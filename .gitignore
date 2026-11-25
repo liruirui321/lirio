@@ -27,8 +27,10 @@ src-tauri/resources/llm/
 __pycache__/
 *.pyc
 
-# Server sqlite files
+# Commercial server local runtime state
 server/*.db
 server/*.db-*
 server/*.sqlite*
 server/.env
+server/releases/
+dist-release/

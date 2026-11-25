@@ -18,6 +18,15 @@ import {
   playTypingClick,
   setTypingSoundEnabled,
 } from '../../services/typingSound';
+import {
+  checkForAppUpdate,
+  downloadAndInstallUpdate,
+  getUpdateState,
+  initAppVersion,
+  relaunchAfterUpdate,
+  subscribeUpdateState,
+  type UpdateState,
+} from '../../services/updaterService';
 import { IconClose, IconEye } from '../Icons';
 
 export type GlobalSettingsTab = 'ai' | 'data';
@@ -49,14 +58,22 @@ export function GlobalSettingsModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [busyData, setBusyData] = useState(false);
   const [typingSound, setTypingSound] = useState<boolean>(() => isTypingSoundEnabled());
+  const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
 
   useEffect(() => {
     if (!isOpen) return;
     setPersisted(loadSpeakState());
     setTypingSound(isTypingSoundEnabled());
+    setUpdateState(getUpdateState());
+    void initAppVersion();
     setStatusMsg('');
     setErrorMsg('');
-    return subscribeSpeakState((next) => setPersisted(next));
+    const unsubSpeak = subscribeSpeakState((next) => setPersisted(next));
+    const unsubUpd = subscribeUpdateState((next) => setUpdateState(next));
+    return () => {
+      unsubSpeak();
+      unsubUpd();
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -421,6 +438,46 @@ export function GlobalSettingsModal({
                     导入恢复
                   </button>
                 </div>
+              </div>
+
+              <div className="settings-row-between">
+                <div className="settings-version-meta">
+                  <span className="settings-section-title">版本</span>
+                  <small>
+                    v{updateState.currentVersion}
+                    {updateState.status === 'up_to_date' && ' · 已是最新'}
+                    {updateState.status === 'error' && ' · 暂未检测到更新'}
+                  </small>
+                </div>
+                {updateState.status === 'available' ? (
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => void downloadAndInstallUpdate()}
+                  >
+                    下载 v{updateState.availableVersion}
+                  </button>
+                ) : updateState.status === 'downloading' ? (
+                  <button type="button" disabled>
+                    下载中 {updateState.progressPct ?? 0}%
+                  </button>
+                ) : updateState.status === 'ready' ? (
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => void relaunchAfterUpdate()}
+                  >
+                    立即重启
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={updateState.status === 'checking'}
+                    onClick={() => void checkForAppUpdate({ silent: false })}
+                  >
+                    {updateState.status === 'checking' ? '检查中…' : '检查更新'}
+                  </button>
+                )}
               </div>
             </div>
 

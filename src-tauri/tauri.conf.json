@@ -26,6 +26,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": false,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -42,5 +43,12 @@
       "resources/llm/*"
     ]
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZFODQ5ODY1RUVGNTdDNTIKUldSU2ZQWHVaWmlFYm1qREJDZUVKcDVpM0VHNXVGZG5LQldmNTFNMHJEVmQ5SzFhS2ZkaGJ4a2kK",
+      "endpoints": [
+        "https://github.com/liruirui321/lirio/releases/latest/download/latest.json"
+      ]
+    }
+  }
 }

@@ -27,6 +27,8 @@
     "fs:allow-download-read-recursive",
     "fs:allow-home-read-recursive",
     "fs:allow-read-file",
-    "fs:allow-mkdir"
+    "fs:allow-mkdir",
+    "updater:default",
+    "process:default"
   ]
 }
