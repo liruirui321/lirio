@@ -18,6 +18,7 @@ import {
 import { FUNCTION_WORDS, record } from '../../services/submissions';
 import { addMistakeToWordBook, loadCorpusState } from '../../services/corpusService';
 import { simplifyMaterialTitle } from '../../services/materialTitle';
+import { handleDictationKeySound } from '../../services/typingSound';
 import type { Sentence } from '../../types/project';
 import { CustomSelect } from '../Corpus/CustomSelect';
 import { StudyWaveform } from './StudyWaveform';
@@ -1013,6 +1014,7 @@ export function Dictation({
                           update({ answer: nextSlots.join(' '), submitted: false });
                         }}
                         onKeyDown={(e) => {
+                          handleDictationKeySound(e);
                           if (e.key === ' ') {
                             e.preventDefault();
                             if (idx < slots.length - 1) {
@@ -1051,6 +1053,7 @@ export function Dictation({
                 value={sentence.answer}
                 onChange={(e) => update({ answer: e.target.value, submitted: false })}
                 onKeyDown={(e) => {
+                  handleDictationKeySound(e);
                   if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
                     e.preventDefault();
                     if (sentence.submitted && result?.correct && cursor < visible.length - 1) {

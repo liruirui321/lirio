@@ -13,6 +13,11 @@ import {
   type SpeakConfig,
   type SpeakPersistedState,
 } from '../../services/speakService';
+import {
+  isTypingSoundEnabled,
+  playTypingClick,
+  setTypingSoundEnabled,
+} from '../../services/typingSound';
 import { IconClose, IconEye } from '../Icons';
 
 export type GlobalSettingsTab = 'ai' | 'data';
@@ -43,10 +48,12 @@ export function GlobalSettingsModal({
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [busyData, setBusyData] = useState(false);
+  const [typingSound, setTypingSound] = useState<boolean>(() => isTypingSoundEnabled());
 
   useEffect(() => {
     if (!isOpen) return;
     setPersisted(loadSpeakState());
+    setTypingSound(isTypingSoundEnabled());
     setStatusMsg('');
     setErrorMsg('');
     return subscribeSpeakState((next) => setPersisted(next));
@@ -373,6 +380,33 @@ export function GlobalSettingsModal({
                     onClick={() => onThemeChange('dark')}
                   >
                     深色
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-row-between">
+                <span className="settings-section-title">打字音效</span>
+                <div className="seg-pill">
+                  <button
+                    type="button"
+                    className={typingSound ? 'active' : ''}
+                    onClick={() => {
+                      setTypingSoundEnabled(true);
+                      setTypingSound(true);
+                      playTypingClick('char');
+                    }}
+                  >
+                    开启
+                  </button>
+                  <button
+                    type="button"
+                    className={!typingSound ? 'active' : ''}
+                    onClick={() => {
+                      setTypingSoundEnabled(false);
+                      setTypingSound(false);
+                    }}
+                  >
+                    关闭
                   </button>
                 </div>
               </div>
