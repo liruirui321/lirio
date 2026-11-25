@@ -158,6 +158,13 @@ export function SpeakCompanion({
   const callActiveRef = useRef<boolean>(false);
   const turnsRef = useRef<SpeakTurn[]>([]);
   const configRef = useRef<SpeakConfig>(config);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (subView === 'call') {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [turns.length, callPhase, subView]);
   const memoryRef = useRef<UserMemoryProfile>(memory);
   const speakModeRef = useRef<SpeakMode>(speakMode);
   const topicIdRef = useRef<string>(topicId);
@@ -964,15 +971,6 @@ export function SpeakCompanion({
     [activeDeck],
   );
 
-  const lastAiTurn = useMemo(
-    () => [...turns].reverse().find((t) => t.role === 'assistant') || null,
-    [turns],
-  );
-  const lastUserTurn = useMemo(
-    () => [...turns].reverse().find((t) => t.role === 'user') || null,
-    [turns],
-  );
-
   const memoryCount =
     memory.aboutMe.length +
     memory.habits.length +
@@ -1010,6 +1008,8 @@ export function SpeakCompanion({
                 : '点击光球，拨通双语语音通话';
 
   const orbScale = callPhase === 'listening' ? 1 + micLevel * 0.25 : 1;
+  const inChatLayout = callActive || turns.length > 0;
+  const teacherLabel = speakMode === 'examiner' ? '考官' : '老师';
 
   return (
     <div className="speak-workspace">
@@ -1151,8 +1151,8 @@ export function SpeakCompanion({
         </div>
       )}
 
-      {/* VIEW 1: Minimalist Fluid Orb Call Stage */}
-      {subView === 'call' && (
+      {/* VIEW 1: Fluid Orb Stage -> Left/Right Chat Layout when active */}
+      {subView === 'call' && !inChatLayout && (
         <div className="speak-call-stage">
           {/* Pre-Exam Random Drawn Combo Ticket (Part 1 + Linked Part 2 & 3) */}
           {!callActive && speakMode === 'examiner' && examLaunchMode === 'full_mock' && drawnSet.length > 0 && (
@@ -1191,7 +1191,7 @@ export function SpeakCompanion({
           )}
 
           {/* Part 2 Cue Card Floating Glass Card (Only in Examiner Part 2) */}
-          {speakMode === 'examiner' && activeQuestion?.part === 'part2' && (callActive || examLaunchMode === 'single') && (
+          {speakMode === 'examiner' && activeQuestion?.part === 'part2' && examLaunchMode === 'single' && (
             <div className="cue-card-float">
               <div className="cue-card-badge">PART 2 · CUE CARD</div>
               <h3>{activeQuestion.topic}</h3>
@@ -1219,51 +1219,18 @@ export function SpeakCompanion({
             </button>
 
             <div className="speak-orb-status">{phaseLabel}</div>
-            {callActive && speakMode === 'examiner' && mockQueue.length > 1 && (
-              <div className="exam-stage-steps" aria-label="模考进度">
-                {mockQueue.map((q, idx) => (
-                  <span
-                    key={q.id}
-                    className={`exam-stage-step${idx === mockStep ? ' active' : idx < mockStep ? ' done' : ''}`}
-                  >
-                    {q.part.toUpperCase()}
-                    {q.topicZh ? ` · ${q.topicZh}` : ''}
-                  </span>
-                ))}
-              </div>
-            )}
-            {callActive && speakMode === 'examiner' && mockStep + 1 < mockQueue.length && (
-              <button
-                type="button"
-                className="mock-next-pill"
-                disabled={reviewing}
-                onClick={() => void handleNextMockStage()}
-              >
-                提前进入下一部分 ({mockQueue[mockStep + 1].part.toUpperCase()})
-              </button>
-            )}
-            {!callActive && (
-              <div className="speak-orb-engine">
-                {activeProviderLabel}
-                {speakMode === 'companion' && memoryCount > 0 ? ` · ${memoryCount} 条记忆` : ''}
-                {speakMode === 'examiner'
-                  ? examLaunchMode === 'full_mock' && drawnSet.length > 1
-                    ? ` · 全真连考 (${drawnSet.map((q) => q.part.toUpperCase()).join(' → ')})`
-                    : activeQuestion
-                      ? ` · ${activeQuestion.part.toUpperCase()}${activeQuestion.part === 'part2' && findLinkedPart3(activeDeck, activeQuestion) ? ' + 联动 PART 3' : ''}`
-                      : ''
-                  : ''}
-              </div>
-            )}
-          </div>
-
-          {/* Cinematic Dissolving Captions (Last Turn Only, No Chat Boxes) */}
-          {config.showLiveSubtitles && (lastAiTurn || lastUserTurn) && (
-            <div className="cinematic-captions">
-              {lastAiTurn && <p className="cap-ai">{lastAiTurn.text}</p>}
-              {lastUserTurn && <p className="cap-user">{lastUserTurn.text}</p>}
+            <div className="speak-orb-engine">
+              {activeProviderLabel}
+              {speakMode === 'companion' && memoryCount > 0 ? ` · ${memoryCount} 条记忆` : ''}
+              {speakMode === 'examiner'
+                ? examLaunchMode === 'full_mock' && drawnSet.length > 1
+                  ? ` · 全真连考 (${drawnSet.map((q) => q.part.toUpperCase()).join(' → ')})`
+                  : activeQuestion
+                    ? ` · ${activeQuestion.part.toUpperCase()}${activeQuestion.part === 'part2' && findLinkedPart3(activeDeck, activeQuestion) ? ' + 联动 PART 3' : ''}`
+                    : ''
+                : ''}
             </div>
-          )}
+          </div>
 
           {/* Expandable Quiet Text Fallback */}
           {showKeyboard && (
@@ -1296,20 +1263,8 @@ export function SpeakCompanion({
             </div>
           )}
 
-          {/* Minimal Floating Bottom Dock (Only 3 Circular Icons during Call) */}
+          {/* Minimal Floating Bottom Dock */}
           <div className="speak-bottom-dock">
-            {callActive && (
-              <button
-                type="button"
-                className={`dock-circle${muted ? ' active' : ''}`}
-                title={muted ? '取消静音' : '静音'}
-                aria-label="静音"
-                onClick={() => setMuted((m) => !m)}
-              >
-                {muted ? <IconPause size={17} /> : <IconMic size={17} />}
-              </button>
-            )}
-
             <button
               type="button"
               className={`dock-circle${showKeyboard ? ' active' : ''}`}
@@ -1319,18 +1274,173 @@ export function SpeakCompanion({
             >
               <IconKeyboard size={17} />
             </button>
+          </div>
+        </div>
+      )}
 
-            {callActive && (
+      {subView === 'call' && inChatLayout && (
+        <div className="speak-call-stage chat-active">
+          {speakMode === 'examiner' && activeQuestion?.part === 'part2' && (callActive || examLaunchMode === 'single') && (
+            <div className="cue-card-float compact">
+              <div className="cue-card-badge">PART 2 · CUE CARD</div>
+              <h3>{activeQuestion.topic}</h3>
+              <ul>
+                {activeQuestion.prompts.map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {callActive && speakMode === 'examiner' && mockQueue.length > 1 && (
+            <div className="exam-stage-steps" aria-label="模考进度">
+              {mockQueue.map((q, idx) => (
+                <span
+                  key={q.id}
+                  className={`exam-stage-step${idx === mockStep ? ' active' : idx < mockStep ? ' done' : ''}`}
+                >
+                  {q.part.toUpperCase()}
+                  {q.topicZh ? ` · ${q.topicZh}` : ''}
+                </span>
+              ))}
+              {mockStep + 1 < mockQueue.length && (
+                <button
+                  type="button"
+                  className="mock-next-pill"
+                  disabled={reviewing}
+                  onClick={() => void handleNextMockStage()}
+                >
+                  下一部分 ({mockQueue[mockStep + 1].part.toUpperCase()})
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="speak-chat-thread" aria-label="对话记录">
+            {turns.map((t) =>
+              t.role === 'assistant' ? (
+                <div key={t.id} className="speak-chat-row ai">
+                  <div className="speak-chat-meta">{teacherLabel}</div>
+                  <div className="speak-bubble-wrap">
+                    <div className="speak-bubble ai">{t.text}</div>
+                    <button
+                      type="button"
+                      className="icon-btn speak-bubble-play"
+                      disabled={callActive && !muted}
+                      title={callActive && !muted ? '静音或结束后可重播' : '重播这句'}
+                      aria-label="重播"
+                      onClick={() => void playTtsAndWait(t.text)}
+                    >
+                      <IconVolume size={13} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div key={t.id} className="speak-chat-row user">
+                  <div className="speak-chat-meta">我</div>
+                  <div className="speak-bubble user">{t.text}</div>
+                </div>
+              ),
+            )}
+            {callPhase === 'thinking' && (
+              <div className="speak-chat-row ai">
+                <div className="speak-chat-meta">{teacherLabel}</div>
+                <div className="speak-bubble ai pending">思考中…</div>
+              </div>
+            )}
+            {callPhase === 'transcribing' && (
+              <div className="speak-chat-row user">
+                <div className="speak-chat-meta">我</div>
+                <div className="speak-bubble user pending">识别中…</div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {showKeyboard && (
+            <div className="speak-text-row">
+              <div className="speak-text-fallback">
+                <input
+                  type="text"
+                  autoFocus
+                  value={draftText}
+                  disabled={reviewing || callPhase === 'transcribing' || callPhase === 'thinking'}
+                  placeholder="输入文本回答（支持中英混说，Enter 发送）…"
+                  onChange={(e) => setDraftText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleManualTextSend();
+                    }
+                  }}
+                />
+                <button
+                  className="icon-btn primary"
+                  disabled={!draftText.trim() || reviewing}
+                  title="发送"
+                  aria-label="发送"
+                  onClick={handleManualTextSend}
+                >
+                  <IconSend size={15} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="speak-chat-controls">
+            <div className="speak-chat-orb-group">
               <button
                 type="button"
-                className="dock-circle danger"
-                title="结束通话并生成复盘"
-                aria-label="挂断"
-                onClick={handleHangUp}
+                className={`fluid-orb-wrap compact ${callPhase}`}
+                style={{ transform: `scale(${orbScale.toFixed(3)})` }}
+                disabled={reviewing || callPhase === 'transcribing' || callPhase === 'thinking'}
+                onClick={handleOrbTap}
+                title={phaseLabel}
+                aria-label={phaseLabel}
               >
-                <IconStop size={16} />
+                <span className="fluid-orb-halo" />
+                <span className="fluid-orb" />
               </button>
-            )}
+              <span className="speak-chat-status">{phaseLabel}</span>
+            </div>
+
+            <div className="speak-chat-dock">
+              {callActive && (
+                <button
+                  type="button"
+                  className={`dock-circle sm${muted ? ' active' : ''}`}
+                  title={muted ? '取消静音' : '静音'}
+                  aria-label="静音"
+                  onClick={() => setMuted((m) => !m)}
+                >
+                  {muted ? <IconPause size={15} /> : <IconMic size={15} />}
+                </button>
+              )}
+              <button
+                type="button"
+                className={`dock-circle sm${showKeyboard ? ' active' : ''}`}
+                title="切换键盘输入"
+                aria-label="键盘输入"
+                onClick={() => setShowKeyboard((k) => !k)}
+              >
+                <IconKeyboard size={15} />
+              </button>
+              {callActive ? (
+                <button
+                  type="button"
+                  className="dock-circle sm danger"
+                  title="结束通话并生成复盘"
+                  aria-label="挂断"
+                  onClick={handleHangUp}
+                >
+                  <IconStop size={14} />
+                </button>
+              ) : (
+                <button type="button" onClick={() => setTurns([])}>
+                  新对话
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1495,15 +1605,22 @@ export function SpeakCompanion({
                   : `展开本场完整对话原文 (${activeReview.turns.length} 轮 · 支持划词翻译收录)`}
               </button>
               {showTranscript && (
-                <div className="qa-transcript-list">
-                  {activeReview.turns.map((t) => (
-                    <div key={t.id} className={`qa-turn-row ${t.role}`}>
-                      <span className="qa-turn-role">
-                        {t.role === 'user' ? '你' : activeReview.mode === 'examiner' ? '考官' : '语伴'}
-                      </span>
-                      <p>{t.text}</p>
-                    </div>
-                  ))}
+                <div className="qa-transcript-list chat-style">
+                  {activeReview.turns.map((t) =>
+                    t.role === 'user' ? (
+                      <div key={t.id} className="speak-chat-row user">
+                        <div className="speak-chat-meta">我</div>
+                        <div className="speak-bubble user">{t.text}</div>
+                      </div>
+                    ) : (
+                      <div key={t.id} className="speak-chat-row ai">
+                        <div className="speak-chat-meta">
+                          {activeReview.mode === 'examiner' ? '考官' : '老师'}
+                        </div>
+                        <div className="speak-bubble ai">{t.text}</div>
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
             </div>
