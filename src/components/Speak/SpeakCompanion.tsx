@@ -1072,15 +1072,6 @@ export function SpeakCompanion({
                   <IconShuffle size={13} />
                   <span>抽题</span>
                 </button>
-                <button
-                  type="button"
-                  className="mock-start-btn"
-                  disabled={callActive || !activeDeck?.items.length}
-                  title="开始模考"
-                  onClick={() => handleStartFullMock(activeDeck, drawnSet)}
-                >
-                  开始模考
-                </button>
               </>
             )}
           </div>
