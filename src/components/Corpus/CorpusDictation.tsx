@@ -13,6 +13,7 @@ import {
   IconVolume,
 } from '../Icons';
 import { CustomSelect, type SelectOption } from './CustomSelect';
+import { handleDictationKeySound } from '../../services/typingSound';
 import {
   type Accent,
   type CardWordState,
@@ -1150,6 +1151,7 @@ export function CorpusDictation() {
                         }
                       }}
                       onKeyDown={(e) => {
+                        if (!submitted && !isRevealed) handleDictationKeySound(e);
                         if (e.key === 'Enter') {
                           e.preventDefault();
                           if (e.shiftKey) {
@@ -1349,6 +1351,7 @@ export function CorpusDictation() {
                           });
                         }}
                         onKeyDown={(e) => {
+                          if (!submitted) handleDictationKeySound(e);
                           if (e.key === 'Enter') {
                             e.preventDefault();
                             if (e.shiftKey) {
