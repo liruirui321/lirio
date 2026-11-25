@@ -949,6 +949,7 @@ export function SpeakCompanion({
     if (nextSet[0]) {
       setSelectedQuestionId(nextSet[0].id);
     }
+    setStatusMsg('已重新抽题');
   };
 
   const topicOptions: SelectOption[] = useMemo(
@@ -961,26 +962,11 @@ export function SpeakCompanion({
     [decks],
   );
 
-  const questionOptions: SelectOption[] = useMemo(
-    () =>
-      (activeDeck?.items || []).map((q) => ({
-        value: q.id,
-        label: q.topicZh ? `${q.topic}（${q.topicZh}）` : q.topic,
-        meta: q.part.toUpperCase(),
-      })),
-    [activeDeck],
-  );
-
   const memoryCount =
     memory.aboutMe.length +
     memory.habits.length +
     memory.recurringTopics.length +
     memory.targetPhrases.length;
-
-  const activeProviderLabel =
-    config.textMode === 'local'
-      ? '内置离线模型'
-      : config.textModel?.trim() || '自定义文本 API';
 
   const phaseLabel =
     callPhase === 'ai_speaking'
@@ -1076,35 +1062,24 @@ export function SpeakCompanion({
                   menuWidth={260}
                   onChange={(v) => updatePersisted((prev) => ({ ...prev, activeDeckId: v }))}
                 />
-                <CustomSelect
-                  value={activeQuestion?.id || ''}
-                  options={questionOptions}
-                  disabled={callActive}
-                  minWidth={165}
-                  menuWidth={300}
-                  onChange={(v) => {
-                    setSelectedQuestionId(v);
-                    setExamLaunchMode('single');
-                  }}
-                />
                 <button
                   type="button"
-                  className="icon-btn"
+                  className="speak-draw-btn"
                   disabled={callActive}
-                  title="随机抽一套（Part 1 + Part 2 & 3 联动）"
-                  aria-label="随机抽题"
+                  title="随机抽一套题"
                   onClick={handleDrawRandomMockSet}
                 >
-                  <IconShuffle size={15} />
+                  <IconShuffle size={13} />
+                  <span>抽题</span>
                 </button>
                 <button
                   type="button"
                   className="mock-start-btn"
                   disabled={callActive || !activeDeck?.items.length}
-                  title="按当前抽取组合开启 Part 1 → Part 2 → Part 3 全真连考"
+                  title="开始模考"
                   onClick={() => handleStartFullMock(activeDeck, drawnSet)}
                 >
-                  全真连考
+                  开始模考
                 </button>
               </>
             )}
@@ -1135,7 +1110,7 @@ export function SpeakCompanion({
           <button
             type="button"
             className="icon-btn"
-            title={`全局 AI 与语音设置（${activeProviderLabel}）`}
+            title="设置"
             aria-label="设置"
             disabled={callActive}
             onClick={() => onOpenGlobalSettings?.()}
@@ -1154,43 +1129,7 @@ export function SpeakCompanion({
       {/* VIEW 1: Fluid Orb Stage -> Left/Right Chat Layout when active */}
       {subView === 'call' && !inChatLayout && (
         <div className="speak-call-stage">
-          {/* Pre-Exam Random Drawn Combo Ticket (Part 1 + Linked Part 2 & 3) */}
-          {!callActive && speakMode === 'examiner' && examLaunchMode === 'full_mock' && drawnSet.length > 0 && (
-            <div className="exam-ticket-card">
-              <div className="exam-ticket-head">
-                <span className="exam-ticket-title">
-                  本场抽题组合（点击光球或「全真连考」逐部分开考）
-                </span>
-                <button
-                  type="button"
-                  className="exam-ticket-refresh"
-                  onClick={handleDrawRandomMockSet}
-                  title="重新随机抽取 Part 1 与联动 Part 2/3"
-                >
-                  <IconShuffle size={12} />
-                  <span>随机换一套</span>
-                </button>
-              </div>
-              <div className="exam-ticket-rows">
-                {drawnSet.map((q) => (
-                  <div key={q.id} className="exam-ticket-row">
-                    <span className={q.part === 'part3' ? 'exam-part-tag linked' : 'exam-part-tag'}>
-                      {q.part === 'part3' ? 'PART 3 · 联动' : q.part.toUpperCase()}
-                    </span>
-                    <span className="exam-ticket-topic" title={q.topic}>
-                      {q.topic}
-                      {q.topicZh && <small>（{q.topicZh}）</small>}
-                    </span>
-                    <span className="exam-ticket-meta">
-                      {q.part === 'part2' ? '1–2 min 陈述' : `${q.prompts.length} 问`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Part 2 Cue Card Floating Glass Card (Only in Examiner Part 2) */}
+          {/* Part 2 Cue Card Floating Glass Card (Only in Examiner Single Part 2) */}
           {speakMode === 'examiner' && activeQuestion?.part === 'part2' && examLaunchMode === 'single' && (
             <div className="cue-card-float">
               <div className="cue-card-badge">PART 2 · CUE CARD</div>
@@ -1219,17 +1158,6 @@ export function SpeakCompanion({
             </button>
 
             <div className="speak-orb-status">{phaseLabel}</div>
-            <div className="speak-orb-engine">
-              {activeProviderLabel}
-              {speakMode === 'companion' && memoryCount > 0 ? ` · ${memoryCount} 条记忆` : ''}
-              {speakMode === 'examiner'
-                ? examLaunchMode === 'full_mock' && drawnSet.length > 1
-                  ? ` · 全真连考 (${drawnSet.map((q) => q.part.toUpperCase()).join(' → ')})`
-                  : activeQuestion
-                    ? ` · ${activeQuestion.part.toUpperCase()}${activeQuestion.part === 'part2' && findLinkedPart3(activeDeck, activeQuestion) ? ' + 联动 PART 3' : ''}`
-                    : ''
-                : ''}
-            </div>
           </div>
 
           {/* Expandable Quiet Text Fallback */}

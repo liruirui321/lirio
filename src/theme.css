@@ -2906,3 +2906,10 @@ textarea:focus { outline: none; }
 .qa-transcript-list.chat-style .speak-bubble.ai {
   max-width: 78%;
 }
+.speak-draw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+}
