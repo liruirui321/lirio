@@ -363,6 +363,7 @@ pub async fn speak_tts(
     provider: Option<String>,
     api_key: Option<String>,
     base_url: Option<String>,
+    model: Option<String>,
     voice: Option<String>,
 ) -> Result<CorpusAudioResult, String> {
     let trimmed = text.trim().to_string();
@@ -376,11 +377,11 @@ pub async fn speak_tts(
         fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
         let id = uuid::Uuid::new_v4().to_string();
 
-        // 0. Optional OpenAI Cloud TTS
-        if prov == "openai" {
+        // 0. Optional Custom / OpenAI-compatible Cloud TTS
+        if prov == "openai" || prov == "custom" {
             let key = api_key.unwrap_or_default().trim().to_string();
             if key.is_empty() {
-                return Err("已在全局设置中选择 OpenAI TTS，请先填写语音 API Key。".into());
+                return Err("已选择自定义语音 API，请先填写语音合成 API Key。".into());
             }
             let endpoint = format!(
                 "{}/audio/speech",
@@ -391,6 +392,12 @@ pub async fn speak_tts(
                     .unwrap_or("https://api.openai.com/v1")
                     .trim_end_matches('/')
             );
+            let chosen_model = model
+                .as_deref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("tts-1")
+                .to_string();
             let chosen_voice = voice
                 .as_deref()
                 .map(|s| s.trim())
@@ -399,7 +406,7 @@ pub async fn speak_tts(
                 .to_string();
             let mp3_path: PathBuf = cache.join(format!("speak-oa-tts-{id}.mp3"));
             let body = serde_json::json!({
-                "model": "tts-1",
+                "model": &chosen_model,
                 "input": &trimmed,
                 "voice": &chosen_voice,
                 "response_format": "mp3",

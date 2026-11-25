@@ -21,15 +21,12 @@ import {
 } from '../../services/accountService';
 import { exportAllStateJson, importAllStateJson } from '../../services/stateSync';
 import {
-  PROVIDER_META,
   loadSpeakState,
   saveSpeakState,
   subscribeSpeakState,
   testProviderConnection,
-  type ProviderId,
   type SpeakConfig,
   type SpeakPersistedState,
-  type TtsProviderId,
 } from '../../services/speakService';
 import { IconClose, IconEye, IconMoon, IconReplay, IconSun } from '../Icons';
 
@@ -40,20 +37,6 @@ const ACCENT_OPTS: SelectOption[] = [
   { value: 'us', label: '美音 US' },
   { value: 'au', label: '澳音 AU' },
   { value: 'in', label: '印音 IN' },
-];
-
-const TTS_OPTS: SelectOption[] = [
-  { value: 'edge', label: 'Edge TTS（默认免费）' },
-  { value: 'openai', label: 'OpenAI TTS（tts-1）' },
-  { value: 'macos', label: 'macOS 离线语音' },
-];
-
-const VOICE_OPTS: SelectOption[] = [
-  { value: 'alloy', label: 'Alloy' },
-  { value: 'fable', label: 'Fable（英伦感）' },
-  { value: 'nova', label: 'Nova' },
-  { value: 'onyx', label: 'Onyx' },
-  { value: 'shimmer', label: 'Shimmer' },
 ];
 
 function formatLedgerUsage(entry: LedgerEntry): string {
@@ -89,7 +72,8 @@ export function GlobalSettingsModal({
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [ledgerBusy, setLedgerBusy] = useState(false);
 
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [showTextKey, setShowTextKey] = useState(false);
+  const [showSpeechKey, setShowSpeechKey] = useState(false);
   const [testingConn, setTestingConn] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -129,7 +113,7 @@ export function GlobalSettingsModal({
   useEffect(() => {
     if (!isOpen) return;
     const latest = loadSpeakState();
-    if (!latest.config.providers.deepseek.apiKey) {
+    if (!latest.config.textApiKey && (latest.config.textApiUrl || '').includes('deepseek')) {
       invoke<string | null>('speak_auto_detect_deepseek')
         .then((key) => {
           if (key) {
@@ -138,10 +122,7 @@ export function GlobalSettingsModal({
               ...cur,
               config: {
                 ...cur.config,
-                providers: {
-                  ...cur.config.providers,
-                  deepseek: { ...cur.config.providers.deepseek, apiKey: key },
-                },
+                textApiKey: key,
               },
             });
           }
@@ -156,32 +137,15 @@ export function GlobalSettingsModal({
   const activeProviderLabel =
     account.aiMode === 'pro_balance'
       ? 'Lirio 官方 API'
-      : PROVIDER_META.find((p) => p.id === config.activeProvider)?.label || config.activeProvider;
+      : config.textMode === 'local'
+        ? '本地离线模型'
+        : config.textModel || '自定义文本 API';
 
   const updateConfig = (patch: Partial<SpeakConfig>) => {
     const latest = loadSpeakState();
     const next: SpeakPersistedState = {
       ...latest,
       config: { ...latest.config, ...patch },
-    };
-    saveSpeakState(next);
-    setPersisted(next);
-  };
-
-  const updateProviderField = (
-    pid: Exclude<ProviderId, 'local'>,
-    patch: Partial<{ baseUrl: string; apiKey: string; model: string }>,
-  ) => {
-    const latest = loadSpeakState();
-    const next: SpeakPersistedState = {
-      ...latest,
-      config: {
-        ...latest.config,
-        providers: {
-          ...latest.config.providers,
-          [pid]: { ...latest.config.providers[pid], ...patch },
-        },
-      },
     };
     saveSpeakState(next);
     setPersisted(next);
@@ -366,7 +330,7 @@ export function GlobalSettingsModal({
                 onClick={() => handleSelectMode('byok')}
               >
                 <strong>自配置 API Key</strong>
-                <small>使用自己的文本与语音合成模型 Key</small>
+                <small>填写任意平台 URL 与 Key，或使用本机离线/免费语音</small>
               </button>
             </div>
 
@@ -592,124 +556,171 @@ export function GlobalSettingsModal({
                 )}
               </>
             ) : (
-              /* Step 2B: Self-configured BYOK -> Text LLM + TTS ONLY (no login/recharge clutter) */
+              /* Step 2B: Self-configured BYOK -> Generic Text API + Speech Model ONLY */
               <>
-                <div className="settings-section-title" style={{ marginTop: 4 }}>
-                  第二步：配置自己的模型（文本模型 + 语音合成模型）
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+                  <span className="settings-section-title">1. 文本模型（通用 URL + API Key）</span>
+                  <div className="seg-pill">
+                    <button
+                      type="button"
+                      className={config.textMode !== 'local' ? 'active' : ''}
+                      onClick={() => updateConfig({ textMode: 'api' })}
+                    >
+                      自定义 API
+                    </button>
+                    <button
+                      type="button"
+                      className={config.textMode === 'local' ? 'active' : ''}
+                      onClick={() => updateConfig({ textMode: 'local' })}
+                    >
+                      本地离线模型
+                    </button>
+                  </div>
                 </div>
 
-                <div className="provider-grid compact">
-                  {PROVIDER_META.map((p) => {
-                    const active = config.activeProvider === p.id;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className={`provider-card${active ? ' active' : ''}`}
-                        onClick={() => updateConfig({ activeProvider: p.id })}
-                      >
-                        <strong>{p.label}</strong>
-                        <small>{p.hint}</small>
-                      </button>
-                    );
-                  })}
+                {config.textMode === 'local' ? (
+                  <div className="provider-form">
+                    <small style={{ color: 'var(--muted)' }}>
+                      使用本机内置离线 Qwen 模型，无需填写 URL 与 API Key。
+                    </small>
+                  </div>
+                ) : (
+                  <div className="provider-form">
+                    <div className="settings-two-col">
+                      <div className="speak-field">
+                        <label>API URL</label>
+                        <input
+                          type="text"
+                          value={config.textApiUrl || ''}
+                          placeholder="https://api.deepseek.com/v1"
+                          onChange={(e) => updateConfig({ textApiUrl: e.target.value })}
+                        />
+                      </div>
+                      <div className="speak-field">
+                        <label>模型名称（Model）</label>
+                        <input
+                          type="text"
+                          value={config.textModel || ''}
+                          placeholder="如 deepseek-chat / gpt-4o-mini"
+                          onChange={(e) => updateConfig({ textModel: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="speak-field">
+                      <label>API Key（仅保存在本机）</label>
+                      <div className="settings-key-row">
+                        <input
+                          type={showTextKey ? 'text' : 'password'}
+                          value={config.textApiKey || ''}
+                          placeholder="填入文本模型 API Key…"
+                          onChange={(e) => updateConfig({ textApiKey: e.target.value })}
+                        />
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={showTextKey ? '隐藏 Key' : '显示 Key'}
+                          aria-label="切换密钥可见性"
+                          onClick={() => setShowTextKey((s) => !s)}
+                        >
+                          <IconEye size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+                  <span className="settings-section-title">2. 语音合成模型</span>
+                  <div className="seg-pill">
+                    <button
+                      type="button"
+                      className={config.speechMode !== 'api' ? 'active' : ''}
+                      onClick={() => updateConfig({ speechMode: 'local' })}
+                    >
+                      本地免费语音
+                    </button>
+                    <button
+                      type="button"
+                      className={config.speechMode === 'api' ? 'active' : ''}
+                      onClick={() => updateConfig({ speechMode: 'api' })}
+                    >
+                      自定义语音 API
+                    </button>
+                  </div>
                 </div>
 
-                {config.activeProvider !== 'local' && (() => {
-                  const pid = config.activeProvider;
-                  const prof = config.providers[pid];
-                  return (
-                    <div className="provider-form">
+                <div className="provider-form">
+                  <div className="settings-inline-row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="speak-field">
+                      <label>默认口音</label>
+                      <CustomSelect
+                        value={config.accent}
+                        options={ACCENT_OPTS}
+                        minWidth={130}
+                        onChange={(val) => updateConfig({ accent: val as Accent })}
+                      />
+                    </div>
+                    {config.speechMode !== 'api' && (
+                      <small style={{ color: 'var(--muted)', flex: 1 }}>
+                        默认使用本地神经语音（Edge TTS），离线自动回退 macOS 系统语音，无需 API Key。
+                      </small>
+                    )}
+                  </div>
+
+                  {config.speechMode === 'api' && (
+                    <>
                       <div className="settings-two-col">
                         <div className="speak-field">
-                          <label>API Base URL</label>
+                          <label>语音 API URL</label>
                           <input
                             type="text"
-                            value={prof.baseUrl}
-                            onChange={(e) => updateProviderField(pid, { baseUrl: e.target.value })}
+                            value={config.speechBaseUrl || ''}
+                            placeholder="https://api.openai.com/v1"
+                            onChange={(e) => updateConfig({ speechBaseUrl: e.target.value })}
                           />
                         </div>
                         <div className="speak-field">
-                          <label>Model</label>
-                          <input
-                            type="text"
-                            value={prof.model}
-                            onChange={(e) => updateProviderField(pid, { model: e.target.value })}
-                          />
+                          <label>语音模型 & 音色</label>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <input
+                              type="text"
+                              value={config.speechModel || ''}
+                              placeholder="tts-1"
+                              onChange={(e) => updateConfig({ speechModel: e.target.value })}
+                            />
+                            <input
+                              type="text"
+                              value={config.speechVoice || ''}
+                              placeholder="alloy"
+                              style={{ width: 92 }}
+                              onChange={(e) => updateConfig({ speechVoice: e.target.value })}
+                            />
+                          </div>
                         </div>
                       </div>
                       <div className="speak-field">
-                        <label>文本模型 API Key（仅保存在本机）</label>
+                        <label>语音 API Key（仅保存在本机）</label>
                         <div className="settings-key-row">
                           <input
-                            type={showApiKey ? 'text' : 'password'}
-                            value={prof.apiKey}
-                            placeholder="填入对应平台的 API Key…"
-                            onChange={(e) => updateProviderField(pid, { apiKey: e.target.value })}
+                            type={showSpeechKey ? 'text' : 'password'}
+                            value={config.speechApiKey || ''}
+                            placeholder="填入语音合成 API Key…"
+                            onChange={(e) => updateConfig({ speechApiKey: e.target.value })}
                           />
                           <button
                             type="button"
                             className="icon-btn"
-                            title={showApiKey ? '隐藏 Key' : '显示 Key'}
-                            aria-label="切换密钥可见性"
-                            onClick={() => setShowApiKey((s) => !s)}
+                            title={showSpeechKey ? '隐藏 Key' : '显示 Key'}
+                            aria-label="切换语音密钥可见性"
+                            onClick={() => setShowSpeechKey((s) => !s)}
                           >
                             <IconEye size={15} />
                           </button>
                         </div>
                       </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="settings-section-title" style={{ marginTop: 4 }}>
-                  语音合成模型
+                    </>
+                  )}
                 </div>
-                <div className="settings-two-col">
-                  <div className="speak-field">
-                    <label>语音合成引擎</label>
-                    <CustomSelect
-                      value={config.ttsProvider || 'edge'}
-                      options={TTS_OPTS}
-                      minWidth={180}
-                      onChange={(v) => updateConfig({ ttsProvider: v as TtsProviderId })}
-                    />
-                  </div>
-                  <div className="speak-field">
-                    <label>默认口音</label>
-                    <CustomSelect
-                      value={config.accent}
-                      options={ACCENT_OPTS}
-                      minWidth={130}
-                      onChange={(val) => updateConfig({ accent: val as Accent })}
-                    />
-                  </div>
-                </div>
-
-                {config.ttsProvider === 'openai' && (
-                  <div className="provider-form">
-                    <div className="settings-two-col">
-                      <div className="speak-field">
-                        <label>语音 API Key</label>
-                        <input
-                          type={showApiKey ? 'text' : 'password'}
-                          value={config.speechApiKey || ''}
-                          placeholder="留空则自动复用上方 OpenAI Key"
-                          onChange={(e) => updateConfig({ speechApiKey: e.target.value })}
-                        />
-                      </div>
-                      <div className="speak-field">
-                        <label>音色</label>
-                        <CustomSelect
-                          value={config.speechVoice || 'alloy'}
-                          options={VOICE_OPTS}
-                          minWidth={150}
-                          onChange={(v) => updateConfig({ speechVoice: v })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 <div className="import-modal-actions">
                   <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>

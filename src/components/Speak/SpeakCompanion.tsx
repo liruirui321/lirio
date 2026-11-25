@@ -19,7 +19,6 @@ import {
   IconVolume,
 } from '../Icons';
 import {
-  PROVIDER_META,
   SPEAK_TOPICS,
   VadVoiceRecorder,
   addPhraseToWordModule,
@@ -207,7 +206,7 @@ export function SpeakCompanion({
 
   // Silent auto-detect DeepSeek API key from local dsh credentials
   useEffect(() => {
-    if (!persisted.config.providers.deepseek.apiKey) {
+    if (!persisted.config.textApiKey && (persisted.config.textApiUrl || '').includes('deepseek')) {
       invoke<string | null>('speak_auto_detect_deepseek')
         .then((key) => {
           if (key) {
@@ -215,10 +214,7 @@ export function SpeakCompanion({
               ...prev,
               config: {
                 ...prev.config,
-                providers: {
-                  ...prev.config.providers,
-                  deepseek: { ...prev.config.providers.deepseek, apiKey: key },
-                },
+                textApiKey: key,
               },
             }));
           }
@@ -984,7 +980,9 @@ export function SpeakCompanion({
     memory.targetPhrases.length;
 
   const activeProviderLabel =
-    PROVIDER_META.find((p) => p.id === config.activeProvider)?.label || config.activeProvider;
+    config.textMode === 'local'
+      ? '内置离线模型'
+      : config.textModel?.trim() || '自定义文本 API';
 
   const phaseLabel =
     callPhase === 'ai_speaking'
