@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Aboboo needs microphone access to record your voice for language practice.</string>
+  <string>Lirio needs microphone access to record your voice for language practice.</string>
 </dict>
 </plist>

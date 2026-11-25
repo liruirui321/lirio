@@ -1,0 +1,3617 @@
+[
+  {
+    "id": "p1-2026q4-310",
+    "part": "part1",
+    "topic": "Travel",
+    "topicZh": "旅行",
+    "prompts": [
+      "Do you often ride a bicycle?",
+      "What transport do you often use when travelling?",
+      "Do you prefer to sit by the window when travelling?",
+      "Did you have a long journey with your family as a child?"
+    ],
+    "promptsZh": [
+      "你经常骑自行车吗？",
+      "旅行时你经常使用什么交通工具？",
+      "旅行时你更喜欢坐在靠窗的位置吗？",
+      "小时候你有没有和家人进行过长途旅行？"
+    ],
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-322",
+    "part": "part1",
+    "topic": "Feeling Tired",
+    "topicZh": "疲劳",
+    "prompts": [
+      "Do you often feel tired?",
+      "When would you feel tired?",
+      "What do you do when you feel tired?",
+      "When you feel tired, do you still go out with your friends?"
+    ],
+    "promptsZh": [
+      "你经常感到疲劳吗？",
+      "你通常在什么情况下会感到疲劳？",
+      "感到疲劳时你通常会做什么？",
+      "当你感到疲劳时，你还会和朋友出去吗？"
+    ],
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-324",
+    "part": "part1",
+    "topic": "Shoes",
+    "topicZh": "鞋子",
+    "prompts": [
+      "Do you like buying shoes? How often?",
+      "Have you ever bought shoes online?",
+      "How much money do you usually spend on shoes?",
+      "Which do you prefer, fashionable shoes or comfortable shoes?"
+    ],
+    "promptsZh": [
+      "你喜欢买鞋吗？多久买一次？",
+      "你以前在网上买过鞋吗？",
+      "你通常会花多少钱买鞋？",
+      "时尚的鞋和舒适的鞋，你更喜欢哪一种？"
+    ],
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-326",
+    "part": "part1",
+    "topic": "Rubbish and Recycling",
+    "topicZh": "垃圾与回收",
+    "prompts": [
+      "What do you do when you see rubbish on the street?",
+      "How do you recycle things like paper and plastic?",
+      "Is waste sorting common in your country?",
+      "Did you recycle when you were a kid?"
+    ],
+    "promptsZh": [
+      "当你在街上看到垃圾时，你会怎么做？",
+      "你通常怎样回收纸张和塑料等物品？",
+      "垃圾分类在你的国家普遍吗？",
+      "你小时候会回收利用物品吗？"
+    ],
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-328",
+    "part": "part1",
+    "topic": "Being Polite",
+    "topicZh": "礼貌",
+    "prompts": [
+      "How did you learn to be polite as a child?",
+      "Do you think being polite is very important?",
+      "On what occasions should we be polite?",
+      "What did you do to show your politeness as a child?"
+    ],
+    "promptsZh": [
+      "你小时候是怎样学会礼貌待人的？",
+      "你认为礼貌非常重要吗？",
+      "我们在哪些场合应该有礼貌？",
+      "你小时候会做些什么来表现礼貌？"
+    ],
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-354",
+    "part": "part1",
+    "topic": "Fruit and Vegetables",
+    "topicZh": "水果和蔬菜",
+    "prompts": [
+      "How often do you eat fruit and vegetables?",
+      "Where do you usually buy fruit and vegetables?",
+      "What kinds of fruit and vegetables do you dislike?",
+      "Were there any kinds of fruit or vegetables that you disliked as a child?",
+      "Do people in your country like planting vegetables?"
+    ],
+    "promptsZh": [
+      "你多久吃一次水果和蔬菜？",
+      "你通常在哪里买水果和蔬菜？",
+      "你不喜欢哪些水果和蔬菜？",
+      "小时候有没有你不喜欢吃的水果或蔬菜？",
+      "你们国家的人喜欢种菜吗？"
+    ],
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-355",
+    "part": "part1",
+    "topic": "Advertisements",
+    "topicZh": "广告",
+    "prompts": [
+      "Do you often see advertisements when you are on your phone or computer?",
+      "Is there an advertisement that made an impression on you when you were a child?",
+      "Do you see a lot of advertising on trains or other transport?",
+      "Do you like advertisements?",
+      "What kind of advertising do you like?",
+      "Have you ever bought something because of an advertisement?"
+    ],
+    "promptsZh": [
+      "你使用手机或电脑时经常看到广告吗？",
+      "小时候有没有哪个广告给你留下了深刻印象？",
+      "你在火车或其他交通工具上会看到很多广告吗？",
+      "你喜欢广告吗？",
+      "你喜欢什么类型的广告？",
+      "你是否曾经因为一则广告而购买某件东西？"
+    ],
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-356",
+    "part": "part1",
+    "topic": "Paper",
+    "topicZh": "纸张",
+    "prompts": [
+      "Have you made any crafts with paper?",
+      "Do you still write physical letters?",
+      "Do people still keep handwritten letters today?",
+      "Do you carry paper and pens with you when you go out?",
+      "What did you like to do with paper as a child?"
+    ],
+    "promptsZh": [
+      "你用纸做过手工吗？",
+      "你现在还会写纸质信件吗？",
+      "现在人们还会保存手写信吗？",
+      "你出门时会随身携带纸和笔吗？",
+      "小时候你喜欢用纸做什么？"
+    ],
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-387",
+    "part": "part1",
+    "topic": "Secondary School",
+    "topicZh": "中学生活",
+    "prompts": [
+      "Do you remember your first day at secondary school?",
+      "Were there any subjects that you found difficult at secondary school?",
+      "What was your favourite subject at secondary school?",
+      "Is there anything you miss about your secondary school?"
+    ],
+    "promptsZh": [
+      "你还记得上中学的第一天吗？",
+      "上中学时，有没有哪些科目是你觉得比较难的？",
+      "上中学时，你最喜欢哪一门科目？",
+      "你有没有怀念的中学时光？"
+    ],
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-388",
+    "part": "part1",
+    "topic": "Names",
+    "topicZh": "名字",
+    "prompts": [
+      "Is it easy for you to remember people's names?",
+      "How do you remember people's names?",
+      "How do you feel when people can't remember your name?",
+      "Do you often forget people's names?"
+    ],
+    "promptsZh": [
+      "你容易记住别人的名字吗？",
+      "你通常怎么记住别人的名字？",
+      "别人记不住你的名字时，你有什么感受？",
+      "你经常忘记别人的名字吗？"
+    ],
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-670",
+    "part": "part1",
+    "topic": "Opportunities",
+    "topicZh": "机会",
+    "prompts": [
+      "Did you have any opportunities to take part in new activities as a child?",
+      "Should people try as many different things as they can?",
+      "Do you like taking on new opportunities?",
+      "Do you often get new opportunities?"
+    ],
+    "promptsZh": [
+      "你小时候有机会参加新的活动吗？",
+      "人们是否应该尽可能多地尝试不同的事情？",
+      "你喜欢接受新的机会吗？",
+      "你经常有新的机会吗？"
+    ],
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-366",
+    "part": "part2",
+    "topic": "Describe a person who learns history and loves history",
+    "topicZh": "学习并喜欢历史的人",
+    "prompts": [
+      "Who this person is",
+      "How he/she learns history",
+      "Why he/she loves history",
+      "And explain how you feel about him/her"
+    ],
+    "linkedId": "p3-2026q4-366",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-366",
+    "part": "part3",
+    "topic": "A person who learns history and loves history",
+    "topicZh": "学习并喜欢历史的人",
+    "prompts": [
+      "Besides big historical events, what else is important when learning history?",
+      "Do you think children should begin learning history from an early age?",
+      "At what age do you think people should begin to learn history?",
+      "How do children learn history before they attend school?",
+      "Is it important to learn how people in the past lived their lives?",
+      "Do you think people should learn ancient history before learning modern history?"
+    ],
+    "promptsZh": [
+      "除了重大历史事件，学习历史时还有什么也很重要？",
+      "你觉得孩子应该从小开始学历史吗？",
+      "你觉得人们应该从几岁开始学历史？",
+      "孩子上学前一般怎么接触历史？",
+      "了解过去的人是怎么生活的重要吗？",
+      "你觉得人们应该先学古代史，再学现代史吗？"
+    ],
+    "linkedId": "p2-2026q4-366",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-368",
+    "part": "part2",
+    "topic": "Describe a person who is good at making things by hand",
+    "topicZh": "擅长做手工的人",
+    "prompts": [
+      "Who this person is",
+      "What he/she makes",
+      "What materials or technologies he/she uses",
+      "And why you think this person is good at making things by hand"
+    ],
+    "linkedId": "p3-2026q4-368",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-368",
+    "part": "part3",
+    "topic": "A person who is good at making things by hand",
+    "topicZh": "擅长做手工的人",
+    "prompts": [
+      "Do you think art classes are important for children?",
+      "Why do some children enjoy making things by hand?",
+      "Do children these days still like doing arts and crafts?",
+      "What impact can artistic buildings have on society?",
+      "Is it good to have creative people in a team?",
+      "Does art, like music or theater, have an impact on society?"
+    ],
+    "promptsZh": [
+      "你认为艺术课对儿童重要吗？",
+      "为什么一些孩子喜欢手工制作？",
+      "如今的孩子仍然喜欢做艺术和手工吗？",
+      "具有艺术感的建筑会对社会产生什么影响？",
+      "团队中有富有创造力的人是好事吗？",
+      "音乐、戏剧等艺术形式会对社会产生影响吗？"
+    ],
+    "linkedId": "p2-2026q4-368",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-370",
+    "part": "part2",
+    "topic": "Describe a person you know who really likes taking photos",
+    "topicZh": "喜欢拍照的人",
+    "prompts": [
+      "Who the person is",
+      "When and how you got to know him/her",
+      "Where he/she takes photos",
+      "And explain how you feel about him/her"
+    ],
+    "linkedId": "p3-2026q4-370",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-370",
+    "part": "part3",
+    "topic": "A person you know who really likes taking photos",
+    "topicZh": "喜欢拍照的人",
+    "prompts": [
+      "Why are some people keen on taking photos?",
+      "What kind of photos do people often take?",
+      "Do you think it's ok to take photos everywhere?",
+      "Some people don't mind others walking into their shot when they're taking photos. What do you think?",
+      "When do people like taking photos?",
+      "What are the downsides of constantly taking photos while traveling?"
+    ],
+    "promptsZh": [
+      "为什么有些人很喜欢拍照？",
+      "人们平时经常拍什么样的照片？",
+      "你觉得在任何地方都可以拍照吗？",
+      "有些人拍照时不介意别人走进镜头里，你怎么看？",
+      "人们通常在什么时候喜欢拍照？",
+      "旅行时不停拍照有哪些坏处？"
+    ],
+    "linkedId": "p2-2026q4-370",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-372",
+    "part": "part2",
+    "topic": "Describe a time when you saved money to buy something you wanted",
+    "topicZh": "攒钱买想要物品",
+    "prompts": [
+      "What you wanted to buy",
+      "Why you wanted to buy it",
+      "How you saved money for it",
+      "And explain how you felt after buying it"
+    ],
+    "linkedId": "p3-2026q4-372",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-372",
+    "part": "part3",
+    "topic": "A time when you saved money to buy something you wanted",
+    "topicZh": "攒钱买想要物品",
+    "prompts": [
+      "Should schools teach children how to manage money from a young age?",
+      "Should parents teach their children to spend money freely or to save money?",
+      "Do you think it is easier to teach teenagers how to manage money when they are around 16 or 17 years old?",
+      "Is it easier to spend money or save money?",
+      "What kind of things do people usually save money for?",
+      "Should people spend time on charity, or just money?"
+    ],
+    "promptsZh": [
+      "学校应该从小教孩子如何管理钱吗？",
+      "父母应该教孩子自由花钱，还是教他们存钱？",
+      "你觉得在孩子十六七岁的时候教他们管理钱会更容易吗？",
+      "花钱更容易，还是存钱更容易？",
+      "人们通常会为什么事情存钱？",
+      "人们做慈善应该投入时间，还是只捐钱？"
+    ],
+    "linkedId": "p2-2026q4-372",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-374",
+    "part": "part2",
+    "topic": "Describe a person you know who is very organized",
+    "topicZh": "有条理的人",
+    "prompts": [
+      "Who this person is",
+      "What this person usually does to stay organized",
+      "In what situations you have noticed this quality",
+      "And explain why you think being organized is important to him/her"
+    ],
+    "linkedId": "p3-2026q4-374",
+    "category": "new",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-374",
+    "part": "part3",
+    "topic": "A person you know who is very organized",
+    "topicZh": "有条理的人",
+    "prompts": [
+      "Why is it important for people to be organized?",
+      "Do you think children should learn to be organized from a young age?",
+      "Are organized people more likely to be successful at work or in their studies?",
+      "What can people do to become more organized?",
+      "Should parents teach their children to be organized?",
+      "Do you think it is important for managers to be well organized?"
+    ],
+    "promptsZh": [
+      "为什么做事有条理很重要？",
+      "你觉得孩子应该从小学习做事有条理吗？",
+      "做事有条理的人在工作或学习中更容易成功吗？",
+      "人们可以怎么让自己变得更有条理？",
+      "父母应该教孩子做事有条理吗？",
+      "你觉得管理者做事有条理重要吗？"
+    ],
+    "linkedId": "p2-2026q4-374",
+    "category": "new",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-376",
+    "part": "part2",
+    "topic": "Describe a happy person you know",
+    "topicZh": "快乐人士",
+    "prompts": [
+      "Who this person is",
+      "What he/she is like",
+      "How he/she shows happiness",
+      "And explain why you think he/she is a happy person"
+    ],
+    "linkedId": "p3-2026q4-376",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-376",
+    "part": "part3",
+    "topic": "A happy person you know",
+    "topicZh": "快乐人士",
+    "prompts": [
+      "Should teachers know what children are doing all the time?",
+      "Do you think teachers are able to spot the unhappy children?",
+      "How can the arts spread positive emotions in society?",
+      "When do you think people are happiest?",
+      "What would make a student happy at school?",
+      "Do you think doing a job that you like is more important than other things?"
+    ],
+    "promptsZh": [
+      "老师应该随时都知道孩子们在做什么吗？",
+      "你觉得老师能看出哪些孩子不开心吗？",
+      "艺术可以怎样在社会中传播积极情绪？",
+      "你觉得人们什么时候最快乐？",
+      "什么会让学生在学校感到快乐？",
+      "你认为做自己喜欢的工作比其他因素更重要吗？"
+    ],
+    "linkedId": "p2-2026q4-376",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-380",
+    "part": "part2",
+    "topic": "Describe a person you know who did something difficult and was successful",
+    "topicZh": "做困难事情并成功的人",
+    "prompts": [
+      "Who this person is",
+      "What difficult thing this person did",
+      "Why this person was successful",
+      "And explain how you feel about this person"
+    ],
+    "linkedId": "p3-2026q4-380",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-380",
+    "part": "part3",
+    "topic": "A person you know who did something difficult and was successful",
+    "topicZh": "做困难事情并成功的人",
+    "prompts": [
+      "Is it difficult to do business in today's world?",
+      "How can companies help protect the environment?",
+      "Does money equal success?",
+      "Other than making money, what is more important for a company?",
+      "Is it easy to start up a company?",
+      "In which sectors are companies more likely to succeed in China?"
+    ],
+    "promptsZh": [
+      "在当今社会，做生意难吗？",
+      "公司可以怎样帮助保护环境？",
+      "有钱就等于成功吗？",
+      "除了赚钱之外，公司还应该重视什么？",
+      "创办一家公司容易吗？",
+      "在中国，哪些行业的公司更容易取得成功？"
+    ],
+    "linkedId": "p2-2026q4-380",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-382",
+    "part": "part2",
+    "topic": "Describe a time when you received good service in a shop/store",
+    "topicZh": "好的购物服务",
+    "prompts": [
+      "Where the shop is",
+      "When you went to the shop",
+      "What service you received from the staff",
+      "And explain how you felt about the service"
+    ],
+    "linkedId": "p3-2026q4-382",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-382",
+    "part": "part3",
+    "topic": "A time when you received good service in a shop/store",
+    "topicZh": "好的购物服务",
+    "prompts": [
+      "Can consumption drive economic growth?",
+      "Why are shopping malls so popular in China?",
+      "What are the advantages and disadvantages of shopping in small shops?",
+      "Why do some people not like shopping in small shops?",
+      "What are the differences between online shopping and in-store shopping?",
+      "What are the advantages and disadvantages of shopping online?"
+    ],
+    "promptsZh": [
+      "消费能推动经济增长吗？",
+      "为什么购物中心在中国这么受欢迎？",
+      "在小商店购物有什么优点和缺点？",
+      "为什么有些人不喜欢在小商店购物？",
+      "网购和实体店购物有什么区别？",
+      "网购有什么优点和缺点？"
+    ],
+    "linkedId": "p2-2026q4-382",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-384",
+    "part": "part2",
+    "topic": "Describe an activity you do regularly that you think is a waste of time",
+    "topicZh": "浪费时间的活动",
+    "prompts": [
+      "What it is",
+      "When you usually do it",
+      "Why you do it",
+      "And explain why you think it is a waste of time"
+    ],
+    "linkedId": "p3-2026q4-384",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-384",
+    "part": "part3",
+    "topic": "An activity you do regularly that you think is a waste of time",
+    "topicZh": "浪费时间的活动",
+    "prompts": [
+      "How do you balance life and work?",
+      "Will you continue doing something when you are aware that it's a waste of time?",
+      "What kinds of things make people feel pressured?",
+      "Why do some people refuse to abide by rules?",
+      "Do you think stress is important in people's lives?",
+      "Is it good to have a daily routine?"
+    ],
+    "promptsZh": [
+      "你是怎么平衡生活和工作的？",
+      "如果已经意识到一件事是在浪费时间，还会继续做吗？",
+      "哪些事情容易让人感到压力？",
+      "为什么有些人不愿意遵守规则？",
+      "你认为压力在人们的生活中重要吗？",
+      "有固定的日常作息是好事吗？"
+    ],
+    "linkedId": "p2-2026q4-384",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-386",
+    "part": "part2",
+    "topic": "Describe a noisy place you have been to",
+    "topicZh": "嘈杂地",
+    "prompts": [
+      "Where it is",
+      "When you went there",
+      "What you did there",
+      "And explain why you feel it's a noisy place"
+    ],
+    "linkedId": "p3-2026q4-386",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-386",
+    "part": "part3",
+    "topic": "A noisy place you have been to",
+    "topicZh": "嘈杂地",
+    "prompts": [
+      "Do you think it is good for children to make noise?",
+      "Should children not be allowed to make noise under any circumstances?",
+      "What kinds of noises are there in our life?",
+      "Which area is exposed to noise more, the city or the countryside?",
+      "How would people usually respond to noises in your country?",
+      "How can people consider others' feelings when chatting in public?"
+    ],
+    "promptsZh": [
+      "你觉得孩子发出一些声音是好事吗？",
+      "是不是在任何情况下都不应该允许孩子发出噪音？",
+      "我们生活中有哪些常见的噪音？",
+      "城市和乡村，哪里的噪音更多？",
+      "在你的国家，人们通常会怎么应对噪音？",
+      "人们在公共场所聊天时，怎样才能照顾到别人的感受？"
+    ],
+    "linkedId": "p2-2026q4-386",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-390",
+    "part": "part2",
+    "topic": "Describe a crowded place you went to",
+    "topicZh": "拥挤的地方",
+    "prompts": [
+      "Where it was",
+      "When you went there",
+      "Who you went there with",
+      "What you did there",
+      "And explain how you felt about it"
+    ],
+    "linkedId": "p3-2026q4-390",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-390",
+    "part": "part3",
+    "topic": "A crowded place you went to",
+    "topicZh": "拥挤的地方",
+    "prompts": [
+      "Which cities are overcrowded in your country?",
+      "Will there be more or less green space in cities in the future?",
+      "Will people use bikes more or less in cities in the future?",
+      "Why do people go to crowded places?",
+      "Do you think there are some people who enjoy crowded places?",
+      "Do you think it is a good trend to have more big cities?"
+    ],
+    "promptsZh": [
+      "在你的国家，哪些城市比较拥挤？",
+      "未来城市里的绿地会更多还是更少？",
+      "未来城市里人们骑自行车会更多还是更少？",
+      "为什么人们会去拥挤的地方？",
+      "你觉得有人会喜欢拥挤的地方吗？",
+      "你觉得出现越来越多的大城市是一个好趋势吗？"
+    ],
+    "linkedId": "p2-2026q4-390",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-392",
+    "part": "part2",
+    "topic": "Describe a new skill you learned when you were a child",
+    "topicZh": "小时候学到的新技能",
+    "prompts": [
+      "What the skill was",
+      "Who taught you this skill",
+      "How you learned it",
+      "And explain how you felt about learning the skill"
+    ],
+    "linkedId": "p3-2026q4-392",
+    "category": "new",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-392",
+    "part": "part3",
+    "topic": "A new skill you learned when you were a child",
+    "topicZh": "小时候学到的新技能",
+    "prompts": [
+      "Is it important for everyone to have a specialized skill?",
+      "What skills should children learn before they go to school?",
+      "What are the differences between learning in a group and learning by yourself?",
+      "What are the differences between the way adults learn and the way children learn?",
+      "Do you think it is easier for children to learn new skills than for adults?",
+      "Can a child learn skills from another child?"
+    ],
+    "promptsZh": [
+      "每个人都有一项专门技能重要吗？",
+      "孩子上学前应该学会哪些技能？",
+      "集体学习和自己学习有什么区别？",
+      "成年人和孩子学习的方式有什么不同？",
+      "你觉得孩子学新技能比成年人更容易吗？",
+      "孩子能从另一个孩子那里学到技能吗？"
+    ],
+    "linkedId": "p2-2026q4-392",
+    "category": "new",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-396",
+    "part": "part2",
+    "topic": "Describe a natural place in your city that you enjoy visiting",
+    "topicZh": "喜欢的城市自然之地",
+    "prompts": [
+      "Where it is",
+      "What it is like",
+      "How often you go there",
+      "Who you often go there with",
+      "And explain why you enjoy visiting there"
+    ],
+    "linkedId": "p3-2026q4-396",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-396",
+    "part": "part3",
+    "topic": "A natural place in your city that you enjoy visiting",
+    "topicZh": "喜欢的城市自然之地",
+    "prompts": [
+      "Do you think there should be many natural places in cities?",
+      "Do you think staying in a natural place would help change people's mood?",
+      "Which is more important, protecting the environment or developing the economy?",
+      "What kind of people do you think enjoy being in nature?",
+      "Do you think people should spend more time in nature?",
+      "What can governments do to encourage people to spend more time in nature?"
+    ],
+    "promptsZh": [
+      "你觉得城市里应该有很多自然空间吗？",
+      "你觉得待在自然环境里会帮助改善人的心情吗？",
+      "保护环境和发展经济哪个更重要？",
+      "你认为哪类人喜欢亲近自然？",
+      "你认为人们应该花更多时间亲近自然吗？",
+      "政府可以如何鼓励人们花更多时间亲近自然？"
+    ],
+    "linkedId": "p2-2026q4-396",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-401",
+    "part": "part2",
+    "topic": "Describe a time you made an important decision and were happy with the result",
+    "topicZh": "对结果开心的重要决定",
+    "prompts": [
+      "What the decision was",
+      "Why you made the decision",
+      "How easy it was for you to make the decision",
+      "And explain why you were happy with the result"
+    ],
+    "linkedId": "p3-2026q4-401",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-401",
+    "part": "part3",
+    "topic": "A time you made an important decision and were happy with the result",
+    "topicZh": "对结果开心的重要决定",
+    "prompts": [
+      "How can we tell the difference between an important and an easy decision?",
+      "Do you think it is a good idea to make a small decision every day?",
+      "What little decisions do people make every day?",
+      "What if people in a group have different opinions on a decision?",
+      "Do you think most of people's decisions are made in their 20s?",
+      "Which is better, to make a decision quickly or slowly?"
+    ],
+    "promptsZh": [
+      "我们怎么区分一个重要决定和一个简单决定？",
+      "你觉得每天做一些小决定是好事吗？",
+      "人们每天都会做哪些小决定？",
+      "如果一群人在做决定时意见不一样，应该怎么办？",
+      "你觉得人们大多数重要决定都是在二十多岁的时候做的吗？",
+      "做决定快一点好，还是慢一点好？"
+    ],
+    "linkedId": "p2-2026q4-401",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-404",
+    "part": "part2",
+    "topic": "Describe someone who is older than you that you admire",
+    "topicZh": "尊敬的比你年长的人",
+    "prompts": [
+      "Who this person is",
+      "How you knew this person",
+      "What kinds of things you like to do together",
+      "And explain how you feel about this person"
+    ],
+    "linkedId": "p3-2026q4-404",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-404",
+    "part": "part3",
+    "topic": "Someone who is older than you that you admire",
+    "topicZh": "尊敬的比你年长的人",
+    "prompts": [
+      "What can young and old people learn from each other?",
+      "Has old people's life quality improved when compared to the past?",
+      "Why is there a generation gap between the young and the old?",
+      "What do old people usually do in their daily life?",
+      "What sports are popular among older people?",
+      "What kinds of things do the elderly remember for a long time?"
+    ],
+    "promptsZh": [
+      "年轻人和老年人可以互相学到什么？",
+      "和过去相比，老年人的生活质量提高了吗？",
+      "为什么年轻人和老年人之间会有代沟？",
+      "老年人平时一般都会做些什么？",
+      "哪些运动在老年人中比较流行？",
+      "老年人会长期记住哪些事情？"
+    ],
+    "linkedId": "p2-2026q4-404",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-406",
+    "part": "part2",
+    "topic": "Describe an enjoyable evening you had with your friends",
+    "topicZh": "和朋友度过的愉快夜晚",
+    "prompts": [
+      "When and where it was",
+      "What you did",
+      "Who you spent the evening with",
+      "And explain why it was enjoyable"
+    ],
+    "linkedId": "p3-2026q4-406",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-406",
+    "part": "part3",
+    "topic": "An enjoyable evening you had with your friends",
+    "topicZh": "和朋友度过的愉快夜晚",
+    "prompts": [
+      "How do people get along in a big family?",
+      "What can we do to bring family members closer together?",
+      "What are the differences between young people's leisure time activities and those of old people?",
+      "Do young people prefer spending time with family or with friends?",
+      "Do older people prefer spending time with family or with friends?",
+      "Why do people need friends?"
+    ],
+    "promptsZh": [
+      "大家庭里的成员通常怎么相处？",
+      "我们可以做些什么让家庭成员的关系更亲近？",
+      "年轻人和老年人的休闲活动有什么区别？",
+      "年轻人更喜欢和家人还是朋友共度时光？",
+      "老年人更喜欢和家人还是朋友共度时光？",
+      "人们为什么需要朋友？"
+    ],
+    "linkedId": "p2-2026q4-406",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-408",
+    "part": "part2",
+    "topic": "Describe a time you watched a famous person being interviewed",
+    "topicZh": "看过的名人采访",
+    "prompts": [
+      "Who the famous person was",
+      "What the interview was about",
+      "When and where you watched the interview",
+      "And explain how you felt about the interview"
+    ],
+    "linkedId": "p3-2026q4-408",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-408",
+    "part": "part3",
+    "topic": "A time you watched a famous person being interviewed",
+    "topicZh": "看过的名人采访",
+    "prompts": [
+      "What kinds of people are usually interviewed?",
+      "What should people do to prepare for a job interview?",
+      "Why do we need to attend interviews when applying for jobs?",
+      "What should people wear to a job interview?",
+      "What kinds of things do famous people often say in an interview?",
+      "What can we do to get a job interview?"
+    ],
+    "promptsZh": [
+      "通常哪些人会接受采访？",
+      "人们应该怎样准备求职面试？",
+      "申请工作时，我们为什么需要参加面试？",
+      "人们参加求职面试时应该穿什么？",
+      "名人在采访中通常会谈些什么？",
+      "我们怎样做才能获得求职面试机会？"
+    ],
+    "linkedId": "p2-2026q4-408",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-412",
+    "part": "part2",
+    "topic": "Describe your least favourite movie",
+    "topicZh": "最不喜欢的电影",
+    "prompts": [
+      "When you watched it",
+      "Where you watched it",
+      "What it was about",
+      "And explain why it's your least favourite movie"
+    ],
+    "linkedId": "p3-2026q4-412",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-412",
+    "part": "part3",
+    "topic": "Your least favourite movie",
+    "topicZh": "最不喜欢的电影",
+    "prompts": [
+      "What kinds of movies are the most popular in China?",
+      "What are the differences between watching movies at home and in a cinema?",
+      "Are movies more likely to help people become more creative than books?",
+      "Can movies help people better understand the cultural background of a country?",
+      "Should documentary films be completely truthful?",
+      "Do people's movie preferences change as they get older?"
+    ],
+    "promptsZh": [
+      "在中国，哪些类型的电影最受欢迎？",
+      "在家看电影和在电影院看电影有什么区别？",
+      "电影比书更容易帮助人们变得有创造力吗？",
+      "电影能帮助人们更好地了解一个国家的文化背景吗？",
+      "纪录片应该完全真实吗？",
+      "人们对电影的偏好会随着年龄增长而改变吗？"
+    ],
+    "linkedId": "p2-2026q4-412",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-414",
+    "part": "part2",
+    "topic": "Describe a short trip you often take but do not like",
+    "topicZh": "不喜欢的短途旅行",
+    "prompts": [
+      "Where you go",
+      "When you go there",
+      "Why you go there",
+      "And explain why you do not like the trip"
+    ],
+    "linkedId": "p3-2026q4-414",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-414",
+    "part": "part3",
+    "topic": "A short trip you often take but do not like",
+    "topicZh": "不喜欢的短途旅行",
+    "prompts": [
+      "Do Chinese people like travelling abroad?",
+      "Who prefers travelling abroad? The young or the old?",
+      "How much time do you think people should spend on a trip abroad?",
+      "Which is better for knowing more about a country? Travelling or reading books about it?",
+      "What are the benefits of travelling abroad?",
+      "What problems does it cause for transportation when everyone commutes at the same time?"
+    ],
+    "promptsZh": [
+      "中国人喜欢出国旅行吗？",
+      "年轻人和老年人，谁更喜欢出国旅行？",
+      "你觉得一次出国旅行应该安排多长时间？",
+      "如果想更了解一个国家，旅行和读相关书籍哪个更好？",
+      "出国旅行有哪些好处？",
+      "当所有人同时通勤时，会给交通带来哪些问题？"
+    ],
+    "linkedId": "p2-2026q4-414",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-430",
+    "part": "part2",
+    "topic": "Describe a successful sportsperson you admire",
+    "topicZh": "钦佩的运动员",
+    "prompts": [
+      "Who he or she is",
+      "What you know about him or her",
+      "What he or she is like in real life",
+      "What achievement he or she has made",
+      "And explain why you admire him or her"
+    ],
+    "linkedId": "p3-2026q4-430",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-430",
+    "part": "part3",
+    "topic": "A successful sportsperson you admire",
+    "topicZh": "钦佩的运动员",
+    "prompts": [
+      "Should students have physical education and do sports at school?",
+      "What qualities should an athlete have?",
+      "Is talent important in sports?",
+      "Is it easy to identify children's talents?",
+      "What is the most popular sport in your country?",
+      "Why are there so few top athletes?"
+    ],
+    "promptsZh": [
+      "学生应该在学校上体育课、参加运动吗？",
+      "一个运动员应该具备哪些品质？",
+      "天赋在运动中重要吗？",
+      "发现孩子的天赋容易吗？",
+      "在你的国家，最受欢迎的运动是什么？",
+      "为什么顶尖运动员这么少？"
+    ],
+    "linkedId": "p2-2026q4-430",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-438",
+    "part": "part2",
+    "topic": "Describe a popular person",
+    "topicZh": "受欢迎的人",
+    "prompts": [
+      "Who this person is",
+      "What kind of person he or she is",
+      "When you see him/her normally",
+      "And explain why you think this person is popular"
+    ],
+    "linkedId": "p3-2026q4-438",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-438",
+    "part": "part3",
+    "topic": "A popular person",
+    "topicZh": "受欢迎的人",
+    "prompts": [
+      "Why are some students popular in school?",
+      "Is it important for a teacher to be popular?",
+      "Do you think good teachers are always popular among students?",
+      "What are the qualities of being a good teacher?",
+      "Is it easier to become popular nowadays?",
+      "Why do people want to be popular?"
+    ],
+    "promptsZh": [
+      "为什么有些学生在学校里很受欢迎？",
+      "老师受学生欢迎重要吗？",
+      "你觉得好老师一定都受学生欢迎吗？",
+      "一个好老师应该具备哪些品质？",
+      "现在变得受欢迎是不是更容易了？",
+      "为什么人们想要受欢迎？"
+    ],
+    "linkedId": "p2-2026q4-438",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-442",
+    "part": "part2",
+    "topic": "Describe a party for a special event that impressed you a lot",
+    "topicZh": "印象深刻的聚会",
+    "prompts": [
+      "When and where it was held",
+      "What the party was held for",
+      "How many people attended it",
+      "And explain why it impressed you a lot"
+    ],
+    "linkedId": "p3-2026q4-442",
+    "category": "new",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-442",
+    "part": "part3",
+    "topic": "A party for a special event that impressed you a lot",
+    "topicZh": "印象深刻的聚会",
+    "prompts": [
+      "When do people like to hold a party?",
+      "What special events are celebrated in your country?",
+      "Do you think people nowadays prefer attending big parties or small gatherings with close friends? Why?",
+      "Are there any differences between how young people and older people celebrate events with parties?",
+      "Do you think it's a waste of money for governments to celebrate national events?",
+      "What festivals are the most important for people in your country?"
+    ],
+    "promptsZh": [
+      "人们通常会在什么时候举办聚会？",
+      "你的国家会庆祝哪些特别的活动或节日？",
+      "你认为与大型聚会相比，现在的人是否更喜欢和亲近的朋友小聚？为什么？",
+      "年轻人和老年人通过聚会庆祝活动的方式有什么不同吗？",
+      "你认为政府花钱庆祝国家活动是一种浪费吗？",
+      "在你的国家，哪些节日对人们最重要？"
+    ],
+    "linkedId": "p2-2026q4-442",
+    "category": "new",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-666",
+    "part": "part2",
+    "topic": "Describe a building you enjoy visiting",
+    "topicZh": "喜欢的建筑",
+    "prompts": [
+      "Where it is",
+      "How you knew it",
+      "What it looks like",
+      "And explain why you enjoy visiting it"
+    ],
+    "linkedId": "p3-2026q4-666",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-666",
+    "part": "part3",
+    "topic": "A building you enjoy visiting",
+    "topicZh": "喜欢的建筑",
+    "prompts": [
+      "Why do people visit historic buildings?",
+      "Should modern buildings replace traditional buildings?",
+      "Is it better to live in an apartment than in a house?",
+      "Is it important to protect historic buildings? Why?",
+      "Why is it hard to protect historic buildings?",
+      "Why do some people prefer to live in the countryside?"
+    ],
+    "promptsZh": [
+      "为什么人们会参观历史建筑？",
+      "现代建筑应该取代传统建筑吗？",
+      "与独立住宅相比，住在公寓里更好吗？",
+      "保护历史建筑重要吗？为什么？",
+      "为什么保护历史建筑很困难？",
+      "为什么有些人更喜欢住在乡村？"
+    ],
+    "linkedId": "p2-2026q4-666",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-668",
+    "part": "part2",
+    "topic": "Describe a person who taught you a new skill",
+    "topicZh": "教你新技能的人",
+    "prompts": [
+      "Who the person is",
+      "What the skill is",
+      "How you learned the skill",
+      "And explain how you feel about this person"
+    ],
+    "linkedId": "p3-2026q4-668",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-668",
+    "part": "part3",
+    "topic": "A person who taught you a new skill",
+    "topicZh": "教你新技能的人",
+    "prompts": [
+      "Why should children learn new skills?",
+      "Where can children learn new skills?",
+      "How can parents and teachers teach children new skills?",
+      "How do adults learn a new skill?",
+      "What are the differences between learning from a teacher and learning by oneself?",
+      "Why is self-discipline important when learning a new skill?"
+    ],
+    "promptsZh": [
+      "为什么孩子应该学习新技能？",
+      "孩子可以在哪里学习新技能？",
+      "父母和老师可以怎样教孩子新技能？",
+      "成年人一般怎么学习一项新技能？",
+      "跟老师学和自学有什么区别？",
+      "为什么学习新技能时自律很重要？"
+    ],
+    "linkedId": "p2-2026q4-668",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-679",
+    "part": "part2",
+    "topic": "Describe a book you enjoyed reading and that made you happy",
+    "topicZh": "读起来开心的书",
+    "prompts": [
+      "What kind of book it was",
+      "What it was about",
+      "Why you read it",
+      "And explain why it made you happy"
+    ],
+    "linkedId": "p3-2026q4-679",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-679",
+    "part": "part3",
+    "topic": "A book you enjoyed reading and that made you happy",
+    "topicZh": "读起来开心的书",
+    "prompts": [
+      "What kinds of books are popular in China?",
+      "Do you think people should read the original book before watching the movie?",
+      "Are success books useful to everyone?",
+      "Do you think people today read less than before? Why?",
+      "Why do some people prefer watching movies to reading books?",
+      "How can parents help children develop a love of reading?"
+    ],
+    "promptsZh": [
+      "中国流行哪些类型的书？",
+      "你认为人们在看电影前应该先读原著吗？",
+      "成功学类书籍对所有人都有用吗？",
+      "你认为与过去相比，如今的人读书更少了吗？为什么？",
+      "为什么有些人比起读书更喜欢看电影？",
+      "父母怎样帮助孩子培养对阅读的热爱？"
+    ],
+    "linkedId": "p2-2026q4-679",
+    "category": "new",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-689",
+    "part": "part2",
+    "topic": "Describe a piece of technology that you didn't know how to use (e.g. a computer, a smartphone, etc.)",
+    "topicZh": "不会用的科技产品",
+    "prompts": [
+      "What it was",
+      "Why you didn't know how to use it",
+      "Whether you learned to use it at last",
+      "And explain how you felt about it"
+    ],
+    "linkedId": "p3-2026q4-689",
+    "category": "new",
+    "frequency": "待确认",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-689",
+    "part": "part3",
+    "topic": "A piece of technology that you didn't know how to use (e.g. a computer, a smartphone, etc.)",
+    "topicZh": "不会用的科技产品",
+    "prompts": [
+      "Are there any disadvantages of using technology?",
+      "Do you think it is good to use technology in education?"
+    ],
+    "promptsZh": [
+      "使用科技有什么缺点吗？",
+      "你觉得在教育中使用科技是件好事吗？"
+    ],
+    "linkedId": "p2-2026q4-689",
+    "category": "new",
+    "frequency": "待确认",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-680",
+    "part": "part2",
+    "topic": "Describe a time when someone talked about something you were not interested in but you kept listening",
+    "topicZh": "听不感兴趣的话",
+    "prompts": [
+      "Who the person was",
+      "What he/she talked about",
+      "Why you kept listening",
+      "And explain how you felt about the experience"
+    ],
+    "linkedId": "p3-2026q4-680",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-680",
+    "part": "part3",
+    "topic": "A time when someone talked about something you were not interested in but you kept listening",
+    "topicZh": "听不感兴趣的话",
+    "prompts": [
+      "How can we tell if a listener is listening carefully?",
+      "What kind of topics do young people like to talk about today?",
+      "What would happen if the listener didn't listen carefully?",
+      "How can a teacher tell if students are listening in class?",
+      "What do you think about talking with people who have different opinions?",
+      "Do most young people in your country like to talk with elderly people?"
+    ],
+    "promptsZh": [
+      "我们怎么判断一个人有没有认真听？",
+      "现在年轻人喜欢聊什么话题？",
+      "如果听的人没有认真听，会发生什么？",
+      "老师怎样判断学生在课堂上有没有认真听？",
+      "你认为与持有不同观点的人交流怎么样？",
+      "在你的国家，大多数年轻人喜欢和老年人聊天吗？"
+    ],
+    "linkedId": "p2-2026q4-680",
+    "category": "new",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-682",
+    "part": "part2",
+    "topic": "Describe a time when you helped someone",
+    "topicZh": "帮助他人",
+    "prompts": [
+      "Where you helped him/her",
+      "Why you helped",
+      "How you helped",
+      "And explain how you felt about it"
+    ],
+    "linkedId": "p3-2026q4-682",
+    "category": "new",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-682",
+    "part": "part3",
+    "topic": "A time when you helped someone",
+    "topicZh": "帮助他人",
+    "prompts": [
+      "Should people be very kind when they help others?",
+      "Should children be taught to be kind to others?",
+      "Should parents help their kids with their homework?",
+      "What kind of advice should parents give to their children?",
+      "Should parents give children advice? Why?",
+      "Can kids provide any help to parents?"
+    ],
+    "promptsZh": [
+      "人们帮助别人时是否应该非常友善？",
+      "是否应该教孩子善待他人？",
+      "父母应该帮助孩子做家庭作业吗？",
+      "父母应该给孩子什么样的建议？",
+      "父母应该给孩子建议吗？为什么？",
+      "孩子能给父母提供帮助吗？"
+    ],
+    "linkedId": "p2-2026q4-682",
+    "category": "new",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-684",
+    "part": "part2",
+    "topic": "Describe a person you know who has healthy habits and a healthy daily routine",
+    "topicZh": "有健康习惯和作息的人",
+    "prompts": [
+      "Who this person is",
+      "How you know him/her",
+      "What healthy habits and daily routine he/she has",
+      "And explain how you feel about this person"
+    ],
+    "linkedId": "p3-2026q4-684",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-684",
+    "part": "part3",
+    "topic": "A person you know who has healthy habits and a healthy daily routine",
+    "topicZh": "有健康习惯和作息的人",
+    "prompts": [
+      "Which group pays more attention to health, young people or old people?",
+      "What effect does stress have on health?",
+      "What makes people stressed?",
+      "How can people relieve stress in daily life?",
+      "Do you think it is important to live in a community where people have healthy lifestyles?",
+      "Does the government play an important role in promoting healthy lifestyles in a community?"
+    ],
+    "promptsZh": [
+      "年轻人和老年人，哪一群体更关注健康？",
+      "压力会对健康产生什么影响？",
+      "什么事情会让人感到有压力？",
+      "人们怎样缓解日常生活中的压力？",
+      "你认为住在一个居民拥有健康生活方式的社区里重要吗？",
+      "政府在促进社区居民形成健康生活方式方面是否发挥着重要作用？"
+    ],
+    "linkedId": "p2-2026q4-684",
+    "category": "new",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-693",
+    "part": "part2",
+    "topic": "Describe a friend of yours who is creative",
+    "topicZh": "有创造力的朋友",
+    "prompts": [
+      "Who he/she is",
+      "How you met him/her",
+      "What materials he/she uses when making things by hand",
+      "And explain why you think he/she is a creative person"
+    ],
+    "linkedId": "p3-2026q4-693",
+    "category": "new",
+    "frequency": "待确认",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-693",
+    "part": "part3",
+    "topic": "A friend of yours who is creative",
+    "topicZh": "有创造力的朋友",
+    "prompts": [
+      "Do you think art classes are important for children?",
+      "Do you think creativity is important for everyone?",
+      "Does creativity come from nature or nurture?",
+      "Do you think there are too many advertisements on TV in your country?",
+      "Do you have a favourite advertisement?",
+      "Have you ever bought something because of an advertisement?"
+    ],
+    "promptsZh": [
+      "你认为艺术课对孩子重要吗？",
+      "你认为创造力对每个人都重要吗？",
+      "创造力是天生的还是后天培养的？",
+      "你认为你们国家电视上的广告太多了吗？",
+      "你有最喜欢的广告吗？",
+      "你曾经因为广告购买过东西吗？"
+    ],
+    "linkedId": "p2-2026q4-693",
+    "category": "new",
+    "frequency": "待确认",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-583",
+    "part": "part1",
+    "topic": "Work or Studies",
+    "topicZh": "工作或学习",
+    "prompts": [
+      "What subjects are you studying?",
+      "Do you like your subject?",
+      "Why did you choose to study that subject?",
+      "Do you think that your subject is popular in your country?",
+      "Do you want to change your major?",
+      "Do you have any plans for your studies in the next five years?",
+      "How much time do you spend on your studies each week?",
+      "Are you looking forward to working?",
+      "Do you prefer to study in the mornings or in the afternoons?",
+      "What technology do you use when you study?",
+      "What are the benefits of being your age?",
+      "What work do you do?",
+      "Do you like your job?",
+      "Why did you choose to do that type of work (or that job)?",
+      "Do you want to change to another job?",
+      "What requirements did you need to meet to get your current job?",
+      "What technology do you use at work?",
+      "Do you have any plans for your work in the next five years?",
+      "What do you think is the most important at the moment?",
+      "Who helps you the most? And how?",
+      "Do you miss being a student?",
+      "What changes would you like to see in your school?"
+    ],
+    "promptsZh": [
+      "你现在学的是什么专业/科目？",
+      "你喜欢你的专业/科目吗？",
+      "你为什么选择学习这个专业/科目？",
+      "你觉得你的专业在你的国家受欢迎吗？",
+      "你想换专业吗？",
+      "你对未来五年的学习有什么计划吗？",
+      "你每周花多长时间在学习上？",
+      "你期待工作吗？",
+      "你更喜欢上午学习还是下午学习？",
+      "你学习时会用到哪些技术或设备？",
+      "你认为你这个年龄有什么优势？",
+      "你现在从事什么工作？",
+      "你喜欢你的工作吗？",
+      "你为什么选择做这种工作？",
+      "你想换一份工作吗？",
+      "你需要满足什么要求才能得到现在的工作？",
+      "你在工作中使用哪些技术或设备？",
+      "你对未来五年的工作有什么计划？",
+      "你认为目前对你来说最重要的是什么？",
+      "谁对你帮助最大？他/她是如何帮助你的？",
+      "你怀念当学生的日子吗？",
+      "你希望学校有哪些改变？"
+    ],
+    "category": "core",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-584",
+    "part": "part1",
+    "topic": "Home and Accommodation",
+    "topicZh": "家与住宿",
+    "prompts": [
+      "Who do you live with?",
+      "Do you live in an apartment or a house?",
+      "What kinds of accommodation do you live in?",
+      "How long have you lived there?",
+      "What part of your home do you like the most?",
+      "Please describe the room you live in.",
+      "Can you describe the place where you live?",
+      "What's your favorite room in your apartment or house?",
+      "Do you prefer living in a house or an apartment?",
+      "What kind of house or apartment do you want to live in in the future?",
+      "Do you plan to live there for a long time?",
+      "What room does your family spend most of the time in?",
+      "What do you usually do in your apartment?",
+      "What makes you feel pleasant in your home?",
+      "What's the difference between where you are living now and where you have lived in the past?",
+      "Are the transport facilities to your home very good?",
+      "Do you think it is important to live in a comfortable environment?"
+    ],
+    "promptsZh": [
+      "你和谁一起住？",
+      "你住的是公寓还是房子？",
+      "你住的是什么类型的住所？",
+      "你在那里住了多久？",
+      "你最喜欢家里的哪个部分？",
+      "请描述一下你住的房间。",
+      "你能描述一下你住的地方吗？",
+      "你最喜欢家里的哪个房间？",
+      "你更喜欢住在房子里还是公寓里？",
+      "你未来想住什么样的房子或公寓？",
+      "你计划在那里住很长时间吗？",
+      "你的家人通常在哪个房间待的时间最长？",
+      "你在公寓里通常做什么？",
+      "家里的什么让你感到愉快？",
+      "你现在住的地方和以前住的地方有什么不同？",
+      "你家的交通设施是否便利？",
+      "你认为住在舒适的环境里重要吗？"
+    ],
+    "category": "core",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-585",
+    "part": "part1",
+    "topic": "Your Hometown",
+    "topicZh": "家乡话题",
+    "prompts": [
+      "Where is your hometown?",
+      "Is that a big city or a small place?",
+      "How long have you been living there?",
+      "Do you like your hometown?",
+      "What do you like (most) about your hometown?",
+      "Is there anything you dislike about it?",
+      "Please describe your hometown a little.",
+      "What's your hometown famous for?",
+      "Did you learn about the culture of your hometown in your childhood?",
+      "Did you learn about the history of your hometown at school?",
+      "Have you learned anything about the history of your hometown?",
+      "Do you think you will continue living there for a long time?",
+      "Are there many young people in your hometown?",
+      "Is your hometown a good place for young people to pursue their careers?",
+      "Do you like living there?"
+    ],
+    "promptsZh": [
+      "你家乡在哪里？",
+      "你家乡是大城市还是小地方？",
+      "你住哪多久了？",
+      "你喜欢你的家乡吗？",
+      "你最喜欢你家乡的什么？",
+      "你不喜欢你家乡的什么？",
+      "请描述一下你的家乡",
+      "你家乡以什么出名？",
+      "你小时候学习过家乡的文化吗？",
+      "你在学校学习过家乡的历史吗？",
+      "你有学习过家乡的历史吗？",
+      "你认为你会继续在那住很长的时间吗？",
+      "你们家乡有很多年轻人吗？",
+      "你们家乡是一个适合年轻人发展的地方吗？",
+      "你喜欢住在那里吗？"
+    ],
+    "category": "core",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-586",
+    "part": "part1",
+    "topic": "The Area You Live In",
+    "topicZh": "居住的地区",
+    "prompts": [
+      "Do you live in a noisy or a quiet area?",
+      "Do you like the area that you live in?",
+      "What are some changes in the area recently?",
+      "Are the people in your neighborhood nice and friendly?",
+      "Do you know any of your neighbours?",
+      "Where do you like to go in that area?",
+      "Do you know any famous people in your area?"
+    ],
+    "promptsZh": [
+      "你住在一个嘈杂的区域还是安静的区域？",
+      "你喜欢你住的区域吗？",
+      "最近这个区域发生了哪些变化？",
+      "你住的社区里的人友善吗？",
+      "你认识你的邻居吗？",
+      "在你住的区域，你喜欢去哪里？",
+      "你知道你住的区域有名人吗？"
+    ],
+    "category": "core",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-558",
+    "part": "part1",
+    "topic": "Watches",
+    "topicZh": "手表",
+    "prompts": [
+      "Do you wear a watch?",
+      "Have you ever got a watch as a gift?",
+      "Why do some people wear expensive watches?",
+      "Do you think it is important to wear a watch? Why?"
+    ],
+    "promptsZh": [
+      "你戴手表吗？",
+      "你收到过手表作为礼物吗？",
+      "为什么有些人戴昂贵的手表？",
+      "你认为戴手表重要吗？为什么？"
+    ],
+    "category": "retained",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-559",
+    "part": "part1",
+    "topic": "Cars",
+    "topicZh": "汽车",
+    "prompts": [
+      "Did you enjoy traveling by car when you were a kid?",
+      "What types of cars do you like?",
+      "Do you prefer to be a driver or a passenger?",
+      "What do you usually do when there is a traffic jam?",
+      "Do you think car colours are important?",
+      "Will you buy an expensive car in the future?"
+    ],
+    "promptsZh": [
+      "你小时候喜欢坐车出行吗？",
+      "你喜欢什么类型的车？",
+      "你更喜欢当司机还是乘客？",
+      "堵车的时候你通常会做什么？",
+      "你觉得汽车颜色重要吗？",
+      "你将来会买一辆昂贵的车吗？"
+    ],
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-560",
+    "part": "part1",
+    "topic": "Websites",
+    "topicZh": "网站",
+    "prompts": [
+      "What kinds of websites do you often visit?",
+      "What is your favourite website?",
+      "Are there any changes to the websites you often visit?",
+      "What kinds of websites are popular in your country?",
+      "Do you prefer getting information from websites or books?",
+      "Would you like to have your own website?",
+      "What have you learned from websites that help with your life or studies?"
+    ],
+    "promptsZh": [
+      "你经常访问什么类型的网站？",
+      "你最喜欢的网站是什么？",
+      "你经常访问的网站有什么变化吗？",
+      "在你的国家，什么类型的网站比较受欢迎？",
+      "你更喜欢从网站还是书里获取信息？",
+      "你想拥有自己的网站吗？",
+      "你从网站上学到了哪些对生活或学习有帮助的东西？"
+    ],
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-561",
+    "part": "part1",
+    "topic": "Mirrors",
+    "topicZh": "镜子",
+    "prompts": [
+      "Do you like looking at yourself in the mirror? How often?",
+      "Have you ever bought mirrors?",
+      "Do you usually take a mirror with you?",
+      "Would you use mirrors to decorate your room?"
+    ],
+    "promptsZh": [
+      "你喜欢照镜子吗？多久照一次？",
+      "你买过镜子吗？",
+      "你通常会随身带镜子吗？",
+      "你会用镜子来装饰房间吗？"
+    ],
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-562",
+    "part": "part1",
+    "topic": "Parks",
+    "topicZh": "公园",
+    "prompts": [
+      "Did you like going to parks as a child?",
+      "Do you still like going to parks now?",
+      "Would you like to see more parks in your city?",
+      "Are there any parks you want to go to in the future?",
+      "Would you prefer to play in a personal garden or public garden?",
+      "How are the parks today different from those you visited as a kid?",
+      "What do you like to do when visiting a park?",
+      "Would you like to play in a public garden or park?"
+    ],
+    "promptsZh": [
+      "你小时候喜欢去公园吗？",
+      "你现在还喜欢去公园吗？",
+      "你希望你的城市有更多公园吗？",
+      "未来有没有你想去的公园？",
+      "你更喜欢在私人花园还是公共花园里活动？",
+      "现在的公园和你小时候去过的公园有什么不同？",
+      "去公园的时候你喜欢做什么？",
+      "你愿意在公共花园或公园里玩吗？"
+    ],
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-563",
+    "part": "part1",
+    "topic": "Shopping",
+    "topicZh": "购物",
+    "prompts": [
+      "Do you like shopping?",
+      "How often do you go shopping?",
+      "Do you prefer online shopping or in-store shopping?",
+      "Have you ever returned anything you bought online?"
+    ],
+    "promptsZh": [
+      "你喜欢购物吗？",
+      "你多久购物一次？",
+      "你更喜欢网购还是线下购物？",
+      "你退过网购买的东西吗？"
+    ],
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-564",
+    "part": "part1",
+    "topic": "Keeping Tidy",
+    "topicZh": "整洁",
+    "prompts": [
+      "Do you like to keep things tidy?",
+      "Did you keep your room tidy as a child?",
+      "How do you keep your work or study space tidy?",
+      "Do you think that it is necessary to be tidy?",
+      "Do you think there are people who can always stay tidy?",
+      "What do you think of the people who are not very tidy?"
+    ],
+    "promptsZh": [
+      "你喜欢把东西收拾整齐吗？",
+      "你小时候会保持房间整洁吗？",
+      "你怎么保持工作或学习空间整洁？",
+      "你认为保持整洁是必要的吗？",
+      "你认为有人能一直保持整洁吗？",
+      "你怎么看待不太整洁的人？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-565",
+    "part": "part1",
+    "topic": "Music",
+    "topicZh": "音乐",
+    "prompts": [
+      "Do you prefer sad or happy music?",
+      "Does happy music make you feel more excited?",
+      "Have you taken any music classes?",
+      "Do you listen to music while doing other things?"
+    ],
+    "promptsZh": [
+      "你更喜欢伤感的音乐还是快乐的音乐？",
+      "快乐的音乐会让你更兴奋吗？",
+      "你上过音乐课吗？",
+      "你会一边做别的事情一边听音乐吗？"
+    ],
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-566",
+    "part": "part1",
+    "topic": "Teachers",
+    "topicZh": "老师",
+    "prompts": [
+      "Do you have a favorite teacher?",
+      "Do you want to be a teacher in the future?",
+      "Do you have a teacher from your past that you still remember?",
+      "Are you still in touch with your primary school teachers?",
+      "In what way has your favourite teacher helped you?",
+      "Do you like your primary school teachers more than your high school teachers?"
+    ],
+    "promptsZh": [
+      "你有最喜欢的老师吗？",
+      "你以后想当老师吗？",
+      "你过去有没有一位老师，直到现在你还记得？",
+      "你现在还和你小学的老师保持联系吗？",
+      "你最喜欢的那位老师是怎样帮助你的？",
+      "相比高中老师，你更喜欢小学老师吗？"
+    ],
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-567",
+    "part": "part1",
+    "topic": "Social Media",
+    "topicZh": "社交媒体",
+    "prompts": [
+      "Have you ever posted anything on social media?",
+      "When did you start using social media?",
+      "Do you think you spend too much time on social media?",
+      "Do your friends use social media?",
+      "What do people often do on social media?"
+    ],
+    "promptsZh": [
+      "你在社交媒体上发过东西吗？",
+      "你是什么时候开始用社交媒体的？",
+      "你觉得自己花在社交媒体上的时间太多吗？",
+      "你的朋友用社交媒体吗？",
+      "人们通常会在社交媒体上做什么？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-568",
+    "part": "part1",
+    "topic": "Clothes",
+    "topicZh": "服装",
+    "prompts": [
+      "What kind of clothes do you like to wear?",
+      "Do you prefer to wear comfortable and casual clothes or smart clothes?",
+      "Do you like wearing T-shirts?",
+      "Do you spend a lot of time choosing clothes?",
+      "Do you wear different styles of clothes on weekdays and weekends?",
+      "What colour clothes do you like?"
+    ],
+    "promptsZh": [
+      "你喜欢穿什么样的衣服？",
+      "你更喜欢穿舒适休闲的衣服，还是正式得体的衣服？",
+      "你喜欢穿 T 恤吗？",
+      "你会花很多时间挑衣服吗？",
+      "你工作日和周末会穿不同风格的衣服吗？",
+      "你喜欢什么颜色的衣服？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-571",
+    "part": "part1",
+    "topic": "The City You Live In",
+    "topicZh": "你居住的城市",
+    "prompts": [
+      "What city do you live in?",
+      "Do you like this city? Why?",
+      "How long have you lived in this city?",
+      "Are there big changes in this city?",
+      "Is this city your permanent residence?",
+      "Are there people of different ages living in this city?",
+      "Are the people friendly in the city?",
+      "Is the city friendly to children and old people?",
+      "Do you often see your neighbors?",
+      "What's the weather like where you live?",
+      "Would you recommend your city to others?"
+    ],
+    "promptsZh": [
+      "你住在哪个城市？",
+      "你喜欢这个城市吗？为什么？",
+      "你在这个城市住了多久了？",
+      "这座城市发生了很大变化吗？",
+      "这座城市是你的永久居住地吗？",
+      "这座城市有不同年龄段的人居住吗？",
+      "这座城市的人们友好吗？",
+      "这座城市对老年人和儿童友好吗？",
+      "你经常见到你的邻居吗？",
+      "你居住的地方天气怎么样？",
+      "你会向别人推荐你居住的城市吗？"
+    ],
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-572",
+    "part": "part1",
+    "topic": "Outer Space and Stars",
+    "topicZh": "外太空和星星",
+    "prompts": [
+      "Have you ever learnt about outer space and stars?",
+      "Do you like science fiction movies? Why?",
+      "Do you want to know more about outer space?",
+      "Do you want to go into outer space in the future?"
+    ],
+    "promptsZh": [
+      "你学过关于外太空和星星的知识吗？",
+      "你喜欢科幻电影吗？为什么？",
+      "你想更多了解外太空吗？",
+      "你未来想去外太空吗？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-574",
+    "part": "part1",
+    "topic": "Singing",
+    "topicZh": "唱歌",
+    "prompts": [
+      "Do you like singing? Why?",
+      "Have you ever learnt how to sing?",
+      "Who do you want to sing for?",
+      "Do you think singing can bring happiness to people?",
+      "Do you like listening to others singing?",
+      "Have you ever taken a singing class?"
+    ],
+    "promptsZh": [
+      "你喜欢唱歌吗？为什么？",
+      "你学过唱歌吗？",
+      "你想为谁唱歌？",
+      "你觉得唱歌能给人带来快乐吗？",
+      "你喜欢听别人唱歌吗？",
+      "你上过唱歌课吗？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-578",
+    "part": "part1",
+    "topic": "Science",
+    "topicZh": "科学",
+    "prompts": [
+      "Do you like science?",
+      "When did you start to learn about science?",
+      "Which science subject is interesting to you?",
+      "What kinds of interesting things have you done with science?",
+      "Do you like watching science TV programs?",
+      "Do Chinese people often visit science museums?"
+    ],
+    "promptsZh": [
+      "你喜欢科学吗？",
+      "你是什么时候开始学习科学的？",
+      "你对哪门科学科目感兴趣？",
+      "你做过哪些和科学有关的有趣事情？",
+      "你喜欢看科学类电视节目吗？",
+      "中国人经常参观科学博物馆吗？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-579",
+    "part": "part1",
+    "topic": "Headphones",
+    "topicZh": "耳机",
+    "prompts": [
+      "Do you use headphones?",
+      "What type of headphones do you use?",
+      "When would you use headphones?",
+      "In what conditions would you not use headphones?",
+      "Is wearing headphones comfortable?"
+    ],
+    "promptsZh": [
+      "你使用耳机吗？",
+      "你使用哪种类型的耳机？",
+      "你什么时候会使用耳机？",
+      "在什么情况下你不会使用耳机？",
+      "戴耳机舒服吗？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-580",
+    "part": "part1",
+    "topic": "Jokes and Comedies",
+    "topicZh": "笑话与喜剧",
+    "prompts": [
+      "Are you good at telling jokes?",
+      "Do your friends like to tell jokes?",
+      "Do you like to watch comedies?",
+      "Have you ever watched a live show?",
+      "Are comedy shows popular in your country?"
+    ],
+    "promptsZh": [
+      "你擅长讲笑话吗？",
+      "你的朋友喜欢讲笑话吗？",
+      "你喜欢看喜剧吗？",
+      "你看过现场表演吗？",
+      "喜剧节目在你的国家受欢迎吗？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-582",
+    "part": "part1",
+    "topic": "Morning Routines",
+    "topicZh": "早上作息",
+    "prompts": [
+      "Do you like getting up early in the morning?",
+      "What do you usually do in the morning?",
+      "What did you do in the morning when you were little? Why?",
+      "Are there any differences between what you do in the morning now and what you did in the past?",
+      "Do you spend your mornings doing the same things on both weekends and weekdays? Why?"
+    ],
+    "promptsZh": [
+      "你喜欢早起吗？",
+      "你早上一般会做什么？",
+      "你小时候早上一般做什么？为什么？",
+      "你现在早上做的事和以前有什么不同吗？",
+      "你周末和工作日的早晨做的事情一样吗？为什么？"
+    ],
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-587",
+    "part": "part2",
+    "topic": "Describe a change that you made recently",
+    "topicZh": "近期改变",
+    "prompts": [
+      "What the change was",
+      "What caused the change",
+      "What you did for the change",
+      "And explain how you feel about the change"
+    ],
+    "linkedId": "p3-2026q4-587",
+    "category": "retained",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-587",
+    "part": "part3",
+    "topic": "A change that you made recently",
+    "topicZh": "近期改变",
+    "prompts": [
+      "Do you think it is good to change one's daily routine?",
+      "Do you think it is good to change jobs?",
+      "Is it good for people to get a job promotion?",
+      "Do people often make plans around their regular routines?",
+      "Who tend to change their daily routine more, young people or old people?"
+    ],
+    "promptsZh": [
+      "你认为改变一个人的日常作息/日常安排是好事吗？",
+      "你认为换工作是好事吗？",
+      "人们获得升职是好事吗？",
+      "人们经常围绕自己的固定日常安排来制定计划吗？",
+      "年轻人和老年人相比，谁更容易改变日常安排？"
+    ],
+    "linkedId": "p2-2026q4-587",
+    "category": "retained",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-588",
+    "part": "part2",
+    "topic": "Describe a time when you changed an important opinion of yours",
+    "topicZh": "改变重要想法",
+    "prompts": [
+      "When you changed your opinion",
+      "What the original opinion was",
+      "Why you changed it",
+      "And explain how you felt about the experience"
+    ],
+    "linkedId": "p3-2026q4-588",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-588",
+    "part": "part3",
+    "topic": "A time when you changed an important opinion of yours",
+    "topicZh": "改变重要想法",
+    "prompts": [
+      "When do most children begin to have their own opinions?",
+      "Whose opinions are more important to children, their parents' or teachers'?",
+      "Do children communicate more with teachers or with parents?",
+      "Who do young people like to share opinions with?"
+    ],
+    "promptsZh": [
+      "大多数孩子什么时候开始有自己的想法？",
+      "对孩子来说，父母的意见和老师的意见，谁的更重要？",
+      "孩子和老师沟通更多，还是和父母沟通更多？",
+      "年轻人喜欢和谁分享观点？"
+    ],
+    "linkedId": "p2-2026q4-588",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-589",
+    "part": "part2",
+    "topic": "Describe a law on environmental protection",
+    "topicZh": "保护环境的法律",
+    "prompts": [
+      "What it is",
+      "How you first learned about it",
+      "Who benefits from it",
+      "And explain how you feel about this law"
+    ],
+    "linkedId": "p3-2026q4-589",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-589",
+    "part": "part3",
+    "topic": "A law on environmental protection",
+    "topicZh": "保护环境的法律",
+    "prompts": [
+      "What kinds of rules do schools in China have?",
+      "Do you think school rules are important?",
+      "Are children unhappy with the school rules?",
+      "What are the rules people should obey at work?",
+      "What is the purpose of punishment?",
+      "How can parents and teachers help children understand and follow rules?"
+    ],
+    "promptsZh": [
+      "中国学校有哪些规则？",
+      "你认为学校规则重要吗？",
+      "孩子们会因为学校规则而不开心吗？",
+      "人们在工作中应该遵守哪些规则？",
+      "惩罚的目的是什么？",
+      "父母和老师怎样帮助孩子理解并遵守规则？"
+    ],
+    "linkedId": "p2-2026q4-589",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-590",
+    "part": "part2",
+    "topic": "Describe a long-term goal/ambition you would like to achieve",
+    "topicZh": "长久目标/抱负",
+    "prompts": [
+      "How long you have had this goal/ambition",
+      "What it is",
+      "How you will achieve it",
+      "And explain why you set it"
+    ],
+    "linkedId": "p3-2026q4-590",
+    "category": "retained",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-590",
+    "part": "part3",
+    "topic": "A long-term goal/ambition you would like to achieve",
+    "topicZh": "长久目标/抱负",
+    "prompts": [
+      "Why should children have ambitions?",
+      "What do you think of people going after high positions?",
+      "Why are some young people keen on being fans of superstars?",
+      "Is it good for a person to be ambitious?",
+      "Do you think it is necessary to be ambitious when working in a team in a company?",
+      "Should parents support their children in pursuing their ambitions?"
+    ],
+    "promptsZh": [
+      "为什么孩子应该有抱负？",
+      "你怎么看待人们追求高职位？",
+      "为什么有些年轻人热衷于成为明星粉丝？",
+      "一个人有抱负是好事吗？",
+      "在公司团队工作时，有抱负是必要的吗？",
+      "父母应该支持孩子追求抱负吗？"
+    ],
+    "linkedId": "p2-2026q4-590",
+    "category": "retained",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-591",
+    "part": "part2",
+    "topic": "Describe a time when you sent a message or an email to someone but received no reply for a long time",
+    "topicZh": "很久没收到回复的信息",
+    "prompts": [
+      "Who you sent it to",
+      "What the message/email was about",
+      "Whether you finally received the reply",
+      "And explain how you felt about the experience"
+    ],
+    "linkedId": "p3-2026q4-591",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-591",
+    "part": "part3",
+    "topic": "A time when you sent a message or an email to someone but received no reply for a long time",
+    "topicZh": "很久没收到回复的信息",
+    "prompts": [
+      "In what situations do people not respond to messages at all?",
+      "Why do some people prefer sending a message instead of making a call?",
+      "How do you show your respect in your messages?",
+      "Why do some people feel angry when others don't reply to their message?",
+      "In what situations do people spend a long time responding to others' messages?",
+      "What would you do if you did not receive a reply after sending out a message?"
+    ],
+    "promptsZh": [
+      "在哪些情况下，人们完全不回复信息？",
+      "为什么有些人更喜欢发信息，而不是打电话？",
+      "你在信息里怎样表达尊重？",
+      "为什么有些人在别人不回复信息时会生气？",
+      "在哪些情况下，人们会花很长时间回复别人的信息？",
+      "如果你发出信息后没有收到回复，你会怎么做？"
+    ],
+    "linkedId": "p2-2026q4-591",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-592",
+    "part": "part2",
+    "topic": "Describe a story/book with animals in it",
+    "topicZh": "包含动物的故事或书",
+    "prompts": [
+      "What animals are in it",
+      "What the story/book is about",
+      "Why you read the story/book",
+      "And explain what you think of this story/book"
+    ],
+    "linkedId": "p3-2026q4-592",
+    "category": "retained",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-592",
+    "part": "part3",
+    "topic": "A story/book with animals in it",
+    "topicZh": "包含动物的故事或书",
+    "prompts": [
+      "Should schools teach children about animals?",
+      "Some people think pets should not be kept in cities. What do you think?",
+      "Many people regard pets as members of their family. What do you think?",
+      "Do many people keep pets in your country?",
+      "What are the advantages of keeping a pet?",
+      "Why do people always tell children stories with animals?"
+    ],
+    "promptsZh": [
+      "学校应该教孩子关于动物的知识吗？",
+      "有些人认为城市里不应该养宠物。你怎么看？",
+      "很多人把宠物看作家庭成员。你怎么看？",
+      "你们国家有很多人养宠物吗？",
+      "养宠物有什么好处？",
+      "为什么人们总是给孩子讲包含动物的故事？"
+    ],
+    "linkedId": "p2-2026q4-592",
+    "category": "retained",
+    "frequency": "超高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-593",
+    "part": "part2",
+    "topic": "Describe an advertisement with a famous person in it",
+    "topicZh": "名人出演的广告",
+    "prompts": [
+      "Who the person is",
+      "Where you can see it",
+      "What the advertisement is about",
+      "And explain how you feel about the advertisement"
+    ],
+    "linkedId": "p3-2026q4-593",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-593",
+    "part": "part3",
+    "topic": "An advertisement with a famous person in it",
+    "topicZh": "名人出演的广告",
+    "prompts": [
+      "What are the advantages and disadvantages of advertisements?",
+      "Why are many advertisements endorsed by celebrities? How useful are they?",
+      "What is the most important factor in an advertisement?",
+      "Why are some advertisements boring?",
+      "Is advertising important for a company? Why?",
+      "Which is more effective, online advertising or offline advertising?"
+    ],
+    "promptsZh": [
+      "广告有哪些优点和缺点？",
+      "为什么很多广告由名人代言？它们有多有用？",
+      "广告中最重要的因素是什么？",
+      "为什么有些广告很无聊？",
+      "广告对公司重要吗？为什么？",
+      "线上广告和线下广告哪个更有效？"
+    ],
+    "linkedId": "p2-2026q4-593",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-594",
+    "part": "part2",
+    "topic": "Describe a place you have travelled to that you would like to recommend to others",
+    "topicZh": "推荐旅行过的地方",
+    "prompts": [
+      "What it is",
+      "Where it is",
+      "What you saw and did there",
+      "And explain why you would like to recommend it to others"
+    ],
+    "linkedId": "p3-2026q4-594",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-594",
+    "part": "part3",
+    "topic": "A place you have travelled to that you would like to recommend to others",
+    "topicZh": "推荐旅行过的地方",
+    "prompts": [
+      "Where do people in your country often go for holidays?",
+      "What is the ideal length for a holiday?",
+      "How do people usually plan holidays?",
+      "Is it important to plan a holiday ahead?",
+      "Why do many countries try to attract people to visit?",
+      "How do people decide when to travel?"
+    ],
+    "promptsZh": [
+      "你们国家的人假期通常去哪里？",
+      "理想的假期长度是多久？",
+      "人们通常如何计划假期？",
+      "提前计划假期重要吗？",
+      "为什么很多国家努力吸引人们去旅游？",
+      "人们如何决定什么时候去旅行？"
+    ],
+    "linkedId": "p2-2026q4-594",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-595",
+    "part": "part2",
+    "topic": "Describe a challenging technological problem you faced",
+    "topicZh": "遇到的科技问题",
+    "prompts": [
+      "What the problem was",
+      "When and where you faced it",
+      "How challenging it was",
+      "And explain how you solved it"
+    ],
+    "linkedId": "p3-2026q4-595",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-595",
+    "part": "part3",
+    "topic": "A challenging technological problem you faced",
+    "topicZh": "遇到的科技问题",
+    "prompts": [
+      "What are the advantages and disadvantages of AI?",
+      "Do you think people today should learn about AI technology?",
+      "Should children learn to use AI?",
+      "How can AI help in our lives?",
+      "Do you think students are overly reliant on AI?",
+      "What can teachers do to stop students relying too much on AI?"
+    ],
+    "promptsZh": [
+      "人工智能有哪些优点和缺点？",
+      "你认为现在的人应该学习人工智能技术吗？",
+      "孩子应该学习使用人工智能吗？",
+      "人工智能可以如何帮助我们的生活？",
+      "你认为学生过度依赖人工智能了吗？",
+      "老师可以做什么来防止学生过度依赖人工智能？"
+    ],
+    "linkedId": "p2-2026q4-595",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-596",
+    "part": "part2",
+    "topic": "Describe a person who is good at learning and speaking new languages",
+    "topicZh": "擅长学习和说语言的人",
+    "prompts": [
+      "Who this person is",
+      "How you know this person",
+      "What languages this person can speak",
+      "And how this person learns new languages"
+    ],
+    "linkedId": "p3-2026q4-596",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-596",
+    "part": "part3",
+    "topic": "A person who is good at learning and speaking new languages",
+    "topicZh": "擅长学习和说语言的人",
+    "prompts": [
+      "Are there many people who can speak foreign languages in your country?",
+      "Does speaking other languages help at work?",
+      "Do people learn any languages other than English?",
+      "Why is it easier for children to learn new things than for adults?",
+      "How do people learn new things?",
+      "What is the most important thing for learning a language well?"
+    ],
+    "promptsZh": [
+      "你们国家有很多人会说外语吗？",
+      "会说其他语言对工作有帮助吗？",
+      "人们会学习英语以外的其他语言吗？",
+      "为什么孩子比成年人更容易学习新东西？",
+      "人们通常如何学习新东西？",
+      "学好一门语言最重要的是什么？"
+    ],
+    "linkedId": "p2-2026q4-596",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-597",
+    "part": "part2",
+    "topic": "Describe a food that people eat on special occasions/events",
+    "topicZh": "特别场合的食物",
+    "prompts": [
+      "What it is",
+      "What the special event/occasion is",
+      "How it is cooked/made",
+      "And explain why people eat it on that special occasion/event"
+    ],
+    "linkedId": "p3-2026q4-597",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-597",
+    "part": "part3",
+    "topic": "A food that people eat on special occasions/events",
+    "topicZh": "特别场合的食物",
+    "prompts": [
+      "Why are there special foods on special occasions or events?",
+      "What are the differences between everyday food and festival food?",
+      "Are there any differences between the food people eat today and the food people ate in the past?",
+      "Do people today prefer eating at home or in a restaurant?"
+    ],
+    "promptsZh": [
+      "为什么特殊场合或活动会有特殊食物？",
+      "日常食物和节日食物有什么区别？",
+      "现在人们吃的食物和过去人们吃的食物有什么区别？",
+      "现在人们更喜欢在家吃饭还是去餐厅吃饭？"
+    ],
+    "linkedId": "p2-2026q4-597",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-598",
+    "part": "part2",
+    "topic": "Describe a live sports event you watched and liked",
+    "topicZh": "喜欢的现场体育赛事",
+    "prompts": [
+      "What it was",
+      "When and where you watched it",
+      "Who you watched it with",
+      "And explain why you liked it"
+    ],
+    "linkedId": "p3-2026q4-598",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-598",
+    "part": "part3",
+    "topic": "A live sports event you watched and liked",
+    "topicZh": "喜欢的现场体育赛事",
+    "prompts": [
+      "Why do some people like to watch sports events?",
+      "Where do people normally watch sports events?",
+      "What are the advantages of watching sports events online?",
+      "What sports matches are suitable for children to attend?",
+      "Why do some people spend a lot going to other countries to watch sports events?",
+      "What sports games are popular in your country?"
+    ],
+    "promptsZh": [
+      "为什么有些人喜欢观看体育赛事？",
+      "人们通常在哪里观看体育赛事？",
+      "在线观看体育赛事有什么优点？",
+      "什么体育比赛适合孩子去现场观看？",
+      "为什么有些人会花很多钱去其他国家看体育赛事？",
+      "在你的国家，哪些体育比赛比较受欢迎？"
+    ],
+    "linkedId": "p2-2026q4-598",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-599",
+    "part": "part2",
+    "topic": "Describe a person you know who would like to choose a career in the medical field",
+    "topicZh": "想从事医疗行业的人",
+    "prompts": [
+      "When you knew him/her",
+      "When he/she started to think about that",
+      "What he/she would like to do",
+      "And explain why he/she would like to choose this career"
+    ],
+    "linkedId": "p3-2026q4-599",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-599",
+    "part": "part3",
+    "topic": "A person you know who would like to choose a career in the medical field",
+    "topicZh": "想从事医疗行业的人",
+    "prompts": [
+      "Do you think being a doctor is easy or difficult?",
+      "Do you think learning biology is interesting for children?",
+      "Why do some children want to become doctors?",
+      "Do you think governments should put a large amount of money into medical research?",
+      "Why is some doctors' pay high and others' low?",
+      "Do you think doctors should be paid more? Why?"
+    ],
+    "promptsZh": [
+      "你认为当医生容易还是困难？",
+      "你认为孩子学习生物有趣吗？",
+      "为什么有些孩子想成为医生？",
+      "你认为政府应该把大量资金投入医学研究吗？",
+      "为什么有些医生薪酬高，而有些医生薪酬低？",
+      "你认为医生应该获得更高的报酬吗？为什么？"
+    ],
+    "linkedId": "p2-2026q4-599",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-600",
+    "part": "part2",
+    "topic": "Describe a time when you worked in a group",
+    "topicZh": "在团队中工作",
+    "prompts": [
+      "When it was",
+      "What you did",
+      "Who you worked with",
+      "And explain why you worked in this group"
+    ],
+    "linkedId": "p3-2026q4-600",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-600",
+    "part": "part3",
+    "topic": "A time when you worked in a group",
+    "topicZh": "在团队中工作",
+    "prompts": [
+      "Why do some people prefer to work by themselves?",
+      "What should a leader do to make team members want to follow him or her?",
+      "Should students learn to do group work?",
+      "What group tasks are there in schools?",
+      "What advantages are there for students experiencing teamwork at school?",
+      "How can you tell if a person is a good leader?"
+    ],
+    "promptsZh": [
+      "为什么有些人更喜欢独自工作？",
+      "领导应该怎么做，才能让团队成员愿意跟随他/她？",
+      "学生应该学习团队合作吗？",
+      "学校里有哪些小组任务？",
+      "学生在学校体验团队合作有什么好处？",
+      "你怎么判断一个人是不是好领导？"
+    ],
+    "linkedId": "p2-2026q4-600",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-601",
+    "part": "part2",
+    "topic": "Describe a person you know who has a successful business",
+    "topicZh": "拥有成功商业的人",
+    "prompts": [
+      "Who this person is",
+      "What business he/she does",
+      "Why you think it is successful",
+      "And explain how you feel about him/her"
+    ],
+    "linkedId": "p3-2026q4-601",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-601",
+    "part": "part3",
+    "topic": "A person you know who has a successful business",
+    "topicZh": "拥有成功商业的人",
+    "prompts": [
+      "Why do some people start their own business?",
+      "Should governments provide financial support to start-ups?",
+      "Do most people prefer shopping at big stores or small stores?",
+      "What makes a business successful?",
+      "What makes a business fail?",
+      "Is it easy to set up a new business in your country?"
+    ],
+    "promptsZh": [
+      "为什么有些人会自己创业？",
+      "政府应该为初创企业提供资金支持吗？",
+      "大多数人更喜欢在大商店还是小商店购物？",
+      "什么因素会让一门生意成功？",
+      "什么会导致一门生意失败？",
+      "在你的国家开一家新公司容易吗？"
+    ],
+    "linkedId": "p2-2026q4-601",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-602",
+    "part": "part2",
+    "topic": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
+    "topicZh": "喜欢在家/花园种植物的人",
+    "prompts": [
+      "Who this person is",
+      "What plants he/she grows",
+      "How he/she grows the plants",
+      "And explain why he/she loves growing plants"
+    ],
+    "linkedId": "p3-2026q4-602",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-602",
+    "part": "part3",
+    "topic": "A person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
+    "topicZh": "喜欢在家/花园种植物的人",
+    "prompts": [
+      "What are the advantages of growing vegetables or flowers at home?",
+      "Do many people grow vegetables or flowers at home in your country?",
+      "Is it easy to grow plants at home?",
+      "Why do some people like to grow plants?",
+      "Why do some people prefer to grow their own fruits and vegetables instead of buying them from the market?",
+      "Do you think students should learn to grow plants?"
+    ],
+    "promptsZh": [
+      "在家种蔬菜或花有什么好处？",
+      "你国家有很多人在家种蔬菜或花吗？",
+      "在家种植物容易吗？",
+      "为什么有些人喜欢种植物？",
+      "为什么有些人更喜欢自己种水果蔬菜，而不是从市场买？",
+      "你认为学生应该学习种植物吗？"
+    ],
+    "linkedId": "p2-2026q4-602",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-603",
+    "part": "part2",
+    "topic": "Describe an interesting video",
+    "topicZh": "有趣视频",
+    "prompts": [
+      "When and where you watched it",
+      "What it is about",
+      "Why you watched it",
+      "And explain how you feel about it"
+    ],
+    "linkedId": "p3-2026q4-603",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-603",
+    "part": "part3",
+    "topic": "An interesting video",
+    "topicZh": "有趣视频",
+    "prompts": [
+      "What kind of videos do people in your country like to watch?",
+      "Which is more helpful, watching videos or reading books?",
+      "What skills can people learn from watching videos?",
+      "Are there any differences between the videos that young people and old people like to watch?",
+      "Are there any differences between the videos that young men and young women like to watch?",
+      "What makes a video go viral online?"
+    ],
+    "promptsZh": [
+      "你国家的人喜欢看什么类型的视频？",
+      "看视频和读书，哪个更有帮助？",
+      "人们可以通过看视频学到什么技能？",
+      "年轻人和老年人喜欢看的视频有什么不同？",
+      "年轻男性和年轻女性喜欢看的视频有什么不同吗？",
+      "什么会让一个视频在网上爆火？"
+    ],
+    "linkedId": "p2-2026q4-603",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-604",
+    "part": "part2",
+    "topic": "Describe a tall building you like or dislike",
+    "topicZh": "喜欢或不喜欢的高建筑",
+    "prompts": [
+      "What it is used for",
+      "Where it is",
+      "What it looks like",
+      "And explain why you like/dislike it"
+    ],
+    "linkedId": "p3-2026q4-604",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-604",
+    "part": "part3",
+    "topic": "A tall building you like or dislike",
+    "topicZh": "喜欢或不喜欢的高建筑",
+    "prompts": [
+      "Are there many tall buildings in your country?",
+      "What are the differences between those tall buildings in your country?",
+      "Why are different places laid out and designed differently?",
+      "What are the advantages of living in tall buildings?",
+      "Why do some people like to remodel and decorate their homes themselves?",
+      "What kind of interior design style do most people like?"
+    ],
+    "promptsZh": [
+      "你的国家有很多高建筑吗？",
+      "你国家的那些高建筑之间有什么不同？",
+      "为什么不同地方的布局和设计会不一样？",
+      "住在高层建筑里有什么好处？",
+      "为什么有些人喜欢自己改造和装饰家？",
+      "大多数人喜欢什么样的室内设计风格？"
+    ],
+    "linkedId": "p2-2026q4-604",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-605",
+    "part": "part2",
+    "topic": "Describe a boring place",
+    "topicZh": "去过的无聊地方",
+    "prompts": [
+      "Where it is",
+      "Who you went there with",
+      "What you did there",
+      "And explain why you think it is a boring place"
+    ],
+    "linkedId": "p3-2026q4-605",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-605",
+    "part": "part3",
+    "topic": "A boring place",
+    "topicZh": "去过的无聊地方",
+    "prompts": [
+      "Why do most children think education is boring?",
+      "Why aren't young people willing to listen to the experiences of older people?",
+      "What can people do when they feel bored?",
+      "Why are some teachers' classes boring? Are there any solutions?",
+      "Why do some young people feel bored when talking with old people?",
+      "Do most people think news about celebrities is boring?"
+    ],
+    "promptsZh": [
+      "为什么大多数孩子觉得教育很无聊？",
+      "为什么年轻人不愿意听老年人的经验？",
+      "人们觉得无聊时可以做什么？",
+      "为什么有些老师的课很无聊？有什么解决方法吗？",
+      "为什么有些年轻人和老年人聊天时会觉得无聊？",
+      "大多数人觉得名人新闻无聊吗？"
+    ],
+    "linkedId": "p2-2026q4-605",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-606",
+    "part": "part2",
+    "topic": "Describe a plan that you had to change recently",
+    "topicZh": "近期改变的计划",
+    "prompts": [
+      "What the plan was",
+      "Why you had to change it",
+      "What the new plan was",
+      "And explain how you felt about the change"
+    ],
+    "linkedId": "p3-2026q4-606",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-606",
+    "part": "part3",
+    "topic": "A plan that you had to change recently",
+    "topicZh": "近期改变的计划",
+    "prompts": [
+      "Do people often change their plans?",
+      "Would you tell others if you change your plan?",
+      "Why do you think parents still make plans for their children nowadays?",
+      "How does technology help people make plans?",
+      "What kind of plans do people often make?",
+      "Do you think people like the process of making plans more, or the moment of carrying them out?"
+    ],
+    "promptsZh": [
+      "人们经常改变计划吗？",
+      "如果你改变计划，你会告诉别人吗？",
+      "为什么现在父母仍然会为孩子做计划？",
+      "科技如何帮助人们制定计划？",
+      "人们经常会制定什么样的计划？",
+      "你觉得人们更喜欢制定计划的过程，还是执行计划的那一刻？"
+    ],
+    "linkedId": "p2-2026q4-606",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-607",
+    "part": "part2",
+    "topic": "Describe a new law you would like to introduce in your country",
+    "topicZh": "想颁布的新法律",
+    "prompts": [
+      "What law it is",
+      "What changes this law brings",
+      "Whether this new law will be popular",
+      "How you came up with the new law",
+      "And explain how you feel about this new law"
+    ],
+    "linkedId": "p3-2026q4-607",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-607",
+    "part": "part3",
+    "topic": "A new law you would like to introduce in your country",
+    "topicZh": "想颁布的新法律",
+    "prompts": [
+      "What rules should students follow at school?",
+      "Do people in your country usually obey the law?",
+      "What kinds of behavior are considered as good behavior?",
+      "Do you think children can learn about the law outside of school?",
+      "What are the benefits for people to obey rules?",
+      "How can parents teach children to obey rules?"
+    ],
+    "promptsZh": [
+      "学生在学校应该遵守什么规则？",
+      "你国家的人通常遵守法律吗？",
+      "什么样的行为被认为是好行为？",
+      "你认为孩子能在学校之外学习法律吗？",
+      "人们遵守规则有什么好处？",
+      "父母如何教孩子遵守规则？"
+    ],
+    "linkedId": "p2-2026q4-607",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-608",
+    "part": "part2",
+    "topic": "Describe an important decision that you made",
+    "topicZh": "重要决定",
+    "prompts": [
+      "What the decision was",
+      "How you made your decision",
+      "What the results of the decision were",
+      "And explain why it was important"
+    ],
+    "linkedId": "p3-2026q4-608",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-608",
+    "part": "part3",
+    "topic": "An important decision that you made",
+    "topicZh": "重要决定",
+    "prompts": [
+      "Do you think children sometimes have to make important decisions?",
+      "What important decisions do teenagers need to make after graduation?",
+      "Who can children turn to for help when making a decision?",
+      "Do you think advertisements can influence our decisions when shopping?",
+      "Do you think the influence of advertising is good?",
+      "How do people usually make important decisions?"
+    ],
+    "promptsZh": [
+      "你认为孩子有时候也需要做重要决定吗？",
+      "青少年毕业后需要做哪些重要决定？",
+      "孩子在做决定时可以向谁寻求帮助？",
+      "你认为广告会影响我们购物时的决定吗？",
+      "你认为广告的影响是好的吗？",
+      "人们通常如何做重要决定？"
+    ],
+    "linkedId": "p2-2026q4-608",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-609",
+    "part": "part2",
+    "topic": "Describe a friend from your childhood",
+    "topicZh": "发小",
+    "prompts": [
+      "Who he/she is",
+      "Where and how you met each other",
+      "What you often did together",
+      "And explain what made you like him/her"
+    ],
+    "linkedId": "p3-2026q4-609",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-609",
+    "part": "part3",
+    "topic": "A friend from your childhood",
+    "topicZh": "发小",
+    "prompts": [
+      "Do you still keep in touch with your friends from childhood? Why or why not?",
+      "How important is childhood friendship to children?",
+      "What do you think of communicating via social media?",
+      "Do you think online communication through social media will replace face-to-face communication?",
+      "What's the difference between having younger friends and older friends?",
+      "Has technology changed people's friendships? How?"
+    ],
+    "promptsZh": [
+      "你还和童年朋友保持联系吗？为什么？",
+      "童年友谊对孩子有多重要？",
+      "你怎么看通过社交媒体交流？",
+      "你认为通过社交媒体进行线上沟通会取代面对面交流吗？",
+      "有比自己年轻的朋友和年长的朋友有什么不同？",
+      "科技改变了人们的友谊吗？怎么改变的？"
+    ],
+    "linkedId": "p2-2026q4-609",
+    "category": "retained",
+    "frequency": "高频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-615",
+    "part": "part2",
+    "topic": "Describe a time when you got up early",
+    "topicZh": "早起经历",
+    "prompts": [
+      "When it was",
+      "What you did",
+      "Why you got up early",
+      "And how you felt about it"
+    ],
+    "linkedId": "p3-2026q4-615",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-615",
+    "part": "part3",
+    "topic": "A time when you got up early",
+    "topicZh": "早起经历",
+    "prompts": [
+      "Do you know anyone who likes to get up early?",
+      "Why do people get up early?",
+      "What kinds of occasions need people to arrive early?",
+      "Why do some people like to stay up late?",
+      "Is it good to arrive early in any situation?",
+      "What kind of people like getting up early?"
+    ],
+    "promptsZh": [
+      "你认识喜欢早起的人吗？",
+      "为什么人们会早起？",
+      "什么场合需要人们提前到达？",
+      "为什么有些人喜欢熬夜？",
+      "任何情况下早到都是好事吗？",
+      "什么样的人喜欢早起？"
+    ],
+    "linkedId": "p2-2026q4-615",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-616",
+    "part": "part2",
+    "topic": "Describe a piece of local news that people are interested in",
+    "topicZh": "当地新闻",
+    "prompts": [
+      "What it was about",
+      "Where you saw/heard it",
+      "Who was involved",
+      "And explain why people were interested in it"
+    ],
+    "linkedId": "p3-2026q4-616",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-616",
+    "part": "part3",
+    "topic": "A piece of local news that people are interested in",
+    "topicZh": "当地新闻",
+    "prompts": [
+      "Do people read the newspaper where you live?",
+      "Do people prefer local or international news?",
+      "Do you think it's important to have a national identity?",
+      "How can people develop their national identity?"
+    ],
+    "promptsZh": [
+      "你住的地方人们读报纸吗？",
+      "人们更喜欢本地新闻还是国际新闻？",
+      "你认为拥有国家认同感重要吗？",
+      "人们可以怎样培养国家认同感？"
+    ],
+    "linkedId": "p2-2026q4-616",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-617",
+    "part": "part2",
+    "topic": "Describe an environmental law you would like your country to introduce",
+    "topicZh": "想要颁布的环保法律",
+    "prompts": [
+      "What law it should be",
+      "Why people should follow the law",
+      "Whether the law will be popular",
+      "And explain how you feel about this law"
+    ],
+    "linkedId": "p3-2026q4-617",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-617",
+    "part": "part3",
+    "topic": "An environmental law you would like your country to introduce",
+    "topicZh": "想要颁布的环保法律",
+    "prompts": [
+      "How does technology affect the law?",
+      "Will there be a law that is universally accepted?",
+      "What environmental laws does your country already have?",
+      "What kinds of rules do schools in China have?"
+    ],
+    "promptsZh": [
+      "科技如何影响法律？",
+      "会不会有一条被所有人普遍接受的法律？",
+      "你的国家已经有哪些环保法律？",
+      "中国的学校通常有哪些规章制度？"
+    ],
+    "linkedId": "p2-2026q4-617",
+    "category": "retained",
+    "frequency": "低频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p2-2026q4-618",
+    "part": "part2",
+    "topic": "Describe a home that you like to visit but do not want to live in",
+    "topicZh": "喜欢拜访但不想住的家",
+    "prompts": [
+      "Where it is",
+      "What it is like",
+      "Why you like to visit it",
+      "And explain why you would not like to live there"
+    ],
+    "linkedId": "p3-2026q4-618",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p3-2026q4-618",
+    "part": "part3",
+    "topic": "A home that you like to visit but do not want to live in",
+    "topicZh": "喜欢拜访但不想住的家",
+    "prompts": [
+      "Do Chinese people like to visit others' homes?",
+      "What do Chinese people do when they visit others?",
+      "What kind of place do people in your country like to live in?",
+      "What's the difference between homes in cities and those in the countryside?",
+      "What kind of gifts do people usually bring when they visit others?",
+      "How often do you visit your relatives or friends?"
+    ],
+    "promptsZh": [
+      "中国人喜欢去别人家拜访吗？",
+      "中国人去别人家拜访时通常会做什么？",
+      "你们国家的人喜欢住在什么样的地方？",
+      "城市里的家和乡村里的家有什么区别？",
+      "人们拜访别人时通常会带什么礼物？",
+      "你多久拜访一次亲戚或朋友？"
+    ],
+    "linkedId": "p2-2026q4-618",
+    "category": "retained",
+    "frequency": "中频",
+    "region": "全球通用"
+  },
+  {
+    "id": "p1-2026q4-306",
+    "part": "part1",
+    "topic": "Collecting Things",
+    "topicZh": "收藏物品",
+    "prompts": [
+      "Do you collect things?",
+      "Are there any things you have kept from your childhood?",
+      "Would you keep old things for a long time? Why?",
+      "Where do you usually keep things you need?"
+    ],
+    "promptsZh": [
+      "你会收集东西吗？",
+      "你有没有保留一些童年时期的东西？",
+      "你会把旧东西保存很长时间吗？为什么？",
+      "你通常把自己需要的东西放在哪里？"
+    ],
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p1-2026q4-308",
+    "part": "part1",
+    "topic": "Street Markets",
+    "topicZh": "街头市场",
+    "prompts": [
+      "What do people usually buy on the street market?",
+      "Do you prefer to go shopping in the shopping mall or on the street market?",
+      "When was the last time you went to a street market?",
+      "Are there many street markets in China?"
+    ],
+    "promptsZh": [
+      "人们通常会在街头市场买什么？",
+      "你更喜欢去购物中心还是街头市场购物？",
+      "你上一次去街头市场是什么时候？",
+      "中国有很多街头市场吗？"
+    ],
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p1-2026q4-312",
+    "part": "part1",
+    "topic": "Computers and Tablets",
+    "topicZh": "电脑与平板电脑",
+    "prompts": [
+      "Would you like to use a computer or tablet?",
+      "In what conditions would you use a computer or tablet?",
+      "When was the first time you used a computer or tablet?",
+      "What would your life be like without computers or tablets?",
+      "In what conditions would it be difficult for you to use a computer or tablet?"
+    ],
+    "promptsZh": [
+      "你更愿意使用电脑还是平板电脑？",
+      "你会在什么情况下使用电脑或平板电脑？",
+      "你第一次使用电脑或平板电脑是什么时候？",
+      "如果没有电脑或平板电脑，你的生活会是什么样？",
+      "在什么情况下，你会觉得使用电脑或平板电脑比较困难？"
+    ],
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p1-2026q4-320",
+    "part": "part1",
+    "topic": "Lost and Found",
+    "topicZh": "失物招领",
+    "prompts": [
+      "What will you do if you find something lost by others?",
+      "Do you report to the police when finding something lost by others? Why?",
+      "Have you ever lost things?",
+      "Will you post on social media if you lose your item?",
+      "Have you ever lost your keys?"
+    ],
+    "promptsZh": [
+      "如果你捡到别人丢失的东西，你会怎么做？",
+      "捡到别人丢失的东西时，你会报警吗？为什么？",
+      "你以前丢过东西吗？",
+      "如果丢了东西，你会发到社交媒体上吗？",
+      "你以前丢过钥匙吗？"
+    ],
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p1-2026q4-444",
+    "part": "part1",
+    "topic": "Feeling Bored",
+    "topicZh": "感到无聊",
+    "prompts": [
+      "Do you often feel bored?",
+      "When would you feel bored?",
+      "What do you do when you feel bored?",
+      "Do you think childhood is boring or adulthood is boring?"
+    ],
+    "promptsZh": [
+      "你经常感到无聊吗？",
+      "你通常在什么时候会感到无聊？",
+      "你感到无聊的时候会做什么？",
+      "你觉得童年比较无聊，还是成年生活比较无聊？"
+    ],
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p1-2026q4-446",
+    "part": "part1",
+    "topic": "Friends",
+    "topicZh": "朋友",
+    "prompts": [
+      "Is there a difference between where you meet friends now and where you used to meet them in the past?",
+      "Why are some places suitable for meeting while others are not?",
+      "Do you prefer to spend time with one friend or with a group of friends?",
+      "Would you invite friends to your home?",
+      "How important are friends to you?",
+      "Do you often go out with your friends?",
+      "Where do you often meet each other?",
+      "What do you usually do with your friends?",
+      "Do you have a friend you have known for a long time?"
+    ],
+    "promptsZh": [
+      "现在和过去相比，你与朋友见面的地点有变化吗？",
+      "为什么有些地方适合见面，而有些地方不适合？",
+      "你更喜欢和一个朋友相处，还是和一群朋友聚会？",
+      "你会邀请朋友到家里来吗？",
+      "朋友对你来说有多重要？",
+      "你经常和朋友一起出去吗？",
+      "你们经常在哪里见面？",
+      "你通常和朋友一起做什么？",
+      "你有没有一个认识了很久的朋友？"
+    ],
+    "category": "overseas",
+    "frequency": "高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p2-2026q4-362",
+    "part": "part2",
+    "topic": "Describe a person you only met once recently and want to know more about",
+    "topicZh": "一见想继续了解的人",
+    "prompts": [
+      "Who he/she is",
+      "When you met him/her",
+      "Why you want to know more about him/her",
+      "And explain how you feel about him/her"
+    ],
+    "linkedId": "p3-2026q4-362",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p3-2026q4-362",
+    "part": "part3",
+    "topic": "A person you only met once recently and want to know more about",
+    "topicZh": "一见想继续了解的人",
+    "prompts": [
+      "What can we do to leave a good impression on people we meet for the first time?",
+      "What should we not talk about when we meet a person for the first time?",
+      "How do people make friends in China?",
+      "On what occasions do people like to make friends?",
+      "Is it important to have the same hobbies and interests when making friends?",
+      "What qualities make true friends?"
+    ],
+    "promptsZh": [
+      "第一次见面时，我们怎样才能给别人留下好印象？",
+      "第一次见面时，有哪些话题最好不要聊？",
+      "在中国，人们通常是怎么交朋友的？",
+      "人们通常会在什么情况下结交新朋友？",
+      "交朋友时，有相同的兴趣爱好重要吗？",
+      "真正的朋友应该具备哪些品质？"
+    ],
+    "linkedId": "p2-2026q4-362",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p2-2026q4-364",
+    "part": "part2",
+    "topic": "Describe a gift you would like to buy for your friend",
+    "topicZh": "送朋友的礼物",
+    "prompts": [
+      "How you knew your friend",
+      "How long you have known him/her",
+      "How you would choose a gift for him/her",
+      "And explain why you would choose that gift for him/her"
+    ],
+    "linkedId": "p3-2026q4-364",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p3-2026q4-364",
+    "part": "part3",
+    "topic": "A gift you would like to buy for your friend",
+    "topicZh": "送朋友的礼物",
+    "prompts": [
+      "When do people normally send gifts to others?",
+      "Is it hard to choose a gift?",
+      "Will people feel happy when receiving an expensive gift?",
+      "Which do people give on traditional festivals, red envelopes or other kinds of gifts?",
+      "What do people usually consider when buying gifts?",
+      "Are there any unlucky things that people should not buy as gifts in your country?"
+    ],
+    "promptsZh": [
+      "人们通常会在什么时候给别人送礼物？",
+      "挑礼物难吗？",
+      "收到贵重礼物时，人们会开心吗？",
+      "传统节日里，人们一般送红包还是其他礼物？",
+      "人们买礼物时通常会考虑什么？",
+      "在你的国家，有没有一些不吉利、不适合送人的东西？"
+    ],
+    "linkedId": "p2-2026q4-364",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p2-2026q4-402",
+    "part": "part2",
+    "topic": "Describe a city that you have been to and would like to visit again",
+    "topicZh": "想再去一次的城市",
+    "prompts": [
+      "When you visited it",
+      "What you did there",
+      "What it was like",
+      "And explain why you would like to visit it again"
+    ],
+    "linkedId": "p3-2026q4-402",
+    "category": "overseas",
+    "frequency": "低频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p3-2026q4-402",
+    "part": "part3",
+    "topic": "A city that you have been to and would like to visit again",
+    "topicZh": "想再去一次的城市",
+    "prompts": [
+      "What's the difference between the city and the countryside?",
+      "Some people say large cities are suitable for old people. What do you think?",
+      "Do you think it is possible that all of the population move to cities?",
+      "Do you think people in the countryside are friendlier than people in the city?",
+      "Are there any changes in your city?",
+      "What should the government do to improve citizens' safety?"
+    ],
+    "promptsZh": [
+      "城市和乡村有什么区别？",
+      "有人说大城市很适合老年人居住，你怎么看？",
+      "你觉得所有人都搬到城市生活有可能吗？",
+      "你觉得乡村的人比城市的人更友好吗？",
+      "你所在的城市这些年有什么变化吗？",
+      "政府应该做些什么来提高市民的安全？"
+    ],
+    "linkedId": "p2-2026q4-402",
+    "category": "overseas",
+    "frequency": "低频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p2-2026q4-410",
+    "part": "part2",
+    "topic": "Describe a course that impressed you a lot",
+    "topicZh": "印象深刻的课程",
+    "prompts": [
+      "What the course was about",
+      "Where you took the course",
+      "What you did during the course",
+      "And explain why it impressed you a lot"
+    ],
+    "linkedId": "p3-2026q4-410",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p3-2026q4-410",
+    "part": "part3",
+    "topic": "A course that impressed you a lot",
+    "topicZh": "印象深刻的课程",
+    "prompts": [
+      "What do people need to remember in their daily lives?",
+      "What can we learn from history?",
+      "Why do some people have a better memory than others?",
+      "Do people like things of memorial significance?",
+      "Which can help people remember things better, words or photos?",
+      "Can technology help people remember things better? How?"
+    ],
+    "promptsZh": [
+      "人们在日常生活中需要记住哪些事情？",
+      "我们可以从历史中学到什么？",
+      "为什么有些人的记忆力比别人更好？",
+      "人们喜欢有纪念意义的东西吗？",
+      "文字和照片，哪一种更能帮助人记住事情？",
+      "科技能帮助人们更好地记住事情吗？怎么帮助？"
+    ],
+    "linkedId": "p2-2026q4-410",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p2-2026q4-658",
+    "part": "part2",
+    "topic": "Describe an occasion that you lost something in public",
+    "topicZh": "公共场所丢物品",
+    "prompts": [
+      "What you lost",
+      "When and where you lost it",
+      "What you did to find it",
+      "And explain how you felt about it"
+    ],
+    "linkedId": "p3-2026q4-658",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p3-2026q4-658",
+    "part": "part3",
+    "topic": "An occasion that you lost something in public",
+    "topicZh": "公共场所丢物品",
+    "prompts": [
+      "What kinds of things do people usually lose?",
+      "What will people do when losing things?",
+      "Is it effective to offer rewards to find lost things?",
+      "What kinds of people may lose things often?",
+      "What can we do to reduce the possibility of losing things?",
+      "What do people often feel after losing things?"
+    ],
+    "promptsZh": [
+      "人们通常容易丢什么东西？",
+      "人们丢东西以后通常会怎么做？",
+      "通过提供报酬来找回丢失的东西有效吗？",
+      "什么样的人可能更容易经常丢东西？",
+      "我们可以怎么减少丢东西的可能？",
+      "人们丢东西以后通常会有什么感受？"
+    ],
+    "linkedId": "p2-2026q4-658",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p2-2026q4-660",
+    "part": "part2",
+    "topic": "Describe a way/change that helps you save a lot of time",
+    "topicZh": "节约时间的方法/改变",
+    "prompts": [
+      "What it is",
+      "How you implement it",
+      "How difficult it is to implement it",
+      "And explain how you feel about the way/change"
+    ],
+    "linkedId": "p3-2026q4-660",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  },
+  {
+    "id": "p3-2026q4-660",
+    "part": "part3",
+    "topic": "A way/change that helps you save a lot of time",
+    "topicZh": "节约时间的方法/改变",
+    "prompts": [
+      "Is it necessary for children to learn time management?",
+      "What can schools do to help students learn time management?",
+      "What can people do to save time?",
+      "Does technology help people save time? How and why?",
+      "Do you think parents should be responsible for teaching children to save time?",
+      "Do people who can manage time well become successful more easily?"
+    ],
+    "promptsZh": [
+      "孩子有必要学习时间管理吗？",
+      "学校可以怎样帮助学生学习时间管理？",
+      "人们可以做些什么来节省时间？",
+      "科技能帮助人们节省时间吗？怎么帮助？",
+      "你觉得父母应该负责教孩子节省时间吗？",
+      "会管理时间的人是不是更容易成功？"
+    ],
+    "linkedId": "p2-2026q4-660",
+    "category": "overseas",
+    "frequency": "超高频",
+    "region": "海外加考"
+  }
+]

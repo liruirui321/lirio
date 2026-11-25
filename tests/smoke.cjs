@@ -168,6 +168,10 @@ if(await page.getByLabel('听写答案',{exact:true}).count()){
 }
 await page.getByRole('button',{name:'提交轨迹分析',exact:true}).click();
 await page.getByRole('heading',{name:'提交轨迹 · 智能分析'}).waitFor();
+await page.getByRole('heading',{name:'语流听辨 · 连读与弱读'}).waitFor();
+await page.getByRole('button',{name:'重听完整原句',exact:true}).first().click();
+await page.waitForFunction(()=>document.querySelector('.listening-tools [role=status]')?.textContent==='原句');
+await page.getByRole('button',{name:'停止重听',exact:true}).click();
 await page.waitForFunction(()=>document.body.innerText.includes('旧版本只保留'));
 const captured=await page.evaluate(()=>window.__submissions);
 if(!captured.length||captured.some(r=>!r.submittedAt||r.recovered))throw Error('Submission snapshots missing');
@@ -222,5 +226,10 @@ await page.getByLabel('听写答案',{exact:true}).scrollIntoViewIfNeeded();
 if((await page.getByLabel('听写答案',{exact:true}).boundingBox()).height<60)throw Error('Small window lost input');
 if(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('aboboo-panel-size:'))))throw Error('Reset layout failed');
 if((await page.evaluate(async()=>(await import('/src/stores/projectStore.ts')).useProjectStore.getState().project.dictation.sentences[0].answer))!==projectBeforeReload.dictation.sentences[0].answer)throw Error('Resizing changed practice data');
+await page.evaluate(async()=>{const s=(await import('/src/stores/projectStore.ts')).useProjectStore;s.getState().updateProject({dictation:{index:0,source:'test',sentences:[{id:'numbers-names',start:0,end:2,text:'There are three people in London.',answer:'',attempts:0,submitted:false,revealed:false}]}});});
+await page.getByLabel('听写答案',{exact:true}).fill('There are 3 people in noun');
+await page.getByRole('button',{name:'提交批改',exact:true}).click();
+const flexibleGrade=await page.getByLabel('批改结果').innerText();
+if(!flexibleGrade.includes('专名占位')||flexibleGrade.includes('全部正确')||await page.locator('.notebook-word').count())throw Error('Numbers/noun grading UI incorrect');
 await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary and automatic single playback on next','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards','pause/next/submit keyboard workflow','library one-click open and progress restore','all six draggable boundaries, keyboard and double-click reset, reload persistence, small window layout','immutable submission snapshots','missing/wrong analysis and retry improvement'],errors},null,2)); if(errors.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});

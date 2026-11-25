@@ -7,7 +7,14 @@ export class AudioRecorder {
   async initialize(): Promise<void> {
     if (this.stream) return; // reuse existing stream
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+        video: false,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(`Microphone access denied: ${msg}`);

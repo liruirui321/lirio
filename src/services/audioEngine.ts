@@ -110,6 +110,49 @@ export class AudioEngine {
     return peaks.map(p => p / max);
   }
 
+  trimSilence(id: string, start: number, end: number): { start: number; end: number } {
+    const buffer = this.buffers.get(id);
+    if (!buffer || end - start < 0.15) return { start, end };
+    const data = buffer.getChannelData(0);
+    const sr = buffer.sampleRate;
+    const a = Math.max(0, Math.floor(start * sr));
+    const b = Math.min(data.length, Math.ceil(end * sr));
+    if (b <= a) return { start, end };
+
+    const frameLen = Math.max(1, Math.floor(sr * 0.01));
+    const rmsList: number[] = [];
+    let maxRms = 0;
+    for (let i = a; i < b; i += frameLen) {
+      const limit = Math.min(b, i + frameLen);
+      let sum = 0;
+      for (let n = i; n < limit; n++) {
+        sum += data[n] * data[n];
+      }
+      const rms = Math.sqrt(sum / Math.max(1, limit - i));
+      rmsList.push(rms);
+      if (rms > maxRms) maxRms = rms;
+    }
+
+    if (maxRms < 0.003) return { start, end };
+    const thresh = Math.max(0.006, maxRms * 0.06);
+    let firstVoice = -1;
+    let lastVoice = -1;
+    for (let idx = 0; idx < rmsList.length; idx++) {
+      if (rmsList[idx] >= thresh) {
+        if (firstVoice < 0) firstVoice = idx;
+        lastVoice = idx;
+      }
+    }
+    if (firstVoice < 0 || lastVoice < firstVoice) return { start, end };
+
+    const candidateStart = Math.max(start, start + firstVoice * 0.01 - 0.06);
+    const candidateEnd = Math.min(end, start + (lastVoice + 1) * 0.01 + 0.10);
+    const finalStart = candidateStart - start >= 0.08 ? candidateStart : start;
+    const finalEnd = end - candidateEnd >= 0.15 ? candidateEnd : end;
+    if (finalEnd - finalStart < 0.08) return { start, end };
+    return { start: finalStart, end: finalEnd };
+  }
+
   async exportWav(id: string): Promise<Uint8Array> {
     const original = this.buffers.get(id);
     if (!original) throw new Error('请先打开音频。');
@@ -125,7 +168,7 @@ export class AudioEngine {
     return bytes;
   }
 
-  async playRange(id:string,start:number,end:number,rate=1) {
+  async playRange(id:string,start:number,end:number,rate=1,onEnded?:()=>void) {
     const buffer=this.buffers.get(id);if(!buffer)throw new Error('音频尚未加载。');
     this.stop();const request=++this.rangeRequest;const ctx=this.getCtx();await ctx.resume();
     if(request!==this.rangeRequest)return false;
@@ -133,7 +176,7 @@ export class AudioEngine {
     this.rate=rate;this.pausedAt=start;this.startedAt=ctx.currentTime;this.playing=true;
     const source=ctx.createBufferSource();source.buffer=buffer;source.playbackRate.value=rate;source.connect(ctx.destination);
     this.sources.set(id,source);
-    source.onended=()=>{if(this.sources.get(id)===source && this.playing){this.pausedAt=end;this.playing=false;this.sources.delete(id);source.disconnect();}};
+    source.onended=()=>{if(this.sources.get(id)===source && this.playing){this.pausedAt=end;this.playing=false;this.sources.delete(id);source.disconnect();onEnded?.();}};
     source.start(0,start,end-start);
     return true;
   }

@@ -25,6 +25,15 @@ pub fn run() {
             commands::library::library_open,
             commands::library::library_add,
             commands::library::library_save_progress,
+            commands::corpus::corpus_fetch_audio,
+            commands::speak::speak_transcribe,
+            commands::speak::speak_chat_remote,
+            commands::speak::speak_chat_local,
+            commands::speak::speak_tts,
+            commands::speak::speak_auto_detect_deepseek,
+            commands::speak::podcast_download_latest,
+            commands::state::app_state_load,
+            commands::state::app_state_save,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,6 @@
 import { writeFile, readTextFile, readFile } from '@tauri-apps/plugin-fs';
 import { save, open } from '@tauri-apps/plugin-dialog';
+import {stripExamInstructions} from './examInstructions';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project } from '../types/project';
 
@@ -51,7 +52,7 @@ export class ProjectService {
     if (document.format !== 'aboboo-community-v1' || !Array.isArray(document.tracks) || !document.embeddedAudio) {
       throw new Error('请选择本社区版保存的 .abmac 项目；不支持官方 Aboboo 课件。');
     }
-    const project: Project = document;
+    const project: Project = stripExamInstructions(document);
     const blobUrls = new Map<string, string>();
     const recordingBlobs = new Map<string, Blob>();
     for (const track of project.tracks) {

@@ -23,7 +23,8 @@ fn collect(doc:&Value,known:&mut HashSet<String>,dir:&Path,out:&mut Vec<Value>)-
  if let Some(backups)=doc["dictationBackups"].as_array(){snapshots.extend(backups);}
  for snapshot in snapshots {if let Some(ss)=snapshot["sentences"].as_array(){for s in ss{
   if s["submitted"]!=true {continue;}
-  let mut r=json!({"id":"","projectId":doc["id"],"projectName":doc["name"],"sentenceId":s["id"],"start":s["start"],"end":s["end"],"expected":s["text"],"answer":s["answer"],"attempt":s["attempts"],"submittedAt":null,"recovered":true,"assisted":null});
+  let ans=if s["submittedAnswer"].is_string(){&s["submittedAnswer"]}else{&s["answer"]};
+  let mut r=json!({"id":"","projectId":doc["id"],"projectName":doc["name"],"sentenceId":s["id"],"start":s["start"],"end":s["end"],"expected":s["text"],"answer":ans,"attempt":s["attempts"],"submittedAt":null,"recovered":true,"assisted":null});
   let key=fingerprint(&r);if !known.insert(key.clone()){continue;}
   r["id"]=json!(format!("legacy-{key}"));store(dir,&r)?;out.push(r);
  }}}
@@ -58,4 +59,5 @@ fn list(app:tauri::AppHandle,project:Option<Value>)->Result<Value,String>{
 #[cfg(test)]mod tests{use super::*;
  #[test]fn migration_keeps_only_available_snapshots_and_is_idempotent(){let dir=std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());fs::create_dir(&dir).unwrap();let doc=json!({"id":"p","name":"x","dictation":{"sentences":[{"id":"s","text":"the cat","answer":"cat","start":0,"end":2,"attempts":4,"submitted":true},{"id":"draft","submitted":false}]}});let mut known=HashSet::new();let mut out=Vec::new();collect(&doc,&mut known,&dir,&mut out).unwrap();collect(&doc,&mut known,&dir,&mut out).unwrap();assert_eq!(out.len(),1);assert!(out[0]["submittedAt"].is_null());assert_eq!(out[0]["attempt"],4);fs::remove_dir_all(dir).unwrap();}
  #[test]fn immutable_record_rejects_overwrite(){let dir=std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());fs::create_dir(&dir).unwrap();let a=json!({"id":"one","answer":"cat"});store(&dir,&a).unwrap();store(&dir,&a).unwrap();assert!(store(&dir,&json!({"id":"one","answer":"dog"})).is_err());assert_eq!(read(&dir.join("one.json")).unwrap(),a);fs::remove_dir_all(dir).unwrap();}
+ #[test]fn migration_prefers_submitted_answer_and_deduplicates(){let dir=std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());fs::create_dir(&dir).unwrap();let doc=json!({"id":"p","name":"x","dictation":{"sentences":[{"id":"s","text":"the cat","answer":"","submittedAnswer":"cat","start":0,"end":2,"attempts":1,"submitted":true}]}});let existing=json!({"projectId":"p","expected":"the cat","answer":"cat","start":0.0,"attempt":1});let mut known=HashSet::from([fingerprint(&existing)]);let mut out=Vec::new();collect(&doc,&mut known,&dir,&mut out).unwrap();assert_eq!(out.len(),0);known.clear();collect(&doc,&mut known,&dir,&mut out).unwrap();assert_eq!(out.len(),1);assert_eq!(out[0]["answer"],"cat");fs::remove_dir_all(dir).unwrap();}
 }

@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "node tests/smoke.cjs"
+    "test": "node tests/smoke.cjs",
+    "test:learning": "node tests/learning.cjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

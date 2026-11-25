@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { appCacheDir, join } from '@tauri-apps/api/path';
@@ -6,202 +6,1234 @@ import { mkdir, writeFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { audioEngine } from '../../services/audioEngine';
 import { useProjectStore } from '../../stores/projectStore';
-import { grade, sentences, srt, parseSrt } from '../../services/dictation';
-import { record } from '../../services/submissions';
+import {
+  grade,
+  sentences,
+  srt,
+  parseSrt,
+  resegmentSentences,
+  mergeTwoSentences,
+  splitSentenceAt,
+} from '../../services/dictation';
+import { FUNCTION_WORDS, record } from '../../services/submissions';
+import { addMistakeToWordBook, loadCorpusState } from '../../services/corpusService';
+import { simplifyMaterialTitle } from '../../services/materialTitle';
 import type { Sentence } from '../../types/project';
-import { ResizeBoundary, resetPanelSizes } from '../Layout/ResizeBoundary';
+import { CustomSelect } from '../Corpus/CustomSelect';
 import { StudyWaveform } from './StudyWaveform';
+import {
+  IconBookmark,
+  IconBulb,
+  IconCheck,
+  IconClose,
+  IconEye,
+  IconListView,
+  IconNext,
+  IconPause,
+  IconPrev,
+  IconReplay,
+  IconSettings,
+  IconVolume,
+} from '../Icons';
 
-const stamp=(t:number)=>`${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
-export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
-  const {project,updateProject}=useProjectStore();
-  const [busy,setBusy]=useState(false),[status,setStatus]=useState(''),[error,setError]=useState('');
-  const [language,setLanguage]=useState('en'),[playing,setPlaying]=useState(false),[repeat,setRepeat]=useState(false),[rate,setRate]=useState(1);
-  const [wrongOnly,setWrongOnly]=useState(false),[hint,setHint]=useState(false),[editing,setEditing]=useState(false);
-  const [reference,setReference]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
-  const submitting=useRef(false);
-  const commandGesture=useRef<{used:boolean}|null>(null);
-  const tableRef=useRef<HTMLDivElement>(null);
-  const autoPlaySentence=useRef<string|null>(null);
-  const [position,setPosition]=useState(0);const starting=useRef(false),inputRef=useRef<HTMLTextAreaElement>(null);
-  const items=project?.dictation?.sentences||[], index=project?.dictation?.index||0, sentence=items[index];
-  const original=project?.tracks.find(t=>t.type==='original');
-  const key=project ? 'aboboo-dictation:'+project.originalAudioPath+':'+project.duration.toFixed(2) : '';
-  const failure=(e:unknown)=>setError(String(e));
-  const stop=()=>{audioEngine.pause();setPosition(audioEngine.getCurrentTime());setPlaying(false);};
-  useEffect(()=>{if(!project)return; if(!project.dictation){try{const stored=JSON.parse(localStorage.getItem(key)||'null');if(stored&&Array.isArray(stored.sentences)&&stored.sentences.length)updateProject({dictation:stored});}catch{/* ignore corrupt local cache */}}return ()=>{audioEngine.pause();};},[project?.id]);
-  useEffect(()=>{if(project?.dictation){try{localStorage.setItem(key,JSON.stringify(project.dictation));}catch{setError('本机进度缓存空间不足，请使用“保存项目”保存进度。');}}},[project?.dictation]);
-  useEffect(()=>{onBusy(busy);return()=>onBusy(false);},[busy,onBusy]);
-  useEffect(()=>{
-    starting.current=false;setPlaying(false);setHint(false);setEditing(false);setPosition(sentence?.start||0);
-    let cancelled=false;
-    const autoplay=autoPlaySentence.current===sentence?.id;autoPlaySentence.current=null;
-    if(autoplay&&sentence&&original){
-      setError('');starting.current=true;
-      audioEngine.playRange(original.id,sentence.start,sentence.end,rate)
-        .then(started=>{if(!cancelled&&started){setPlaying(true);inputRef.current?.focus();}})
-        .catch(e=>{if(!cancelled)failure(e);})
-        .finally(()=>{if(!cancelled)starting.current=false;});
+const stamp = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+const gradedAnswer = (s: Sentence) => (s.submittedAnswer !== undefined ? s.submittedAnswer : s.answer);
+
+export function Dictation({
+  onBusy,
+  onDiscussInSpeak,
+}: {
+  onBusy: (busy: boolean) => void;
+  onDiscussInSpeak?: (topicTitle: string, excerpt: string) => void;
+}) {
+  const { project, updateProject } = useProjectStore();
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [language, setLanguage] = useState('en');
+  const [playing, setPlaying] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+  const [rate, setRate] = useState(1);
+  const [wrongOnly, setWrongOnly] = useState(false);
+  const [inputStyle, setInputStyle] = useState<'sentence' | 'word'>(() => {
+    try {
+      return localStorage.getItem('aboboo-dict-input-style') === 'word' ? 'word' : 'sentence';
+    } catch {
+      return 'sentence';
     }
-    return()=>{cancelled=true;};
-  },[sentence?.id]);
-  useEffect(()=>{if(!playing||!sentence||!original)return;const timer=setInterval(()=>{setPosition(audioEngine.getCurrentTime());if(!audioEngine.isPlaying()&&!starting.current){if(repeat){starting.current=true;audioEngine.playRange(original.id,sentence.start,sentence.end,rate).catch(failure).finally(()=>{starting.current=false;});}else setPlaying(false);}},80);return()=>clearInterval(timer);},[playing,repeat,sentence?.id,rate]);
-  useEffect(()=>{
-    const box=tableRef.current;if(!box)return;
-    const reveal=()=>{const row=box.querySelector('tr.selected');if(!row)return;const r=row.getBoundingClientRect(),b=box.getBoundingClientRect();if(r.bottom>b.bottom)box.scrollTop+=r.bottom-b.bottom;else if(r.top<b.top+28)box.scrollTop-=b.top+28-r.top;};
-    reveal();const observer=new ResizeObserver(reveal);observer.observe(box);return()=>observer.disconnect();
-  },[index,wrongOnly,items.length]);
-  useEffect(()=>{
-    const handle=(e:KeyboardEvent)=>{
-      if(e.key==='Meta'){
-        if(!e.repeat&&!commandGesture.current)commandGesture.current={used:busy||editing||!sentence||e.altKey||e.ctrlKey||e.shiftKey||e.isComposing};
+  });
+  const [hint, setHint] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [showDrawer, setShowDrawer] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showComplete, setShowComplete] = useState(false);
+  const [addedMistakes, setAddedMistakes] = useState<Record<string, boolean>>({});
+  const [reference, setReference] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+
+  const submitting = useRef(false);
+  const commandGesture = useRef<{ used: boolean } | null>(null);
+  const autoPlaySentence = useRef<string | null>(null);
+  const [position, setPosition] = useState(0);
+  const starting = useRef(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const slotRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  const items = project?.dictation?.sentences || [];
+  const index = project?.dictation?.index || 0;
+  const sentence = items[index];
+  const original = project?.tracks.find((t) => t.type === 'original');
+  const trimmed = useMemo(
+    () => (sentence && original ? audioEngine.trimSilence(original.id, sentence.start, sentence.end) : null),
+    [original?.id, sentence?.id, sentence?.start, sentence?.end],
+  );
+  const segStart = trimmed?.start ?? sentence?.start ?? 0;
+  const segEnd = trimmed?.end ?? sentence?.end ?? 0;
+  const key = project ? 'aboboo-dictation:' + project.originalAudioPath + ':' + project.duration.toFixed(2) : '';
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [sentence?.answer, sentence?.id, inputStyle]);
+  const failure = (e: unknown) => setError(String(e));
+  const stop = () => {
+    audioEngine.pause();
+    setPosition(audioEngine.getCurrentTime());
+    setPlaying(false);
+  };
+
+  useEffect(() => {
+    if (!project) return;
+    if (!project.dictation) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(key) || 'null');
+        if (stored && Array.isArray(stored.sentences) && stored.sentences.length) {
+          updateProject({ dictation: stored });
+        }
+      } catch {
+        // ignore corrupt local cache
+      }
+    }
+    return () => {
+      audioEngine.pause();
+    };
+  }, [project?.id]);
+
+  useEffect(() => {
+    if (project?.dictation) {
+      try {
+        localStorage.setItem(key, JSON.stringify(project.dictation));
+      } catch {
+        setError('本机进度缓存空间不足。');
+      }
+    }
+  }, [project?.dictation]);
+
+  useEffect(() => {
+    onBusy(busy);
+    return () => onBusy(false);
+  }, [busy, onBusy]);
+
+  useEffect(() => {
+    setShowComplete(false);
+  }, [project?.id]);
+
+  useEffect(() => {
+    if (!project?.name) return;
+    try {
+      const { shortTitle: cleanTitle } = simplifyMaterialTitle(project.name);
+      localStorage.setItem(
+        'aboboo-last-listening',
+        JSON.stringify({
+          libraryId: project.libraryId || '',
+          title: cleanTitle || project.name,
+          index,
+          total: items.length,
+          updatedAt: Date.now(),
+        }),
+      );
+    } catch {
+      // ignore storage failure
+    }
+  }, [project?.name, project?.libraryId, index, items.length]);
+
+  useEffect(() => {
+    starting.current = false;
+    setPlaying(false);
+    setHint(false);
+    setEditing(false);
+    setPosition(segStart);
+    let cancelled = false;
+    const autoplay = autoPlaySentence.current === sentence?.id;
+    autoPlaySentence.current = null;
+    if (autoplay && sentence && original) {
+      setError('');
+      starting.current = true;
+      audioEngine
+        .playRange(original.id, segStart, segEnd, rate)
+        .then((started) => {
+          if (!cancelled && started) {
+            setPlaying(true);
+            (inputRef.current ?? slotRefs.current[0])?.focus();
+          }
+        })
+        .catch((e) => {
+          if (!cancelled) failure(e);
+        })
+        .finally(() => {
+          if (!cancelled) starting.current = false;
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [sentence?.id]);
+
+  useEffect(() => {
+    if (!playing || !sentence || !original) return;
+    const timer = setInterval(() => {
+      setPosition(audioEngine.getCurrentTime());
+      if (!audioEngine.isPlaying() && !starting.current) {
+        if (repeat) {
+          starting.current = true;
+          audioEngine
+            .playRange(original.id, segStart, segEnd, rate)
+            .catch(failure)
+            .finally(() => {
+              starting.current = false;
+            });
+        } else {
+          setPlaying(false);
+        }
+      }
+    }, 80);
+    return () => clearInterval(timer);
+  }, [playing, repeat, sentence?.id, segStart, segEnd, rate]);
+
+  useEffect(() => {
+    const handle = (e: KeyboardEvent) => {
+      if (e.key === 'Meta') {
+        if (!e.repeat && !commandGesture.current) {
+          commandGesture.current = { used: busy || editing || !sentence || e.altKey || e.ctrlKey || e.shiftKey || e.isComposing };
+        }
         return;
       }
-      if(commandGesture.current)commandGesture.current.used=true;
-      if(e.defaultPrevented||e.repeat||e.isComposing||busy||editing||!sentence||!original)return;
-      const target=e.target as HTMLElement|null;
-      if(target?.closest('[role=separator]'))return;
-      const typing=!!target?.closest('input,textarea,select,[contenteditable="true"]');
-      if(e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&e.code==='Space'){e.preventDefault();next(1);inputRef.current?.focus();}
-      else if(!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&((!e.altKey&&!typing&&e.code==='Space')||(e.altKey&&e.code==='KeyP'))){e.preventDefault();togglePlayback().catch(failure);}
-      else if(!e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&e.code==='Tab'&&(!typing||target===inputRef.current)){e.preventDefault();play().catch(failure);}
-      else if(e.altKey&&!e.metaKey&&!e.ctrlKey&&e.code==='ArrowRight'){e.preventDefault();next(1);inputRef.current?.focus();}
-      else if(e.altKey&&!e.metaKey&&!e.ctrlKey&&e.code==='ArrowLeft'){e.preventDefault();next(-1);inputRef.current?.focus();}
-      else if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();submit();}
-    };
-    const release=(e:KeyboardEvent)=>{
-      if(e.key!=='Meta')return;
-      const gesture=commandGesture.current;commandGesture.current=null;
-      if(!gesture||gesture.used||e.isComposing||busy||editing||!sentence||!original)return;
-      if(document.activeElement?.closest('[role=separator]'))return;
-      e.preventDefault();next(1);inputRef.current?.focus();
-    };
-    const modifier=(event:Event)=>{
-      const {command,other}=(event as CustomEvent<{command:boolean;other:boolean}>).detail;
-      if(command){handle(new KeyboardEvent('keydown',{key:'Meta',metaKey:true,shiftKey:other}));if(other&&commandGesture.current)commandGesture.current.used=true;}
-      else release(new KeyboardEvent('keyup',{key:'Meta'}));
-    };
-    window.addEventListener('aboboo-command-modifier',modifier);
-    const cancel=()=>{commandGesture.current=null;};
-    const pointer=()=>{if(commandGesture.current)commandGesture.current.used=true;};
-    window.addEventListener('keydown',handle);window.addEventListener('keyup',release);window.addEventListener('blur',cancel);window.addEventListener('pointerdown',pointer);
-    return()=>{window.removeEventListener('aboboo-command-modifier',modifier);window.removeEventListener('keydown',handle);window.removeEventListener('keyup',release);window.removeEventListener('blur',cancel);window.removeEventListener('pointerdown',pointer);};
-  });
-  if(!project||!original)return null;
-  const update=(changes:Partial<Sentence>)=>{if(!sentence)return;updateProject({dictation:{...project.dictation!,sentences:items.map((s,i)=>i===index?{...s,...changes}:s)}});};
-  const choose=(i:number,autoplay=false)=>{stop();autoPlaySentence.current=autoplay?items[i]?.id??null:null;updateProject({dictation:{...project.dictation!,index:i}});};
-  const visible=items.map((s,i)=>({s,i})).filter(({s})=>!wrongOnly||(s.submitted&&!grade(s.text,s.answer).correct));
-  const next=(direction:number)=>{const at=visible.findIndex(v=>v.i===index);const item=visible[at+direction];if(item)choose(item.i,direction>0);};
-  const play=async()=>{if(!sentence)return;stop();setError('');await audioEngine.playRange(original.id,sentence.start,sentence.end,rate);setPosition(sentence.start);setPlaying(true);inputRef.current?.focus();};
-  const togglePlayback=async()=>{
-    if(!sentence)return;if(audioEngine.isPlaying()){stop();return;}
-    const at=audioEngine.getCurrentTime();const offset=at>=sentence.start&&at<sentence.end-.05?at:sentence.start;
-    await audioEngine.playRange(original.id,offset,sentence.end,rate);setPlaying(true);inputRef.current?.focus();
-  };
-  const favorite=(kind:'word'|'sentence',text:string)=>{
-    if(!sentence)return;const favorites=project.favorites||[];
-    if(favorites.some(f=>f.kind===kind&&f.text.toLowerCase()===text.toLowerCase()&&f.start===sentence.start)){setStatus('已经在收藏中');return;}
-    updateProject({favorites:[...favorites,{id:crypto.randomUUID(),kind,text,context:sentence.text,start:sentence.start,end:sentence.end,note:'',mastered:false,reviews:0}]});setStatus('已加入收藏，可在“收藏词卡”复习');
-  };
-  const submit=async()=>{
-    if(!sentence||submitting.current)return;submitting.current=true;setError('');
-    const captured=sentence, projectId=project.id;
-    try{
-      await record(project,captured,!!captured.assisted||captured.revealed||hint);
-      const current=useProjectStore.getState().project;
-      if(current?.id===projectId&&current.dictation){
-        updateProject({dictation:{...current.dictation,sentences:current.dictation.sentences.map(s=>s.id===captured.id?{...s,submitted:s.answer===captured.answer&&s.text===captured.text,attempts:Math.max(s.attempts,captured.attempts+1)}:s)}});
+      if (commandGesture.current) commandGesture.current.used = true;
+      if (e.defaultPrevented || e.repeat || e.isComposing || busy || editing || !sentence || !original) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[role=separator]')) return;
+      const typing = !!target?.closest('input,textarea,select,[contenteditable="true"]');
+      if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.code === 'Space') {
+        e.preventDefault();
+        next(1);
+        inputRef.current?.focus();
+      } else if (!e.metaKey && !e.ctrlKey && !e.shiftKey && ((!e.altKey && !typing && e.code === 'Space') || (e.altKey && e.code === 'KeyP'))) {
+        e.preventDefault();
+        togglePlayback().catch(failure);
+      } else if (!e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.code === 'Tab' && (!typing || target === inputRef.current)) {
+        e.preventDefault();
+        play().catch(failure);
+      } else if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'ArrowRight') {
+        e.preventDefault();
+        next(1);
+        inputRef.current?.focus();
+      } else if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'ArrowLeft') {
+        e.preventDefault();
+        next(-1);
+        inputRef.current?.focus();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        submit();
+      } else if (e.key === 'Escape' && !showDrawer && !showSettings) {
+        e.preventDefault();
+        update({ revealed: !sentence.revealed, assisted: sentence.assisted || !sentence.revealed });
       }
-      setStatus('本次提交已保存到提交轨迹');
-    }catch(e){setError('提交未保存，请重试：'+String(e));}finally{submitting.current=false;}
+    };
+    const release = (e: KeyboardEvent) => {
+      if (e.key !== 'Meta') return;
+      const gesture = commandGesture.current;
+      commandGesture.current = null;
+      if (!gesture || gesture.used || e.isComposing || busy || editing || !sentence || !original) return;
+      if (document.activeElement?.closest('[role=separator]')) return;
+      e.preventDefault();
+      next(1);
+      inputRef.current?.focus();
+    };
+    const modifier = (event: Event) => {
+      const { command, other } = (event as CustomEvent<{ command: boolean; other: boolean }>).detail;
+      if (command) {
+        handle(new KeyboardEvent('keydown', { key: 'Meta', metaKey: true, shiftKey: other }));
+        if (other && commandGesture.current) commandGesture.current.used = true;
+      } else {
+        release(new KeyboardEvent('keyup', { key: 'Meta' }));
+      }
+    };
+    window.addEventListener('aboboo-command-modifier', modifier);
+    const cancel = () => {
+      commandGesture.current = null;
+    };
+    const pointer = () => {
+      if (commandGesture.current) commandGesture.current.used = true;
+    };
+    window.addEventListener('keydown', handle);
+    window.addEventListener('keyup', release);
+    window.addEventListener('blur', cancel);
+    window.addEventListener('pointerdown', pointer);
+    return () => {
+      window.removeEventListener('aboboo-command-modifier', modifier);
+      window.removeEventListener('keydown', handle);
+      window.removeEventListener('keyup', release);
+      window.removeEventListener('blur', cancel);
+      window.removeEventListener('pointerdown', pointer);
+    };
+  });
+
+  const { shortTitle, badge } = useMemo(
+    () => simplifyMaterialTitle(project?.name || ''),
+    [project?.name],
+  );
+
+  // Sliding dot window when items.length > 40 so long Part 1 scripts stay clean
+  const dotWindow = useMemo(() => {
+    if (items.length <= 40) return { start: 0, end: items.length };
+    const half = 12;
+    let s = Math.max(0, index - half);
+    let e = Math.min(items.length, s + half * 2 + 1);
+    if (e - s < half * 2 + 1) s = Math.max(0, e - (half * 2 + 1));
+    return { start: s, end: e };
+  }, [items.length, index]);
+
+  if (!project || !original) return null;
+
+  const update = (changes: Partial<Sentence>) => {
+    if (!sentence) return;
+    updateProject({
+      dictation: {
+        ...project.dictation!,
+        sentences: items.map((s, i) => (i === index ? { ...s, ...changes } : s)),
+      },
+    });
   };
-  const transcribe=async()=>{
-    setBusy(true);setError('');stop();setStatus('正在准备音频…');let unlisten:(()=>void)|undefined;
-    try{
-      unlisten=await listen<string>('transcription-progress',e=>setStatus(e.payload));
-      const bytes=await audioEngine.exportWav(original.id);const id=crypto.randomUUID();const dir=await appCacheDir();await mkdir(dir,{recursive:true});await writeFile(await join(dir,`asr-input-${id}.wav`),bytes);
+
+  const choose = (i: number, autoplay = false) => {
+    stop();
+    autoPlaySentence.current = autoplay ? items[i]?.id ?? null : null;
+    updateProject({ dictation: { ...project.dictation!, index: i } });
+  };
+
+  const visible = items.map((s, i) => ({ s, i })).filter(({ s }) => !wrongOnly || (s.submitted && grade(s.text, gradedAnswer(s)).hasErrors));
+  const wrongIndices = items
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => s.submitted && grade(s.text, gradedAnswer(s)).hasErrors)
+    .map(({ i }) => i);
+  const next = (direction: number) => {
+    const at = visible.findIndex((v) => v.i === index);
+    const item = visible[at + direction];
+    if (item) choose(item.i, direction > 0);
+  };
+
+  const play = async () => {
+    if (!sentence) return;
+    stop();
+    setError('');
+    await audioEngine.playRange(original.id, segStart, segEnd, rate);
+    setPosition(segStart);
+    setPlaying(true);
+    (inputRef.current ?? slotRefs.current[0])?.focus();
+  };
+
+  const togglePlayback = async () => {
+    if (!sentence) return;
+    if (audioEngine.isPlaying()) {
+      stop();
+      return;
+    }
+    const at = audioEngine.getCurrentTime();
+    const offset = at >= segStart && at < segEnd - 0.05 ? at : segStart;
+    await audioEngine.playRange(original.id, offset, segEnd, rate);
+    setPlaying(true);
+    (inputRef.current ?? slotRefs.current[0])?.focus();
+  };
+
+  const playSlow = async () => {
+    if (!sentence) return;
+    stop();
+    setError('');
+    await audioEngine.playRange(original.id, segStart, segEnd, 0.75);
+    setPosition(segStart);
+    setPlaying(true);
+    (inputRef.current ?? slotRefs.current[0])?.focus();
+  };
+
+  const resegmentCurrent = () => {
+    if (!project.dictation || !items.length) return;
+    stop();
+    const nextList = resegmentSentences(
+      items,
+      project.dictation.words,
+      project.duration,
+      (a, b) => audioEngine.trimSilence(original.id, a, b),
+    );
+    if (!nextList.length) return;
+    updateProject({
+      dictationBackups: [...(project.dictationBackups || []), project.dictation].slice(-3),
+      dictation: {
+        ...project.dictation,
+        sentences: nextList,
+        index: Math.min(index, nextList.length - 1),
+        segmentationVersion: 3,
+      },
+    });
+    setWrongOnly(false);
+    setShowSettings(false);
+    setStatus(`已智能重排分句：${items.length} 句 → ${nextList.length} 句`);
+  };
+
+  const mergeNextSentence = () => {
+    if (!project.dictation || index >= items.length - 1) return;
+    stop();
+    const merged = mergeTwoSentences(items[index], items[index + 1]);
+    const nextList = [...items.slice(0, index), merged, ...items.slice(index + 2)];
+    updateProject({
+      dictationBackups: [...(project.dictationBackups || []), project.dictation].slice(-3),
+      dictation: {
+        ...project.dictation,
+        sentences: nextList,
+        index,
+      },
+    });
+    setEditing(false);
+    setShowSettings(false);
+    setStatus(`已与第 ${index + 2} 句合并`);
+  };
+
+  const splitCurrentSentence = () => {
+    if (!project.dictation || !sentence) return;
+    const pair = splitSentenceAt(
+      sentence,
+      position,
+      project.dictation.words,
+      (a, b) => audioEngine.trimSilence(original.id, a, b),
+    );
+    if (!pair) {
+      setError('当前句词数过少，无法继续拆分');
+      return;
+    }
+    stop();
+    const nextList = [...items.slice(0, index), pair[0], pair[1], ...items.slice(index + 1)];
+    updateProject({
+      dictationBackups: [...(project.dictationBackups || []), project.dictation].slice(-3),
+      dictation: {
+        ...project.dictation,
+        sentences: nextList,
+        index,
+      },
+    });
+    setEditing(false);
+    setShowSettings(false);
+    setStatus(`已将第 ${index + 1} 句拆分为两句`);
+  };
+
+  const favoriteSentence = () => {
+    if (!sentence) return;
+    const favorites = project.favorites || [];
+    if (favorites.some((f) => f.kind === 'sentence' && f.text.toLowerCase() === sentence.text.toLowerCase() && f.start === segStart)) {
+      setStatus('该句已在收藏词卡中');
+      return;
+    }
+    updateProject({
+      favorites: [
+        ...favorites,
+        {
+          id: crypto.randomUUID(),
+          kind: 'sentence',
+          text: sentence.text,
+          context: sentence.text,
+          start: segStart,
+          end: segEnd,
+          note: '',
+          mastered: false,
+          reviews: 0,
+        },
+      ],
+    });
+    setStatus('已收藏本句到「收藏词卡」');
+  };
+
+  const submit = async () => {
+    if (!sentence || submitting.current) return;
+    const prevResult = sentence.submitted ? grade(sentence.text, gradedAnswer(sentence)) : null;
+    if (sentence.submitted && prevResult && !prevResult.correct && !sentence.answer.trim()) {
+      (inputRef.current ?? slotRefs.current[0])?.focus();
+      return;
+    }
+    submitting.current = true;
+    setError('');
+    const captured = sentence;
+    const projectId = project.id;
+    try {
+      await record(project, captured, !!captured.assisted || captured.revealed || hint);
+      const graded = grade(captured.text, captured.answer);
+      const current = useProjectStore.getState().project;
+      let clearedForRetry = false;
+      if (current?.id === projectId && current.dictation) {
+        const nextSentences = current.dictation.sentences.map((s) => {
+          if (s.id !== captured.id) return s;
+          const unchanged = s.answer === captured.answer && s.text === captured.text;
+          const attempts = Math.max(s.attempts, captured.attempts + 1);
+          if (!unchanged) {
+            return { ...s, submitted: false, attempts };
+          }
+          if (!graded.correct) {
+            clearedForRetry = true;
+            return { ...s, answer: '', submittedAnswer: captured.answer, submitted: true, attempts };
+          }
+          return { ...s, submittedAnswer: captured.answer, submitted: true, attempts };
+        });
+        updateProject({
+          dictation: {
+            ...current.dictation,
+            sentences: nextSentences,
+          },
+        });
+        if (clearedForRetry) {
+          setTimeout(() => (inputRef.current ?? slotRefs.current[0])?.focus(), 0);
+        }
+        if (nextSentences.length > 0 && nextSentences.every((s) => s.submitted)) {
+          setShowComplete(true);
+        }
+      }
+      setStatus('');
+    } catch (e) {
+      setError('提交未保存，请重试：' + String(e));
+    } finally {
+      submitting.current = false;
+    }
+  };
+
+  const transcribe = async () => {
+    setBusy(true);
+    setError('');
+    setShowSettings(false);
+    stop();
+    setStatus('正在准备音频…');
+    let unlisten: (() => void) | undefined;
+    try {
+      unlisten = await listen<string>('transcription-progress', (e) => setStatus(e.payload));
+      const bytes = await audioEngine.exportWav(original.id);
+      const id = crypto.randomUUID();
+      const dir = await appCacheDir();
+      await mkdir(dir, { recursive: true });
+      await writeFile(await join(dir, `asr-input-${id}.wav`), bytes);
       setStatus('正在本机提取字幕…');
-      const result=await invoke<{segments:Array<{start:number;end:number;text:string}>;words?:Array<{start:number;end:number;text:string}>;source:string}>('transcribe_audio',{id,language});
-      const list=sentences(result.segments,project.duration);if(!list.length)throw Error('没有可用的语音片段。');
-      const restored=list.map(s=>{const old=items.find(o=>o.text.toLowerCase()===s.text.toLowerCase());return old?{...s,answer:old.answer,submitted:old.submitted,revealed:old.revealed,attempts:old.attempts}:s;});
-      updateProject({dictationBackups:project.dictation?[...(project.dictationBackups||[]),project.dictation].slice(-3):project.dictationBackups,dictation:{sentences:restored,index:0,source:result.source,words:result.words,segmentationVersion:2}});setWrongOnly(false);setStatus(`已生成 ${list.length} 个完整单句${items.length?'；原进度已随项目备份':''}`);
-    }catch(e){failure(e);}finally{unlisten?.();setBusy(false);}
+      const result = await invoke<{ segments: Array<{ start: number; end: number; text: string }>; words?: Array<{ start: number; end: number; text: string }>; source: string }>('transcribe_audio', { id, language });
+      const list = sentences(result.segments, project.duration, result.words);
+      if (!list.length) throw Error('没有可用的语音片段。');
+      const restored = list.map((s) => {
+        const old = items.find((o) => o.text.toLowerCase() === s.text.toLowerCase());
+        return old ? { ...s, answer: old.answer, submittedAnswer: old.submittedAnswer, submitted: old.submitted, revealed: old.revealed, attempts: old.attempts } : s;
+      });
+      updateProject({
+        dictationBackups: project.dictation ? [...(project.dictationBackups || []), project.dictation].slice(-3) : project.dictationBackups,
+        dictation: { sentences: restored, index: 0, source: result.source, words: result.words, segmentationVersion: 2 },
+      });
+      setWrongOnly(false);
+      setStatus(`已生成 ${list.length} 个单句`);
+    } catch (e) {
+      failure(e);
+    } finally {
+      unlisten?.();
+      setBusy(false);
+    }
   };
-  const importSubs=async()=>{const path=await open({filters:[{name:'SRT 字幕',extensions:['srt']}],multiple:false});if(typeof path!=='string')return;const list=parseSrt(await readTextFile(path),project.duration);if(!list.length)throw Error('字幕无有效时间轴。');updateProject({dictation:{sentences:list,index:0,source:'导入字幕'}});};
-  const exportSubs=async()=>{const path=await save({defaultPath:project.name+'.srt',filters:[{name:'字幕',extensions:['srt']}]});if(path)await writeFile(path,new TextEncoder().encode(srt(items)));};
-  const result=sentence?.submitted?grade(sentence.text,sentence.answer):null;
-  const done=items.filter(s=>s.submitted).length,correct=items.filter(s=>s.submitted&&grade(s.text,s.answer).correct).length;
-  const cursor=visible.findIndex(v=>v.i===index);
-  const seekSentence=(t:number)=>{const target=items.findIndex(s=>t>=s.start&&t<=s.end);if(target>=0)choose(target);else if(items.length){let nearest=0;items.forEach((s,i)=>{if(Math.abs(s.start-t)<Math.abs(items[nearest].start-t))nearest=i;});choose(nearest);}};
-  const detailPlay=(t:number)=>{if(!sentence)return;stop();audioEngine.playRange(original.id,Math.max(sentence.start,t),sentence.end,rate).then(()=>setPlaying(true)).catch(failure);};
-  return <section className="dictation-workspace" aria-label="听写练习">
-    <div className="study-toolbar">
-      <strong className="study-mode">单句听写</strong>
-      <select aria-label="识别语言" value={language} disabled={busy} onChange={e=>setLanguage(e.target.value)}><option value="en">英语</option><option value="zh">中文</option><option value="auto">自动检测</option></select>
-      <button disabled={busy} onClick={()=>void transcribe()}>{items.length?'重新按单句拆分':'自动提取字幕'}</button>
-      {!items.length&&<button disabled={busy} onClick={()=>importSubs().catch(failure)}>导入 SRT</button>}
-      {busy&&<button onClick={()=>invoke('cancel_transcription').catch(failure)}>取消识别</button>}
-      {!!items.length&&<button onClick={()=>exportSubs().catch(failure)}>导出字幕</button>}
-      <button onClick={resetPanelSizes}>恢复布局</button>
-      <span role="status" className="study-status">{status}</span>
-      {!!items.length&&<label className="wrong-filter"><input type="checkbox" checked={wrongOnly} onChange={e=>setWrongOnly(e.target.checked)}/>只看错句</label>}
-    </div>
-    {error&&<div role="alert" className="study-error">{error}</div>}
-    <div className="study-waves">
-      <StudyWaveform id={original.id} start={0} end={project.duration} position={position} selection={sentence} onSeek={seekSentence}/>
-      <ResizeBoundary name="音频总览高度" variable="--overview-height" target=".overview" min={32} max={300} initial={46}/>
-      {sentence&&<StudyWaveform id={original.id} start={sentence.start} end={sentence.end} position={position} onSeek={detailPlay} detail/>}
-      {sentence&&<ResizeBoundary name="本句波形高度" variable="--detail-height" target=".detail" min={40} max={350} initial={58}/>}
-    </div>
-    {!items.length?<div className="dictation-empty"><span className="empty-wave">▂ ▅ ▃ ▇ ▅ ▂</span><h2>从一段音频，开始听写</h2><p>点击上方“自动提取字幕”，在本机生成听写片段。</p><p>也可以导入已有 SRT。识别后，先听原音、输入内容，再校对。</p><small>机器字幕可能有误，支持手动校正文本和时间。</small></div>:<>
-      <div className="sentence-browser">
-        <div className="sentence-table-wrap" ref={tableRef}>
-          <table className="sentence-table"><thead><tr><th>序号</th><th>听写内容</th><th>次数</th><th>正确率</th><th>起点</th><th>句长</th></tr></thead>
-            <tbody>{visible.map(({s,i})=>{const result=s.submitted?grade(s.text,s.answer):null;return <tr key={s.id} className={i===index?'selected':''} onClick={()=>choose(i)}><td><button aria-label={`第 ${i+1} 句`} onClick={e=>{e.stopPropagation();choose(i);}}>{s.submitted?(result?.correct?'☑':'☒'):'□'} <span>{i+1}</span></button></td><td className="sentence-answer">{s.answer||<span className="not-started">{i===index?'正在听写…':'待听写'}</span>}</td><td>{s.attempts||'—'}</td><td>{result?<span className="score-meter" title={`${result.score}%`}><i style={{width:result.score+'%'}}/><em>{result.score}%</em></span>:'—'}</td><td>{stamp(s.start)}</td><td>{(s.end-s.start).toFixed(1)}s</td></tr>;})}</tbody>
-          </table>
-          {!visible.length&&<div className="empty-rows">还没有错句。取消“只看错句”继续听写。</div>}
+
+  const importSubs = async () => {
+    const path = await open({ filters: [{ name: 'SRT 字幕', extensions: ['srt'] }], multiple: false });
+    if (typeof path !== 'string') return;
+    const list = parseSrt(await readTextFile(path), project.duration);
+    if (!list.length) throw Error('字幕无有效时间轴。');
+    updateProject({ dictation: { sentences: list, index: 0, source: '导入字幕' } });
+    setShowSettings(false);
+  };
+
+  const exportSubs = async () => {
+    const path = await save({ defaultPath: project.name + '.srt', filters: [{ name: '字幕', extensions: ['srt'] }] });
+    if (path) await writeFile(path, new TextEncoder().encode(srt(items)));
+  };
+
+  const result = sentence?.submitted ? grade(sentence.text, gradedAnswer(sentence)) : null;
+  const done = items.filter((s) => s.submitted).length;
+  const cursor = visible.findIndex((v) => v.i === index);
+  const detailPlay = (t: number) => {
+    if (!sentence) return;
+    stop();
+    audioEngine
+      .playRange(original.id, Math.max(segStart, t), segEnd, rate)
+      .then(() => setPlaying(true))
+      .catch(failure);
+  };
+
+  const progressPct = items.length ? ((index + 1) / items.length) * 100 : 0;
+  const cardCls = result ? (result.correct ? 'correct' : 'wrong') : '';
+
+  return (
+    <section className="dict-workspace" aria-label="单句精听">
+      {/* Minimal Single-Row Top Bar */}
+      <div className="dict-topbar">
+        <div className="dict-title-group" title={project.name}>
+          {badge && <span className="material-badge">{badge}</span>}
+          <strong>{shortTitle}</strong>
+          {items.length > 0 && (
+            <span className="dict-done-count">
+              {done}/{items.length}
+            </span>
+          )}
         </div>
-        <ResizeBoundary name="本句词语宽度" variable="--notebook-width" target=".word-notebook" axis="x" reverse min={120} max={500} initial={190}/>
-        <aside className="word-notebook"><div className="panel-caption">本句词语 <small>☆ 收藏复习</small></div>
-          {result&&!result.correct?result.edits.filter(e=>e.expected&&e.kind!=='correct').map((e,i)=><div className="notebook-word" key={i}><strong>{e.expected}</strong><button aria-label={`收藏单词 ${e.expected}`} title="收藏为词卡" onClick={()=>favorite('word',e.expected!)}>☆</button><small>{e.kind==='missing'?'漏写':`误写为 ${e.actual}`}</small></div>):<p className="notebook-empty">提交后在这里查看错词、漏词，点击 ☆ 加入词卡。</p>}
-          <button aria-label="收藏本句" className="save-sentence" onClick={()=>favorite('sentence',sentence.text)}>☆ 收藏本句</button>
-        </aside>
+
+        <div className="dict-top-actions">
+          {wrongIndices.length > 0 && (
+            <button
+              type="button"
+              className={`dict-slow-btn${wrongOnly ? ' active' : ''}`}
+              title={wrongOnly ? '恢复显示全部句子' : '只看并重练错句'}
+              onClick={() => {
+                const nextWrongOnly = !wrongOnly;
+                setWrongOnly(nextWrongOnly);
+                if (nextWrongOnly && !wrongIndices.includes(index)) {
+                  choose(wrongIndices[0], false);
+                }
+              }}
+            >
+              {wrongOnly ? `错句中 (${wrongIndices.length})` : `只看错句 (${wrongIndices.length})`}
+            </button>
+          )}
+          {items.length > 0 && done === items.length && (
+            <button
+              type="button"
+              className={`dict-slow-btn${showComplete ? ' active' : ''}`}
+              title="查看本篇精听总结与下一步"
+              onClick={() => setShowComplete((c) => !c)}
+            >
+              {showComplete ? '返回单句' : '本篇复盘'}
+            </button>
+          )}
+          {items.length > 0 && (
+            <button
+              type="button"
+              className={`icon-btn${showDrawer ? ' active' : ''}`}
+              title="全篇句子目录"
+              aria-label="句子目录"
+              onClick={() => {
+                setShowSettings(false);
+                setShowDrawer((d) => !d);
+              }}
+            >
+              <IconListView size={16} />
+            </button>
+          )}
+          <button
+            type="button"
+            className={`icon-btn${showSettings ? ' active' : ''}`}
+            title="精听设置与字幕工具"
+            aria-label="精听设置"
+            onClick={() => {
+              setShowDrawer(false);
+              setShowSettings((s) => !s);
+            }}
+          >
+            <IconSettings size={16} />
+          </button>
+        </div>
       </div>
-      <ResizeBoundary name="句子列表高度" variable="--browser-height" target=".sentence-browser" min={80} max={600} initial={160}/>
-      {sentence&&<>
-        <div className="sentence-controls">
-          <strong>第 {index+1} / {items.length} 句</strong>
-          <button aria-label="上一句" title="Option + ←" disabled={cursor<=0} onClick={()=>next(-1)}>上一句</button>
-          <button title="Tab：从句首重听（Shift + Tab 切换焦点）" className="play-sentence" onClick={()=>play().catch(failure)}>播放本句</button><button aria-label="暂停本句" title="空格：播放／暂停（输入时用 Option + P）" onClick={()=>togglePlayback().catch(failure)}>{playing?'暂停':'继续播放'}<small className="shortcut-hint">⌥ P</small></button>
-          <button aria-label="下一句" title="Command 单键（松开切换）；Option + 空格也可用" disabled={cursor<0||cursor>=visible.length-1} onClick={()=>next(1)}>下一句<small className="shortcut-hint">⌘</small></button>
-          <label><input type="checkbox" checked={repeat} onChange={e=>setRepeat(e.target.checked)}/>循环本句</label>
-          <select aria-label="听写速度" value={rate} onChange={e=>{stop();setRate(Number(e.target.value));}}>{[0.5,0.75,1,1.25,1.5].map(r=><option key={r} value={r}>{r}×</option>)}</select>
-          <span className="sentence-time">{stamp(position)} / {stamp(sentence.end)} <small>变速会变调</small></span>
+
+      {/* Status / Error Banners */}
+      {(status || error) && (
+        <div className={error ? 'app-error' : 'corpus-banner'} onClick={() => { setStatus(''); setError(''); }}>
+          {error || status}
         </div>
-        <div className="writing-area">
-          <div className="writing-caption"><span>听写区</span><span>Tab 重播 · ⌘ 单键下一句 · ⌥ P 暂停／继续 · ⌘/Ctrl Enter 提交（输入框内空格正常打字）</span></div>
-          <textarea ref={inputRef} aria-label="听写答案" spellCheck={false} placeholder="听原音，在这里写下你听到的内容…" value={sentence.answer} onChange={e=>update({answer:e.target.value,submitted:false})}
-            onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();submit();}if((e.metaKey||e.ctrlKey)&&e.code==='Space'){e.preventDefault();play().catch(failure);}if(e.key==='F1'){e.preventDefault();submit();}}}/>
-          {hint&&<p aria-label="提示" className="initial-hint">{sentence.text.split(/\s+/).map(w=>w[0]+'＿'.repeat(Math.max(1,w.length-1))).join(' ')}</p>}
+      )}
+
+      {/* Settings Popover */}
+      {showSettings && (
+        <div className="corpus-popover">
+          <div className="corpus-popover-head">
+            <strong>精听设置</strong>
+            <button className="icon-btn" onClick={() => setShowSettings(false)} aria-label="关闭">
+              <IconClose size={14} />
+            </button>
+          </div>
+          <div className="corpus-popover-grid">
+            <label>
+              倍速
+              <CustomSelect
+                value={String(rate)}
+                options={[0.5, 0.75, 1, 1.25, 1.5].map((r) => ({ value: String(r), label: `${r}x` }))}
+                minWidth={95}
+                onChange={(v) => {
+                  stop();
+                  setRate(Number(v));
+                }}
+              />
+            </label>
+            <label>
+              识别语言
+              <CustomSelect
+                value={language}
+                disabled={busy}
+                options={[
+                  { value: 'en', label: '英语' },
+                  { value: 'zh', label: '中文' },
+                  { value: 'auto', label: '自动' },
+                ]}
+                minWidth={95}
+                onChange={(v) => setLanguage(v)}
+              />
+            </label>
+            <label>
+              输入形式
+              <CustomSelect
+                value={inputStyle}
+                options={[
+                  { value: 'sentence', label: '整句输入' },
+                  { value: 'word', label: '逐词填空' },
+                ]}
+                minWidth={95}
+                onChange={(v) => {
+                  const nextStyle = v === 'word' ? 'word' : 'sentence';
+                  setInputStyle(nextStyle);
+                  try {
+                    localStorage.setItem('aboboo-dict-input-style', nextStyle);
+                  } catch {}
+                }}
+              />
+            </label>
+          </div>
+          <div className="corpus-popover-checks">
+            <label><input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} /> 单句循环</label>
+            <label><input type="checkbox" checked={wrongOnly} onChange={(e) => setWrongOnly(e.target.checked)} /> 只看错句</label>
+          </div>
+          <div className="corpus-popover-links">
+            <button disabled={busy} onClick={() => void transcribe()}>
+              {items.length ? '重新提取字幕' : '自动提取字幕'}
+            </button>
+            {busy && <button onClick={() => invoke('cancel_transcription').catch(failure)}>取消</button>}
+            {items.length > 0 && (
+              <button disabled={busy} title="免重识别，1秒内按意群切长句、合并碎句" onClick={resegmentCurrent}>
+                智能重排分句
+              </button>
+            )}
+            <button disabled={busy} onClick={() => importSubs().catch(failure)}>导入 SRT</button>
+            {items.length > 0 && <button onClick={() => exportSubs().catch(failure)}>导出 SRT</button>}
+            {sentence && (
+              <>
+                <button disabled={index >= items.length - 1} title="把当前句与下一句合为一体" onClick={mergeNextSentence}>
+                  与下句合并
+                </button>
+                <button title="从当前波形指针或句中停顿处拆成两句" onClick={splitCurrentSentence}>
+                  拆成两句
+                </button>
+                <button
+                  onClick={() => {
+                    stop();
+                    setShowSettings(false);
+                    setEditing((e) => !e);
+                    setReference(sentence.text);
+                    setStart(sentence.start.toFixed(2));
+                    setEnd(sentence.end.toFixed(2));
+                  }}
+                >
+                  校正本句
+                </button>
+              </>
+            )}
+          </div>
         </div>
-        <ResizeBoundary name="听写输入区高度" variable="--writing-height" target=".writing-area" min={105} max={700} initial={180}/>
-        <div className="checking-toolbar">
-          <button aria-label="提交批改" className="primary" onClick={submit}>提交批改<small className="shortcut-hint">⌘ Enter</small></button>
-          <button onClick={()=>{if(!hint)update({assisted:true});setHint(!hint);}}>首字母提示</button>
-          <button onClick={()=>update({revealed:!sentence.revealed,assisted:sentence.assisted||!sentence.revealed})}>{sentence.revealed?'隐藏答案':'显示答案'}</button>
-          <button onClick={()=>{update({answer:'',submitted:false,revealed:false});setHint(false);}}>重新听写</button>
-          <button className="edit-reference" onClick={()=>{stop();setEditing(!editing);setReference(sentence.text);setStart(sentence.start.toFixed(2));setEnd(sentence.end.toFixed(2));}}>校正参考文本／时间</button>
+      )}
+
+      {/* Sentence Directory Drawer */}
+      {showDrawer && items.length > 0 && (
+        <div className="dict-drawer">
+          <div className="corpus-popover-head">
+            <strong>全篇目录（{visible.length} 句）</strong>
+            <button className="icon-btn" onClick={() => setShowDrawer(false)} aria-label="关闭">
+              <IconClose size={14} />
+            </button>
+          </div>
+          <div className="dict-drawer-list">
+            {visible.map(({ s, i }) => {
+              const r = s.submitted ? grade(s.text, gradedAnswer(s)) : null;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`dict-drawer-row${i === index ? ' active' : ''}`}
+                  onClick={() => {
+                    choose(i, true);
+                    setShowDrawer(false);
+                  }}
+                >
+                  <span className="dict-drawer-num">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="dict-drawer-text">{s.answer || s.submittedAnswer || s.text || '待听写'}</span>
+                  <span className={`dict-drawer-score${r ? (r.correct ? ' ok' : ' err') : ''}`}>
+                    {r ? `${r.score}%` : stamp(s.start)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        {(sentence.revealed||sentence.submitted||editing)&&<>
-        <ResizeBoundary name="批改区域高度" variable="--checking-height" target=".checking-panel" reverse min={70} max={450} initial={135}/>
-        <div className="checking-panel">
-          {(sentence.revealed||sentence.submitted)&&<div className="reference-line"><span>参考：</span><p aria-label="参考答案">{sentence.text}</p></div>}
-          {result&&<div aria-label="批改结果" className="grading-line"><strong>{result.correct?'全部正确':`词语准确率 ${result.score}%`}</strong><div>{result.edits.map((e,i)=><span key={i} className={'edit-token '+e.kind}>{e.kind==='correct'?e.actual:e.kind==='missing'?`漏：${e.expected}`:e.kind==='extra'?`多：${e.actual}`:`${e.actual} → ${e.expected}`}</span>)}</div><small>忽略大小写与标点 · 红：错词 · 黄：漏词 · 紫：多写</small></div>}
-          {editing&&<div className="reference-editor"><textarea aria-label="校正文本" value={reference} onChange={e=>setReference(e.target.value)}/><label>起点（秒）<input aria-label="句子起点" type="number" step="0.01" value={start} onChange={e=>setStart(e.target.value)}/></label><label>终点（秒）<input aria-label="句子终点" type="number" step="0.01" value={end} onChange={e=>setEnd(e.target.value)}/></label><button onClick={()=>{const a=Number(start),b=Number(end);if(!reference.trim()||!Number.isFinite(a)||!Number.isFinite(b)||a<0||b<=a||b>project.duration){setError('文本不能为空；起止时间需位于音频范围内。');return;}update({text:reference.trim(),start:a,end:b,submitted:false});setEditing(false);setError('');}}>保存校正</button></div>}
-          <div className="reference-source">{project.dictation?.source} · 可校正，不代表官方答案</div>
-        </div></>}
-      </>}
-      <footer className="study-footer"><span>已提交 {done}/{items.length}　全对 {correct}　待复习 {done-correct}</span><span>本机自动缓存 · 保存项目可备份进度与收藏</span></footer>
-    </>}
-  </section>;
+      )}
+
+      {/* Completion Card OR Empty State OR Centered Single-Sentence Card */}
+      {showComplete && items.length > 0 ? (() => {
+        const gradedList = items.map((s) => grade(s.text, gradedAnswer(s)));
+        const avgScore = Math.round(
+          gradedList.reduce((sum, g) => sum + g.score, 0) / Math.max(1, gradedList.length),
+        );
+        const perfectCount = gradedList.filter((g) => g.correct).length;
+        const mistakeMap = new Map<string, number>();
+        for (const g of gradedList) {
+          for (const e of g.edits) {
+            const w = e.expected?.toLowerCase();
+            if (w && (e.kind === 'wrong' || e.kind === 'missing') && w.length >= 2 && !FUNCTION_WORDS.has(w)) {
+              mistakeMap.set(w, (mistakeMap.get(w) || 0) + 1);
+            }
+          }
+        }
+        const uniqueMistakes = [...mistakeMap.entries()].sort((a, b) => b[1] - a[1]).map(([w]) => w);
+        const existingMistakes = loadCorpusState().mistakes;
+        const unsavedCount = uniqueMistakes.filter((w) => !existingMistakes[w] && !addedMistakes[w]).length;
+        const excerpt = items
+          .slice(0, 6)
+          .map((s) => s.text.trim())
+          .filter(Boolean)
+          .join(' ')
+          .slice(0, 600);
+
+        return (
+          <div className="dict-stage">
+            <div className="dict-complete-card">
+              <div>
+                <span className="tier-badge small">精听完成</span>
+                <h2 style={{ marginTop: 8 }}>{shortTitle}</h2>
+              </div>
+
+              <div className="dict-complete-stats">
+                <div className="dict-complete-stat">
+                  <span>平均正确率</span>
+                  <strong>{avgScore}%</strong>
+                </div>
+                <div className="dict-complete-stat">
+                  <span>全对句数</span>
+                  <strong>
+                    {perfectCount} / {items.length}
+                  </strong>
+                </div>
+                <div className="dict-complete-stat">
+                  <span>实词错词</span>
+                  <strong>{uniqueMistakes.length} 词</strong>
+                </div>
+              </div>
+
+              {uniqueMistakes.length > 0 && (
+                <div className="dict-diff-tokens">
+                  {uniqueMistakes.slice(0, 18).map((w) => {
+                    const added = !!addedMistakes[w] || !!existingMistakes[w];
+                    return (
+                      <button
+                        key={w}
+                        type="button"
+                        className={`dict-mistake-chip wrong${added ? ' added' : ''}`}
+                        title={added ? '已在单词错词本' : '加入单词错词本'}
+                        onClick={() => {
+                          addMistakeToWordBook(w, shortTitle);
+                          setAddedMistakes((prev) => ({ ...prev, [w]: true }));
+                        }}
+                      >
+                        {w}
+                        {added ? ' ✓' : ' +'}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="dict-complete-actions">
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" onClick={() => setShowComplete(false)}>
+                    返回逐句查看
+                  </button>
+                  {wrongIndices.length > 0 && (
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => {
+                        setWrongOnly(true);
+                        setShowComplete(false);
+                        choose(wrongIndices[0], false);
+                      }}
+                    >
+                      只重练本篇错句 ({wrongIndices.length} 句)
+                    </button>
+                  )}
+                  {uniqueMistakes.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={unsavedCount === 0}
+                      onClick={() => {
+                        const mark: Record<string, boolean> = {};
+                        for (const w of uniqueMistakes) {
+                          addMistakeToWordBook(w, shortTitle);
+                          mark[w] = true;
+                        }
+                        setAddedMistakes((prev) => ({ ...prev, ...mark }));
+                        setStatus(`已将 ${uniqueMistakes.length} 个实词收进「单词 → 错词本」`);
+                      }}
+                    >
+                      {unsavedCount > 0 ? `全部收进错词本 (${unsavedCount})` : '已全部收进错词本'}
+                    </button>
+                  )}
+                </div>
+                {onDiscussInSpeak && (
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => onDiscussInSpeak(shortTitle, excerpt)}
+                  >
+                    去「对话」聊聊这篇
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })() : !items.length ? (
+        <div className="dictation-empty">
+          <h2>准备开始单句精听</h2>
+          <p>提取音频字幕后，即可像刷单词一样逐句卡片精听。</p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 18 }}>
+            <button className="primary" disabled={busy} onClick={() => void transcribe()}>
+              {busy ? '正在识别字幕…' : '自动提取字幕'}
+            </button>
+            <button disabled={busy} onClick={() => importSubs().catch(failure)}>
+              导入 SRT
+            </button>
+          </div>
+        </div>
+      ) : sentence ? (
+        <div className="dict-stage">
+          <div className={`dict-card ${cardCls}`}>
+            {/* Card Header: Progress + Timestamp */}
+            <div className="corpus-card-progress">
+              <div className="corpus-card-bar">
+                <i style={{ width: `${progressPct}%` }} />
+              </div>
+              <span>
+                {String(index + 1).padStart(2, '0')} / {String(items.length).padStart(2, '0')} · {stamp(segStart)}
+              </span>
+            </div>
+
+            {/* Single-Sentence Compact Waveform */}
+            <div className="dict-wave-mini">
+              <StudyWaveform id={original.id} start={segStart} end={segEnd} position={position} onSeek={detailPlay} detail />
+            </div>
+
+            {/* Centered Play Button */}
+            <button
+              type="button"
+              className={`corpus-card-play ${playing ? 'playing' : ''}`}
+              onClick={() => togglePlayback().catch(failure)}
+              title="播放 / 暂停 (Tab 重播 · Option+P 播/停)"
+              aria-label={playing ? '暂停本句' : '播放本句'}
+            >
+              {playing ? <IconPause size={22} /> : <IconVolume size={22} />}
+            </button>
+
+            {/* Hint / Status Line */}
+            <div className="corpus-card-hint">
+              {hint
+                ? sentence.text
+                    .split(/\s+/)
+                    .map((w) => w[0] + '＿'.repeat(Math.max(1, w.length - 1)))
+                    .join(' ')
+                : inputStyle === 'word' && sentence.text.trim()
+                  ? 'Space/Enter 跳下一空 · Backspace 返回 · Tab 重播 · Esc 看答案'
+                  : 'Enter 提交批改 · Shift+Enter 换行 · Tab 重播 · Esc 看答案'}
+            </div>
+
+            {/* Clean Borderless Dictation Input: Sentence Textarea OR Word-Fill Slots */}
+            {inputStyle === 'word' && sentence.text.trim() ? (() => {
+              const targetWords = sentence.text.trim().split(/\s+/).filter(Boolean);
+              const rawParts = sentence.answer.split(' ');
+              const slots = targetWords.map((_, i) => rawParts[i] ?? '');
+              return (
+                <div className="word-fill-wrap">
+                  {targetWords.map((tw, idx) => {
+                    const cleanLen = tw.replace(/[^a-zA-Z0-9'-]/g, '').length;
+                    return (
+                      <input
+                        key={idx}
+                        ref={(el) => {
+                          slotRefs.current[idx] = el;
+                        }}
+                        type="text"
+                        className="word-fill-slot"
+                        style={{ width: `${Math.min(18, Math.max(4, cleanLen + 1))}ch` }}
+                        aria-label={`第 ${idx + 1} 个词`}
+                        spellCheck={false}
+                        autoCapitalize="none"
+                        autoComplete="off"
+                        value={slots[idx]}
+                        onChange={(e) => {
+                          const rawVal = e.target.value;
+                          const nextSlots = [...slots];
+                          const pastedWords = rawVal.trim().split(/\s+/).filter(Boolean);
+                          if (rawVal.includes(' ') && pastedWords.length > 1) {
+                            for (let k = 0; k < pastedWords.length && idx + k < nextSlots.length; k++) {
+                              nextSlots[idx + k] = pastedWords[k];
+                            }
+                            const targetFocus = Math.min(nextSlots.length - 1, idx + pastedWords.length - 1);
+                            slotRefs.current[targetFocus]?.focus();
+                          } else {
+                            nextSlots[idx] = rawVal.replace(/\s+/g, '');
+                          }
+                          update({ answer: nextSlots.join(' '), submitted: false });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === ' ') {
+                            e.preventDefault();
+                            if (idx < slots.length - 1) {
+                              slotRefs.current[idx + 1]?.focus();
+                            }
+                          } else if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                            e.preventDefault();
+                            if (sentence.submitted && result?.correct && cursor < visible.length - 1) {
+                              next(1);
+                            } else if (idx < slots.length - 1 && !sentence.submitted) {
+                              slotRefs.current[idx + 1]?.focus();
+                            } else {
+                              submit();
+                            }
+                          } else if (e.key === 'Backspace' && !slots[idx] && idx > 0) {
+                            e.preventDefault();
+                            slotRefs.current[idx - 1]?.focus();
+                          } else if ((e.metaKey || e.ctrlKey) && e.code === 'Space') {
+                            e.preventDefault();
+                            play().catch(failure);
+                          }
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })() : (
+              <textarea
+                ref={inputRef}
+                className="dict-textarea"
+                rows={1}
+                aria-label="听写输入"
+                spellCheck={false}
+                placeholder="在这里输入你听到的这一句…"
+                value={sentence.answer}
+                onChange={(e) => update({ answer: e.target.value, submitted: false })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    if (sentence.submitted && result?.correct && cursor < visible.length - 1) {
+                      next(1);
+                    } else {
+                      submit();
+                    }
+                  } else if ((e.metaKey || e.ctrlKey) && e.code === 'Space') {
+                    e.preventDefault();
+                    play().catch(failure);
+                  }
+                }}
+              />
+            )}
+
+            {/* Immediate Word-Level Diff & Clickable Mistakes -> Word Book */}
+            {(sentence.revealed || sentence.submitted) && (
+              <div className="dict-diff-wrap">
+                {result ? (
+                  <div className="dict-diff-tokens">
+                    {result.edits.map((e, i) => {
+                      if (e.kind === 'correct') {
+                        return <span key={i} className="edit-token correct">{e.actual}</span>;
+                      }
+                      if (e.kind === 'wrong' || e.kind === 'missing') {
+                        const targetWord = e.expected || '';
+                        const added = !!addedMistakes[targetWord.toLowerCase()];
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            className={`dict-mistake-chip ${e.kind}${added ? ' added' : ''}`}
+                            title={added ? '已加入「单词」错词本' : '点击加入「单词」错词本'}
+                            onClick={() => {
+                              if (!targetWord) return;
+                              addMistakeToWordBook(targetWord, shortTitle);
+                              setAddedMistakes((prev) => ({ ...prev, [targetWord.toLowerCase()]: true }));
+                              setStatus(`已将「${targetWord}」加入「单词 → 错词本」`);
+                            }}
+                          >
+                            {e.kind === 'missing' ? `漏:${targetWord}` : `${e.actual}→${targetWord}`}
+                            {added ? ' ✓' : ' +'}
+                          </button>
+                        );
+                      }
+                      if (e.kind === 'extra') {
+                        return <span key={i} className="edit-token extra">{e.actual}</span>;
+                      }
+                      return <span key={i} className="edit-token placeholder">{e.expected}</span>;
+                    })}
+                  </div>
+                ) : null}
+                <div className="dict-ref-sentence">
+                  <span>{sentence.text}</span>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="收藏本句到「收藏词卡」"
+                    aria-label="收藏本句"
+                    onClick={favoriteSentence}
+                  >
+                    <IconBookmark size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Inline Reference Editor (when toggled from settings) */}
+            {editing && (
+              <div className="reference-editor" style={{ width: '100%' }}>
+                <textarea aria-label="校正文本" value={reference} onChange={(e) => setReference(e.target.value)} />
+                <label>起点 <input type="number" step="0.01" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+                <label>终点 <input type="number" step="0.01" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+                <button type="button" disabled={index >= items.length - 1} onClick={mergeNextSentence}>
+                  合并下句
+                </button>
+                <button type="button" onClick={splitCurrentSentence}>
+                  从当前位置拆分
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    const a = Number(start);
+                    const b = Number(end);
+                    if (!reference.trim() || !Number.isFinite(a) || !Number.isFinite(b) || a < 0 || b <= a || b > project.duration) {
+                      setError('文本不能为空且时间需在音频范围内');
+                      return;
+                    }
+                    update({ text: reference.trim(), start: a, end: b, submitted: false, submittedAnswer: undefined });
+                    setEditing(false);
+                    setError('');
+                  }}
+                >
+                  保存
+                </button>
+              </div>
+            )}
+
+            {/* Minimal Icon Navigation Bar */}
+            <div className="corpus-card-nav">
+              <button
+                className="icon-btn"
+                disabled={cursor <= 0}
+                onClick={() => next(-1)}
+                title="上一句 (Option+←)"
+                aria-label="上一句"
+              >
+                <IconPrev size={16} />
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => play().catch(failure)}
+                title="从头重播本句 (Tab)"
+                aria-label="重播"
+              >
+                <IconReplay size={16} />
+              </button>
+              <button
+                type="button"
+                className="dict-slow-btn"
+                onClick={() => void playSlow().catch(failure)}
+                title="0.75× 慢速重听一遍（不改默认倍速）"
+                aria-label="慢速重听一遍"
+              >
+                0.75×
+              </button>
+              <button
+                className={`icon-btn${hint ? ' active' : ''}`}
+                onClick={() => {
+                  if (!hint) update({ assisted: true });
+                  setHint((h) => !h);
+                }}
+                title="首字母提示"
+                aria-label="首字母提示"
+              >
+                <IconBulb size={16} />
+              </button>
+              <button
+                className={`icon-btn${sentence.revealed ? ' active' : ''}`}
+                onClick={() => update({ revealed: !sentence.revealed, assisted: sentence.assisted || !sentence.revealed })}
+                title="显示 / 隐藏答案 (Esc)"
+                aria-label="显示答案"
+              >
+                <IconEye size={16} />
+              </button>
+              <button
+                className="icon-btn primary"
+                onClick={() => {
+                  if (sentence.submitted && result?.correct && cursor < visible.length - 1) {
+                    next(1);
+                  } else {
+                    submit();
+                  }
+                }}
+                title={sentence.submitted && result?.correct ? '下一句 (Command)' : '提交批改 (Enter)'}
+                aria-label="提交或下一句"
+              >
+                {sentence.submitted && result?.correct ? <IconNext size={16} /> : <IconCheck size={16} />}
+              </button>
+              {sentence.submitted && !result?.correct && cursor < visible.length - 1 && (
+                <button
+                  className="icon-btn"
+                  onClick={() => next(1)}
+                  title="跳过到下一句 (Command)"
+                  aria-label="下一句"
+                >
+                  <IconNext size={16} />
+                </button>
+              )}
+            </div>
+
+            {/* Clean Sliding-Window Progress Dots */}
+            <div className="corpus-dots" aria-label="句子进度">
+              {items.slice(dotWindow.start, dotWindow.end).map((s, offset) => {
+                const realIdx = dotWindow.start + offset;
+                const r = s.submitted ? grade(s.text, gradedAnswer(s)) : null;
+                const filled = s.answer.trim().length > 0;
+                const stateCls = r ? (r.correct ? 'ok' : 'err') : filled ? 'filled' : '';
+                const cls = ['corpus-dot', realIdx === index ? 'active' : '', stateCls].filter(Boolean).join(' ');
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={cls}
+                    title={`第 ${realIdx + 1} 句`}
+                    onClick={() => choose(realIdx, true)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
 }
