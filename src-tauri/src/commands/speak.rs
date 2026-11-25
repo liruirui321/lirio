@@ -40,13 +40,17 @@ asyncio.run(main())
 "#;
 
 fn spawn_edge_worker() -> Option<EdgeWorker> {
-    let mut child = Command::new("python3")
-        .args(["-u", "-c", EDGE_WORKER_PY])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+    let mut child = ["python3", "python"]
+        .into_iter()
+        .find_map(|py| {
+            Command::new(py)
+                .args(["-u", "-c", EDGE_WORKER_PY])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+                .ok()
+        })?;
     let stdin = child.stdin.take()?;
     let stdout = BufReader::new(child.stdout.take()?);
     Some(EdgeWorker { child, stdin, stdout })
@@ -116,9 +120,18 @@ fn find_edge_tts() -> Option<String> {
             return Some(cand.to_string());
         }
     }
-    if let Ok(out) = Command::new("which").arg("edge-tts").output() {
+    #[cfg(target_os = "windows")]
+    let probe_cmd = "where";
+    #[cfg(not(target_os = "windows"))]
+    let probe_cmd = "which";
+    if let Ok(out) = Command::new(probe_cmd).arg("edge-tts").output() {
         if out.status.success() {
-            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            let s = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
             if !s.is_empty() {
                 return Some(s);
             }
@@ -202,7 +215,11 @@ pub async fn speak_transcribe(
         .resource_dir()
         .map_err(|e| e.to_string())?
         .join("resources/asr");
-    let cli = resources.join("whisper-cli");
+    #[cfg(target_os = "windows")]
+    const WHISPER_BIN: &str = "whisper-cli.exe";
+    #[cfg(not(target_os = "windows"))]
+    const WHISPER_BIN: &str = "whisper-cli";
+    let cli = resources.join(WHISPER_BIN);
     let model = resources.join("model.bin");
     if !cli.is_file() || !model.is_file() {
         return Err("本地离线语音识别模型缺失。".into());
@@ -316,7 +333,11 @@ pub async fn speak_chat_local(app: tauri::AppHandle, prompt: String) -> Result<S
         .resource_dir()
         .map_err(|e| e.to_string())?
         .join("resources/llm");
-    let bin = llm_dir.join("llama-completion");
+    #[cfg(target_os = "windows")]
+    const LLAMA_BIN: &str = "llama-completion.exe";
+    #[cfg(not(target_os = "windows"))]
+    const LLAMA_BIN: &str = "llama-completion";
+    let bin = llm_dir.join(LLAMA_BIN);
     let model = llm_dir.join("qwen.gguf");
     if !bin.is_file() || !model.is_file() {
         return Err("本地离线语言模型缺失，请在设置中配置云端 API Key。".into());
@@ -489,45 +510,90 @@ pub async fn speak_tts(
             }
         }
 
-        // 2. Offline fallback: macOS native `say` + `afconvert`
-        let voice = match accent.as_str() {
-            "uk" => "Daniel",
-            "us" => "Samantha",
-            "au" => "Karen",
-            "in" => "Rishi",
-            _ => "Daniel",
-        };
-        let aiff = cache.join(format!("speak-tts-{id}.aiff"));
-        let wav = cache.join(format!("speak-tts-{id}.wav"));
-        let s1 = Command::new("say")
-            .args(["-v", voice, "-o"])
-            .arg(&aiff)
-            .arg("--")
-            .arg(&trimmed)
-            .status()
-            .map_err(|e| format!("语音合成失败：{e}"))?;
-        if !s1.success() {
+        // 2. Offline fallback: macOS native `say` + `afconvert`, Windows PowerShell SAPI, mobile guidance
+        #[cfg(target_os = "macos")]
+        {
+            let voice = match accent.as_str() {
+                "uk" => "Daniel",
+                "us" => "Samantha",
+                "au" => "Karen",
+                "in" => "Rishi",
+                _ => "Daniel",
+            };
+            let aiff = cache.join(format!("speak-tts-{id}.aiff"));
+            let wav = cache.join(format!("speak-tts-{id}.wav"));
+            let s1 = Command::new("say")
+                .args(["-v", voice, "-o"])
+                .arg(&aiff)
+                .arg("--")
+                .arg(&trimmed)
+                .status()
+                .map_err(|e| format!("语音合成失败：{e}"))?;
+            if !s1.success() {
+                let _ = fs::remove_file(&aiff);
+                return Err("系统语音合成失败".into());
+            }
+            let s2 = Command::new("afconvert")
+                .args(["-f", "WAVE", "-d", "LEI16@22050"])
+                .arg(&aiff)
+                .arg(&wav)
+                .status()
+                .map_err(|e| format!("音频格式转换失败：{e}"))?;
             let _ = fs::remove_file(&aiff);
-            return Err("系统语音合成失败".into());
-        }
-        let s2 = Command::new("afconvert")
-            .args(["-f", "WAVE", "-d", "LEI16@22050"])
-            .arg(&aiff)
-            .arg(&wav)
-            .status()
-            .map_err(|e| format!("音频格式转换失败：{e}"))?;
-        let _ = fs::remove_file(&aiff);
-        if !s2.success() {
+            if !s2.success() {
+                let _ = fs::remove_file(&wav);
+                return Err("音频转换失败".into());
+            }
+            let bytes = fs::read(&wav).map_err(|e| e.to_string())?;
             let _ = fs::remove_file(&wav);
-            return Err("音频转换失败".into());
+            return Ok(CorpusAudioResult {
+                bytes,
+                mime: "audio/wav".into(),
+                source: format!("macos-{voice}"),
+            });
         }
-        let bytes = fs::read(&wav).map_err(|e| e.to_string())?;
-        let _ = fs::remove_file(&wav);
-        Ok(CorpusAudioResult {
-            bytes,
-            mime: "audio/wav".into(),
-            source: format!("macos-{voice}"),
-        })
+        #[cfg(target_os = "windows")]
+        {
+            let wav = cache.join(format!("speak-tts-{id}.wav"));
+            let culture = match accent.as_str() {
+                "us" => "en-US",
+                "au" => "en-AU",
+                "in" => "en-IN",
+                _ => "en-GB",
+            };
+            let ps_script = r#"
+Add-Type -AssemblyName System.Speech
+$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$v = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -eq $env:LIRIO_TTS_CULTURE } | Select-Object -First 1
+if (-not $v) { $v = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.TwoLetterISOLanguageName -eq 'en' } | Select-Object -First 1 }
+if ($v) { $s.SelectVoice($v.VoiceInfo.Name) }
+$s.SetOutputToWaveFile($env:LIRIO_TTS_OUT)
+$s.Speak($env:LIRIO_TTS_TEXT)
+$s.Dispose()
+"#;
+            let status = Command::new("powershell")
+                .args(["-NoProfile", "-NonInteractive", "-Command", ps_script])
+                .env("LIRIO_TTS_CULTURE", culture)
+                .env("LIRIO_TTS_OUT", wav.to_string_lossy().as_ref())
+                .env("LIRIO_TTS_TEXT", &trimmed)
+                .status()
+                .map_err(|e| format!("Windows 语音合成失败：{e}"))?;
+            if !status.success() {
+                let _ = fs::remove_file(&wav);
+                return Err("Windows 本地语音合成失败".into());
+            }
+            let bytes = fs::read(&wav).map_err(|e| e.to_string())?;
+            let _ = fs::remove_file(&wav);
+            return Ok(CorpusAudioResult {
+                bytes,
+                mime: "audio/wav".into(),
+                source: format!("win-sapi-{accent}"),
+            });
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            Err("当前移动平台请联网或使用可选云端语音服务。".into())
+        }
     })
     .await
     .map_err(|e| format!("朗读任务中断：{e}"))?

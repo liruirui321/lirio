@@ -1,0 +1,192 @@
+name: Release All Platforms (macOS / Windows / Android / iOS)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.5.2)'
+        required: true
+        default: 'v0.5.2'
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npm run build
+      - name: Build macOS Universal App & DMG
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            npx tauri build --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          else
+            npx tauri build --target universal-apple-darwin
+          fi
+          mkdir -p out
+          cp target/universal-apple-darwin/release/bundle/dmg/*.dmg "out/Lirio-${VER}-macos.dmg" || true
+          if [ -f target/universal-apple-darwin/release/bundle/macos/Lirio.app.tar.gz ]; then
+            cp target/universal-apple-darwin/release/bundle/macos/Lirio.app.tar.gz "out/Lirio-${VER}-macos.app.tar.gz"
+            cp target/universal-apple-darwin/release/bundle/macos/Lirio.app.tar.gz.sig "out/Lirio-${VER}-macos.app.tar.gz.sig"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos
+          path: out/*
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npm run build
+      - name: Build Windows NSIS Setup & MSI
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $VER = node -p "require('./package.json').version"
+          if ($env:TAURI_SIGNING_PRIVATE_KEY) {
+            npx tauri build --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          } else {
+            npx tauri build
+          }
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Get-ChildItem target/release/bundle/nsis/*setup.exe | Select-Object -First 1 | Copy-Item -Destination "out/Lirio-$VER-windows-x64-setup.exe"
+          Get-ChildItem target/release/bundle/nsis/*.nsis.zip | Select-Object -First 1 | ForEach-Object {
+            Copy-Item $_ "out/Lirio-$VER-windows-x64.nsis.zip"
+          }
+          Get-ChildItem target/release/bundle/nsis/*.nsis.zip.sig | Select-Object -First 1 | ForEach-Object {
+            Copy-Item $_ "out/Lirio-$VER-windows-x64.nsis.zip.sig"
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: out/*
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run build
+      - name: Initialize & Build Android APK
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          npx tauri android init
+          npx tauri android build --apk
+          mkdir -p out
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          cp "$APK" "out/Lirio-${VER}-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: out/*
+
+  ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npm run build
+      - name: Initialize & Build iOS Project / IPA
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          npx tauri ios init
+          mkdir -p out
+          if npx tauri ios build --export-method ad-hoc; then
+            IPA=$(find src-tauri/gen/apple/build -name "*.ipa" | head -n 1 || true)
+            if [ -n "$IPA" ]; then cp "$IPA" "out/Lirio-${VER}-ios.ipa"; fi
+          else
+            # Fallback to unsigned simulator/device archive build when Apple signing cert secrets are absent
+            xcodebuild -project src-tauri/gen/apple/aboboo.xcodeproj -scheme aboboo_iOS -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO build
+            ditto -c -k --sequesterRsrc --keepParent src-tauri/gen/apple/build "out/Lirio-${VER}-ios-unsigned.zip" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-ios
+          path: out/*
+
+  release:
+    needs: [macos, windows, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Generate merged latest.json for desktop auto-updater
+        run: |
+          node - <<'EOF'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const ver = require('./package.json').version;
+          const baseUrl = `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/latest/download`;
+          const dir = 'release-assets';
+          const manifest = { version: ver, notes: `Lirio v${ver}`, pub_date: new Date().toISOString(), platforms: {} };
+          const macSig = path.join(dir, `Lirio-${ver}-macos.app.tar.gz.sig`);
+          if (fs.existsSync(macSig)) {
+            const sig = fs.readFileSync(macSig, 'utf8').trim();
+            manifest.platforms['darwin-aarch64'] = { signature: sig, url: `${baseUrl}/Lirio-${ver}-macos.app.tar.gz` };
+            manifest.platforms['darwin-x86_64'] = { signature: sig, url: `${baseUrl}/Lirio-${ver}-macos.app.tar.gz` };
+          }
+          const winSig = path.join(dir, `Lirio-${ver}-windows-x64.nsis.zip.sig`);
+          if (fs.existsSync(winSig)) {
+            manifest.platforms['windows-x86_64'] = { signature: fs.readFileSync(winSig, 'utf8').trim(), url: `${baseUrl}/Lirio-${ver}-windows-x64.nsis.zip` };
+          }
+          fs.writeFileSync(path.join(dir, 'latest.json'), JSON.stringify(manifest, null, 2));
+          EOF
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: release-assets/*
+          generate_release_notes: true

@@ -43,7 +43,11 @@ fn recognize(app: &tauri::AppHandle, id: &str, language: &str) -> Result<Segment
         let ranges=spans(&wav)?;
         fs::create_dir_all(&dir).map_err(|e|e.to_string())?;
         let resources=app.path().resource_dir().map_err(|e|e.to_string())?.join("resources/asr");
-        let cli=resources.join("whisper-cli"); let model=resources.join("model.bin");
+        #[cfg(target_os = "windows")]
+        const WHISPER_BIN: &str = "whisper-cli.exe";
+        #[cfg(not(target_os = "windows"))]
+        const WHISPER_BIN: &str = "whisper-cli";
+        let cli=resources.join(WHISPER_BIN); let model=resources.join("model.bin");
         if !cli.is_file() || !model.is_file() { return Err("离线识别组件缺失，请安装包含语音模型的完整应用包。".into()); }
         let mut all=Vec::new();
         for (n,(start,end)) in ranges.iter().enumerate() {

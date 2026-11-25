@@ -1,0 +1,69 @@
+{
+  "appName": "Lirio",
+  "latestVersion": "0.5.2",
+  "releaseDate": "2026-11-26",
+  "releaseBaseUrl": "https://github.com/liruirui321/lirio/releases/latest/download",
+  "priceYuan": 99,
+  "platforms": {
+    "macos": {
+      "label": "macOS",
+      "arch": "Apple Silicon / Intel",
+      "minOs": "macOS 12+",
+      "format": ".dmg",
+      "version": "0.5.2",
+      "filename": "Lirio-0.5.2-macos.dmg",
+      "downloadUrl": "https://github.com/liruirui321/lirio/releases/latest/download/Lirio-0.5.2-macos.dmg",
+      "autoUpdate": true
+    },
+    "windows": {
+      "label": "Windows",
+      "arch": "64 位 (x64)",
+      "minOs": "Windows 10 / 11",
+      "format": ".exe",
+      "version": "0.5.2",
+      "filename": "Lirio-0.5.2-windows-x64-setup.exe",
+      "downloadUrl": "https://github.com/liruirui321/lirio/releases/latest/download/Lirio-0.5.2-windows-x64-setup.exe",
+      "autoUpdate": true
+    },
+    "android": {
+      "label": "Android",
+      "arch": "ARM64 / ARMv7",
+      "minOs": "Android 9+",
+      "format": ".apk",
+      "version": "0.5.2",
+      "filename": "Lirio-0.5.2-android.apk",
+      "downloadUrl": "https://github.com/liruirui321/lirio/releases/latest/download/Lirio-0.5.2-android.apk",
+      "autoUpdate": false
+    },
+    "ios": {
+      "label": "iPhone / iOS",
+      "arch": "iPhone / iPad",
+      "minOs": "iOS 15+",
+      "format": "IPA / TestFlight",
+      "version": "0.5.2",
+      "filename": "Lirio-0.5.2-ios.ipa",
+      "downloadUrl": "https://github.com/liruirui321/lirio/releases/latest/download/Lirio-0.5.2-ios.ipa",
+      "autoUpdate": false
+    }
+  },
+  "history": [
+    {
+      "version": "0.5.2",
+      "date": "2026-11-26",
+      "highlights": [
+        "macOS / Windows / Android / iPhone 四端统一版本架构上线与响应式适配",
+        "接入桌面端签名自动更新，启动静默检查、一键下载升级",
+        "新增「对话」左右气泡布局、2026年9–12月雅思考官全真模考与地道表达复盘",
+        "听力逐词/整句听写新增清脆机械键盘敲击音，语音输入自动静音"
+      ]
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-10-23",
+      "highlights": [
+        "上线精听材料库与音频意群自动分句裁剪（0 Token 本地离线完成）",
+        "上线单词错词本复习、随身听模式与划词翻译收录"
+      ]
+    }
+  ]
+}

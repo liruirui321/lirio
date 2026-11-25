@@ -36,12 +36,13 @@ jobs:
       - run: npm run tauri build -- --bundles app
       - name: Sign and archive
         run: |
-          codesign --force --sign - 'target/release/bundle/macos/Aboboo Community.app/Contents/Resources/resources/asr/whisper-cli'
-          for file in 'target/release/bundle/macos/Aboboo Community.app/Contents/Resources/resources/llm/'*.dylib 'target/release/bundle/macos/Aboboo Community.app/Contents/Resources/resources/llm/llama-completion'; do codesign --force --sign - "$file"; done
-          codesign --force --deep --sign - --entitlements src-tauri/entitlements.plist 'target/release/bundle/macos/Aboboo Community.app'
-          codesign --verify --deep --strict 'target/release/bundle/macos/Aboboo Community.app'
-          ditto -c -k --sequesterRsrc --keepParent 'target/release/bundle/macos/Aboboo Community.app' Aboboo-Community-macOS.zip
+          APP_PATH="target/release/bundle/macos/Lirio.app"
+          codesign --force --sign - "$APP_PATH/Contents/Resources/resources/asr/whisper-cli" || true
+          for file in "$APP_PATH/Contents/Resources/resources/llm/"*.dylib "$APP_PATH/Contents/Resources/resources/llm/llama-completion"; do [ -e "$file" ] && codesign --force --sign - "$file"; done
+          codesign --force --deep --sign - --entitlements src-tauri/entitlements.plist "$APP_PATH"
+          codesign --verify --deep --strict "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" Lirio-macOS.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Aboboo-Community-macOS
-          path: Aboboo-Community-macOS.zip
+          name: Lirio-macOS
+          path: Lirio-macOS.zip
