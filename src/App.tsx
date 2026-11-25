@@ -9,6 +9,16 @@ import { simplifyMaterialTitle } from './services/materialTitle';
 import { getActiveCorpusDraftSummary, loadCorpusState } from './services/corpusService';
 import { loadSpeakState } from './services/speakService';
 import {
+  checkForAppUpdate,
+  dismissUpdateToast,
+  downloadAndInstallUpdate,
+  getUpdateState,
+  initAppVersion,
+  relaunchAfterUpdate,
+  subscribeUpdateState,
+  type UpdateState,
+} from './services/updaterService';
+import {
   formatSmartYuan,
   formatYuan,
   getAccountState,
@@ -78,6 +88,7 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState<GlobalSettingsTab>('ai');
   const [accountState, setAccountState] = useState<AccountState>(() => getAccountState());
   const [recentCharge, setRecentCharge] = useState<LastChargeEvent | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
   const [stateTick, setStateTick] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
@@ -112,6 +123,18 @@ export default function App() {
       unsubAcct();
       unsubCharge();
       if (timer) clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    void initAppVersion();
+    const unsub = subscribeUpdateState((next) => setUpdateState(next));
+    const timer = setTimeout(() => {
+      void checkForAppUpdate({ silent: true });
+    }, 3500);
+    return () => {
+      unsub();
+      clearTimeout(timer);
     };
   }, []);
 
@@ -881,6 +904,53 @@ export default function App() {
           </div>
         </div>
       )}
+      {!updateState.dismissed &&
+        (updateState.status === 'available' ||
+          updateState.status === 'downloading' ||
+          updateState.status === 'ready') && (
+          <div className="update-toast" role="status">
+            {updateState.status === 'available' ? (
+              <>
+                <span className="update-toast-label">新版本 v{updateState.availableVersion}</span>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void downloadAndInstallUpdate()}
+                >
+                  更新
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="忽略更新"
+                  onClick={dismissUpdateToast}
+                >
+                  <IconClose size={14} />
+                </button>
+              </>
+            ) : updateState.status === 'downloading' ? (
+              <>
+                <span className="update-toast-label">下载中 {updateState.progressPct ?? 0}%</span>
+                <div className="update-toast-progress">
+                  <i style={{ width: `${updateState.progressPct ?? 0}%` }} />
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="update-toast-label">
+                  v{updateState.availableVersion} 已就绪
+                </span>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void relaunchAfterUpdate()}
+                >
+                  立即重启
+                </button>
+              </>
+            )}
+          </div>
+        )}
     </div>
   );
 }

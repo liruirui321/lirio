@@ -1,5 +1,7 @@
 import http from 'node:http';
-import { pathToFileURL } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hashPassword, signToken, verifyPassword, verifyToken } from './auth.mjs';
 import {
   DEFAULT_TRIAL_UNITS,
@@ -73,6 +75,25 @@ function escapeHtml(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+function getReleasesDir() {
+  return process.env.LIRIO_RELEASES_DIR || path.join(SERVER_DIR, 'releases');
+}
+
+function compareSemver(a, b) {
+  const pa = String(a || '').replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b || '').replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length, 3);
+  for (let i = 0; i < len; i++) {
+    const da = pa[i] || 0;
+    const db = pb[i] || 0;
+    if (da > db) return 1;
+    if (da < db) return -1;
+  }
+  return 0;
 }
 
 function buildOverview(db) {
@@ -328,6 +349,66 @@ export function createLirioServer({ dbPath } = {}) {
 
       if (isRead && pathname === '/api/health') {
         sendJson(res, 200, { ok: true, service: 'lirio-pro-server', packs: RECHARGE_PACKS }, headOnly);
+        return;
+      }
+
+      if (isRead && pathname.startsWith('/api/updates/')) {
+        const parts = pathname.slice('/api/updates/'.length).split('/').filter(Boolean);
+        const [target, arch, currentVersion] = parts;
+        const manifestPath = path.join(getReleasesDir(), 'latest.json');
+        if (!target || !arch || !currentVersion || !fs.existsSync(manifestPath)) {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        const platformKey = `${target}-${arch}`;
+        const plat = manifest?.platforms?.[platformKey];
+        if (!plat || !manifest.version || compareSemver(manifest.version, currentVersion) <= 0) {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        sendJson(
+          res,
+          200,
+          {
+            version: manifest.version,
+            notes: manifest.notes || '',
+            pub_date: manifest.pub_date || new Date().toISOString(),
+            url: plat.url,
+            signature: plat.signature,
+          },
+          headOnly,
+        );
+        return;
+      }
+
+      if (isRead && pathname.startsWith('/releases/')) {
+        const rawName = decodeURIComponent(pathname.slice('/releases/'.length));
+        const safeName = path.basename(rawName);
+        if (!safeName || safeName !== rawName || safeName.startsWith('.')) {
+          sendJson(res, 404, { error: '文件不存在。' }, headOnly);
+          return;
+        }
+        const filePath = path.join(getReleasesDir(), safeName);
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+          sendJson(res, 404, { error: '文件不存在。' }, headOnly);
+          return;
+        }
+        const ext = path.extname(safeName).toLowerCase();
+        const ctype =
+          ext === '.json'
+            ? 'application/json; charset=utf-8'
+            : ext === '.sig'
+              ? 'text/plain; charset=utf-8'
+              : 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': ctype, 'Content-Length': fs.statSync(filePath).size });
+        if (headOnly) {
+          res.end();
+        } else {
+          fs.createReadStream(filePath).pipe(res);
+        }
         return;
       }
 

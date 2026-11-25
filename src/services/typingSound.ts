@@ -40,13 +40,11 @@ function getNoiseBuffer(ctx: AudioContext): AudioBuffer {
   if (noiseBuffer && noiseBuffer.sampleRate === ctx.sampleRate) {
     return noiseBuffer;
   }
-  const length = Math.max(1, Math.floor(ctx.sampleRate * 0.035));
+  const length = Math.max(1, Math.floor(ctx.sampleRate * 0.008));
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < length; i++) {
-    // Slightly weighted toward crisp initial transient
-    const decay = 1 - i / length;
-    data[i] = (Math.random() * 2 - 1) * (0.45 + 0.55 * decay);
+    data[i] = (Math.random() * 2 - 1) * (1 - i / length);
   }
   noiseBuffer = buffer;
   return buffer;
@@ -55,45 +53,53 @@ function getNoiseBuffer(ctx: AudioContext): AudioBuffer {
 const CLICK_PROFILES: Record<
   ClickKind,
   {
-    noiseFreq: number;
-    noiseQ: number;
-    noiseGain: number;
-    noiseDecay: number;
-    bodyStartHz: number;
-    bodyEndHz: number;
-    bodyGain: number;
-    bodyDecay: number;
+    popStartHz: number;
+    popEndHz: number;
+    popGain: number;
+    popDecay: number;
+    sparkStartHz: number;
+    sparkEndHz: number;
+    sparkGain: number;
+    sparkDecay: number;
+    tickGain: number;
+    tickDecay: number;
   }
 > = {
   char: {
-    noiseFreq: 2250,
-    noiseQ: 1.8,
-    noiseGain: 0.22,
-    noiseDecay: 0.016,
-    bodyStartHz: 300,
-    bodyEndHz: 125,
-    bodyGain: 0.08,
-    bodyDecay: 0.019,
+    popStartHz: 1550,
+    popEndHz: 880,
+    popGain: 0.16,
+    popDecay: 0.011,
+    sparkStartHz: 3100,
+    sparkEndHz: 2100,
+    sparkGain: 0.05,
+    sparkDecay: 0.007,
+    tickGain: 0.06,
+    tickDecay: 0.0045,
   },
   space: {
-    noiseFreq: 1380,
-    noiseQ: 1.5,
-    noiseGain: 0.24,
-    noiseDecay: 0.022,
-    bodyStartHz: 210,
-    bodyEndHz: 90,
-    bodyGain: 0.09,
-    bodyDecay: 0.024,
+    popStartHz: 1150,
+    popEndHz: 660,
+    popGain: 0.18,
+    popDecay: 0.014,
+    sparkStartHz: 2300,
+    sparkEndHz: 1550,
+    sparkGain: 0.045,
+    sparkDecay: 0.008,
+    tickGain: 0.06,
+    tickDecay: 0.0045,
   },
   backspace: {
-    noiseFreq: 1650,
-    noiseQ: 1.6,
-    noiseGain: 0.15,
-    noiseDecay: 0.014,
-    bodyStartHz: 240,
-    bodyEndHz: 110,
-    bodyGain: 0.07,
-    bodyDecay: 0.018,
+    popStartHz: 980,
+    popEndHz: 580,
+    popGain: 0.12,
+    popDecay: 0.01,
+    sparkStartHz: 1900,
+    sparkEndHz: 1300,
+    sparkGain: 0.03,
+    sparkDecay: 0.006,
+    tickGain: 0.045,
+    tickDecay: 0.0045,
   },
 };
 
@@ -107,45 +113,59 @@ export function playTypingClick(kind: ClickKind = 'char', opts?: { repeat?: bool
   const ctx = ensureAudioCtx();
   if (!ctx) return;
 
-  const profile = CLICK_PROFILES[kind];
-  const jitter = 0.95 + Math.random() * 0.1;
+  const p = CLICK_PROFILES[kind];
+  const jitter = 0.96 + Math.random() * 0.08;
   const now = ctx.currentTime;
 
-  // Layer 1: crisp mechanical transient click
-  const src = ctx.createBufferSource();
-  src.buffer = getNoiseBuffer(ctx);
+  // 1. Primary pure sine crisp keypop
+  const pop = ctx.createOscillator();
+  pop.type = 'sine';
+  pop.frequency.setValueAtTime(p.popStartHz * jitter, now);
+  pop.frequency.exponentialRampToValueAtTime(p.popEndHz * jitter, now + p.popDecay);
 
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(profile.noiseFreq * jitter, now);
-  filter.Q.setValueAtTime(profile.noiseQ, now);
+  const popEnv = ctx.createGain();
+  popEnv.gain.setValueAtTime(0.0001, now);
+  popEnv.gain.linearRampToValueAtTime(p.popGain, now + 0.0005);
+  popEnv.gain.exponentialRampToValueAtTime(0.0001, now + 0.001 + p.popDecay);
 
-  const noiseEnv = ctx.createGain();
-  noiseEnv.gain.setValueAtTime(0.0001, now);
-  noiseEnv.gain.linearRampToValueAtTime(profile.noiseGain, now + 0.001);
-  noiseEnv.gain.exponentialRampToValueAtTime(0.0001, now + 0.001 + profile.noiseDecay);
+  pop.connect(popEnv);
+  popEnv.connect(ctx.destination);
+  pop.start(now);
+  pop.stop(now + 0.003 + p.popDecay);
 
-  src.connect(filter);
-  filter.connect(noiseEnv);
-  noiseEnv.connect(ctx.destination);
-  src.start(now);
-  src.stop(now + 0.004 + profile.noiseDecay);
+  // 2. Bright high-harmonic sparkle
+  const spark = ctx.createOscillator();
+  spark.type = 'sine';
+  spark.frequency.setValueAtTime(p.sparkStartHz * jitter, now);
+  spark.frequency.exponentialRampToValueAtTime(p.sparkEndHz * jitter, now + p.sparkDecay);
 
-  // Layer 2: warm PBT keycap thock body
-  const osc = ctx.createOscillator();
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(profile.bodyStartHz * jitter, now);
-  osc.frequency.exponentialRampToValueAtTime(profile.bodyEndHz * jitter, now + profile.bodyDecay);
+  const sparkEnv = ctx.createGain();
+  sparkEnv.gain.setValueAtTime(0.0001, now);
+  sparkEnv.gain.linearRampToValueAtTime(p.sparkGain, now + 0.0004);
+  sparkEnv.gain.exponentialRampToValueAtTime(0.0001, now + 0.0008 + p.sparkDecay);
 
-  const bodyEnv = ctx.createGain();
-  bodyEnv.gain.setValueAtTime(0.0001, now);
-  bodyEnv.gain.linearRampToValueAtTime(profile.bodyGain, now + 0.001);
-  bodyEnv.gain.exponentialRampToValueAtTime(0.0001, now + 0.001 + profile.bodyDecay);
+  spark.connect(sparkEnv);
+  sparkEnv.connect(ctx.destination);
+  spark.start(now);
+  spark.stop(now + 0.002 + p.sparkDecay);
 
-  osc.connect(bodyEnv);
-  bodyEnv.connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.003 + profile.bodyDecay);
+  // 3. Razor-short 4.5ms high-passed tactile front tick (zero low/mid mud)
+  const tick = ctx.createBufferSource();
+  tick.buffer = getNoiseBuffer(ctx);
+
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.setValueAtTime(4200, now);
+
+  const tickEnv = ctx.createGain();
+  tickEnv.gain.setValueAtTime(p.tickGain, now);
+  tickEnv.gain.exponentialRampToValueAtTime(0.0001, now + p.tickDecay);
+
+  tick.connect(hp);
+  hp.connect(tickEnv);
+  tickEnv.connect(ctx.destination);
+  tick.start(now);
+  tick.stop(now + p.tickDecay + 0.002);
 }
 
 export function handleDictationKeySound(e: {

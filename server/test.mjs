@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createLirioServer, seedDemoUser } from './index.mjs';
 import { creditUserBalance, deductUserBalance } from './db.mjs';
 import { calculateChatCostUnits, calculateTtsCostUnits } from './pricing.mjs';
@@ -178,7 +181,41 @@ try {
   assert.ok(overviewRes.json.users.length >= 2);
   assert.ok(overviewRes.json.ledger.length >= 1);
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (8/8)');
+  // 9. Verify auto-update feed endpoint (204 when empty/up-to-date, 200 when newer manifest exists)
+  const noUpdate = await fetch(`${base}/api/updates/darwin/aarch64/0.5.2`);
+  assert.equal(noUpdate.status, 204);
+
+  const tmpRelDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lirio-rel-'));
+  process.env.LIRIO_RELEASES_DIR = tmpRelDir;
+  try {
+    fs.writeFileSync(
+      path.join(tmpRelDir, 'latest.json'),
+      JSON.stringify({
+        version: '0.6.0',
+        notes: 'Release notes',
+        pub_date: '2026-11-26T00:00:00Z',
+        platforms: {
+          'darwin-aarch64': {
+            url: `${base}/releases/Lirio-0.6.0-arm64.app.tar.gz`,
+            signature: 'dummy-sig',
+          },
+        },
+      }),
+    );
+    const hasUpdate = await fetch(`${base}/api/updates/darwin/aarch64/0.5.2`);
+    assert.equal(hasUpdate.status, 200);
+    const updJson = await hasUpdate.json();
+    assert.equal(updJson.version, '0.6.0');
+    assert.equal(updJson.signature, 'dummy-sig');
+
+    const alreadyLatest = await fetch(`${base}/api/updates/darwin/aarch64/0.6.0`);
+    assert.equal(alreadyLatest.status, 204);
+  } finally {
+    delete process.env.LIRIO_RELEASES_DIR;
+    fs.rmSync(tmpRelDir, { recursive: true, force: true });
+  }
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (9/9)');
 } finally {
   server.close();
 }
