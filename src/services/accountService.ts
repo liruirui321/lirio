@@ -58,7 +58,7 @@ const DEFAULT_STATE: AccountState = {
   token: null,
   user: null,
   aiMode: 'byok',
-  proCloudSpeech: false,
+  proCloudSpeech: true,
 };
 
 const listeners = new Set<(state: AccountState) => void>();
@@ -141,7 +141,7 @@ export async function registerAccount(opts: { email: string; password: string; n
     '/api/auth/register',
     { method: 'POST', body: JSON.stringify(opts) },
   );
-  updateAccountState({ token: res.token, user: res.user, aiMode: 'pro_balance' });
+  updateAccountState({ token: res.token, user: res.user, aiMode: 'pro_balance', proCloudSpeech: true });
   return res;
 }
 
@@ -150,7 +150,7 @@ export async function loginAccount(opts: { email: string; password: string }) {
     '/api/auth/login',
     { method: 'POST', body: JSON.stringify(opts) },
   );
-  updateAccountState({ token: res.token, user: res.user, aiMode: 'pro_balance' });
+  updateAccountState({ token: res.token, user: res.user, aiMode: 'pro_balance', proCloudSpeech: true });
   return res;
 }
 

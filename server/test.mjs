@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { createLirioServer } from './index.mjs';
+import { createLirioServer, seedDemoUser } from './index.mjs';
 import { creditUserBalance, deductUserBalance } from './db.mjs';
+import { calculateChatCostUnits, calculateTtsCostUnits } from './pricing.mjs';
 
 process.env.LIRIO_MOCK_AI = '1';
 process.env.LIRIO_JWT_SECRET = 'test-secret-key';
@@ -136,7 +137,31 @@ try {
   });
   assert.equal(refilled.user.balanceUnits, 10000);
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (6/6)');
+  // 7. Verify DeepSeek peak/off-peak + cache-hit pricing & TTS rate & demo ¥100 user
+  const peakDay = new Date('2026-11-25T02:30:00Z'); // 10:30 Beijing Wed (Peak)
+  const offPeakDay = new Date('2026-11-25T16:30:00Z'); // 00:30 Beijing Thu (Off-peak)
+  const peakCost = calculateChatCostUnits('deepseek-chat', 1_000_000, 1_000_000, {
+    cacheHitTokens: 500_000,
+    cacheMissTokens: 500_000,
+    now: peakDay,
+  });
+  const offPeakCost = calculateChatCostUnits('deepseek-chat', 1_000_000, 1_000_000, {
+    cacheHitTokens: 500_000,
+    cacheMissTokens: 500_000,
+    now: offPeakDay,
+  });
+  // Peak: 0.5*400 + 0.5*20000 + 80000 = 90200 units (¥9.02); Off-peak is exact half = 45100 units (¥4.51)
+  assert.equal(peakCost, 90200);
+  assert.equal(offPeakCost, 45100);
+  // TTS: 1000 chars = ¥0.03 = 300 units
+  assert.equal(calculateTtsCostUnits(1000), 300);
+
+  const demo = seedDemoUser(db);
+  assert.equal(demo.email, 'tester@lirio.app');
+  assert.equal(demo.balanceUnits, 1_000_000);
+  assert.equal(demo.tier, 'pro');
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (7/7)');
 } finally {
   server.close();
 }

@@ -17,8 +17,31 @@ import {
   calculateAsrCostUnits,
   calculateChatCostUnits,
   calculateTtsCostUnits,
+  getDeepSeekPeriodLabel,
 } from './pricing.mjs';
 import { forwardChatCompletion, forwardTranscribe, forwardTts } from './aiProxy.mjs';
+
+export function seedDemoUser(db) {
+  const email = 'tester@lirio.app';
+  const existing = getUserByEmail(db, email);
+  if (existing) return serializeUser(existing);
+
+  const created = createUserWithTrial(db, {
+    email,
+    name: 'Lirio 测试官',
+    passwordHash: hashPassword('lirio123'),
+    trialUnits: 0,
+  });
+  const credited = creditUserBalance(db, {
+    userId: created.id,
+    amountUnits: 1_000_000, // ¥100.00
+    kind: 'recharge',
+    feature: '测试官初始充值 ¥100',
+    note: '测试账号预充值 ¥100.00（用于验证峰谷与语音计费）',
+    upgradeToPro: true,
+  });
+  return credited.user;
+}
 
 function sendJson(res, status, data) {
   res.writeHead(status, {
@@ -210,7 +233,18 @@ export function createLirioServer({ dbPath } = {}) {
           aiRes.model,
           aiRes.usage.promptTokens,
           aiRes.usage.completionTokens,
+          {
+            cacheHitTokens: aiRes.usage.cacheHitTokens,
+            cacheMissTokens: aiRes.usage.cacheMissTokens,
+          },
         );
+        const periodLabel = aiRes.model.toLowerCase().includes('deepseek')
+          ? ` · ${getDeepSeekPeriodLabel()}`
+          : '';
+        const note =
+          aiRes.usage.cacheHitTokens !== undefined
+            ? `命中 ${aiRes.usage.cacheHitTokens} + 未命中 ${aiRes.usage.cacheMissTokens} / 输出 ${aiRes.usage.completionTokens} tok${periodLabel}`
+            : `${aiRes.usage.promptTokens} in / ${aiRes.usage.completionTokens} out tok${periodLabel}`;
         const settled = deductUserBalance(db, {
           userId: user.id,
           costUnits,
@@ -219,7 +253,7 @@ export function createLirioServer({ dbPath } = {}) {
           model: aiRes.model,
           inputUnits: aiRes.usage.promptTokens,
           outputUnits: aiRes.usage.completionTokens,
-          note: `${aiRes.usage.promptTokens} in / ${aiRes.usage.completionTokens} out tokens`,
+          note,
         });
         sendJson(res, 200, {
           content: aiRes.content,
@@ -336,7 +370,11 @@ export function createLirioServer({ dbPath } = {}) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT || 8787);
-  const { server } = createLirioServer();
+  const { server, db } = createLirioServer();
+  if (process.env.LIRIO_SEED_DEMO === '1' || process.env.LIRIO_SEED_DEMO === 'true') {
+    const demo = seedDemoUser(db);
+    console.log(`[lirio-pro-server] demo tester ready: ${demo.email} balance=${demo.balanceUnits}`);
+  }
   server.listen(port, '127.0.0.1', () => {
     console.log(`[lirio-pro-server] listening on http://127.0.0.1:${port}`);
   });

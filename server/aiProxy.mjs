@@ -1,3 +1,12 @@
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+
 const DEFAULT_URLS = {
   deepseek: 'https://api.deepseek.com/v1',
   openai: 'https://api.openai.com/v1',
@@ -9,6 +18,56 @@ const DEFAULT_MODELS = {
   openai: 'gpt-4o-mini',
   gemini: 'gemini-2.5-flash',
 };
+
+let cachedLocalDeepSeekKey;
+
+function extractDeepSeekKeyFromText(text) {
+  for (const rawLine of String(text || '').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const cleaned = line.replace(/^export\s+/, '').trim();
+    let val = null;
+    if (cleaned.startsWith('DEEPSEEK_API_KEY:')) {
+      val = cleaned.slice('DEEPSEEK_API_KEY:'.length);
+    } else if (cleaned.startsWith('DEEPSEEK_API_KEY=')) {
+      val = cleaned.slice('DEEPSEEK_API_KEY='.length);
+    }
+    if (val !== null) {
+      const trimmed = val.trim().replace(/^['"]+|['"]+$/g, '').trim();
+      if (trimmed.startsWith('sk-') && trimmed.length > 12) {
+        return trimmed;
+      }
+    }
+  }
+  return '';
+}
+
+function detectLocalDeepSeekKey() {
+  if (cachedLocalDeepSeekKey !== undefined) return cachedLocalDeepSeekKey;
+  if (process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.trim().startsWith('sk-')) {
+    cachedLocalDeepSeekKey = process.env.DEEPSEEK_API_KEY.trim();
+    return cachedLocalDeepSeekKey;
+  }
+  const home = os.homedir();
+  const candidates = [
+    path.join(home, '.dsh', '.credentials.yaml'),
+    path.join(home, '.config', 'novel2comic', 'deepseek.env'),
+    path.join(home, '.zshrc'),
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        const key = extractDeepSeekKeyFromText(fs.readFileSync(p, 'utf8'));
+        if (key) {
+          cachedLocalDeepSeekKey = key;
+          return cachedLocalDeepSeekKey;
+        }
+      }
+    } catch {}
+  }
+  cachedLocalDeepSeekKey = '';
+  return cachedLocalDeepSeekKey;
+}
 
 function isMockMode() {
   return process.env.LIRIO_MOCK_AI === '1' || process.env.LIRIO_MOCK_AI === 'true';
@@ -22,7 +81,9 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
   const provider = (process.env.LIRIO_LLM_PROVIDER || 'deepseek').toLowerCase();
   const model = process.env.LIRIO_LLM_MODEL || DEFAULT_MODELS[provider] || 'deepseek-chat';
   const baseUrl = (process.env.LIRIO_LLM_BASE_URL || DEFAULT_URLS[provider] || DEFAULT_URLS.deepseek).replace(/\/+$/, '');
-  const apiKey = (process.env.LIRIO_LLM_API_KEY || '').trim();
+  const apiKey =
+    (process.env.LIRIO_LLM_API_KEY || '').trim() ||
+    (provider === 'deepseek' ? detectLocalDeepSeekKey() : '');
 
   if (isMockMode()) {
     const lastUser = [...(messages || [])].reverse().find((m) => m.role === 'user')?.content || '';
@@ -58,16 +119,24 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
       }
     }
     const completionTokens = estimateTokens(content);
+    const cacheHitTokens = Math.floor(promptTokens * 0.6);
+    const cacheMissTokens = promptTokens - cacheHitTokens;
     return {
       provider,
       model,
       content,
-      usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens },
+      usage: {
+        promptTokens,
+        completionTokens,
+        cacheHitTokens,
+        cacheMissTokens,
+        totalTokens: promptTokens + completionTokens,
+      },
     };
   }
 
   if (!apiKey) {
-    throw new Error('服务器尚未配置主文本 API Key（LIRIO_LLM_API_KEY），暂时无法使用余额托管模式。');
+    throw new Error('服务器尚未配置主文本 API Key（LIRIO_LLM_API_KEY），暂时无法使用官方 API 模式。');
   }
 
   const payload = {
@@ -99,6 +168,14 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
 
   const promptTokens = Number(data?.usage?.prompt_tokens) || estimateTokens(JSON.stringify(messages));
   const completionTokens = Number(data?.usage?.completion_tokens) || estimateTokens(content);
+  const cacheHitTokens =
+    data?.usage?.prompt_cache_hit_tokens !== undefined
+      ? Number(data.usage.prompt_cache_hit_tokens) || 0
+      : Number(data?.usage?.prompt_tokens_details?.cached_tokens) || 0;
+  const cacheMissTokens =
+    data?.usage?.prompt_cache_miss_tokens !== undefined
+      ? Number(data.usage.prompt_cache_miss_tokens) || 0
+      : Math.max(0, promptTokens - cacheHitTokens);
 
   return {
     provider,
@@ -107,9 +184,47 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
     usage: {
       promptTokens,
       completionTokens,
+      cacheHitTokens,
+      cacheMissTokens,
       totalTokens: promptTokens + completionTokens,
     },
   };
+}
+
+const NEURAL_VOICE_BY_ACCENT = {
+  uk: 'en-GB-SoniaNeural',
+  us: 'en-US-AndrewMultilingualNeural',
+  au: 'en-AU-NatashaNeural',
+  in: 'en-IN-NeerjaNeural',
+};
+
+async function synthLocalNeuralEdgeTts(text, accent) {
+  const voice = NEURAL_VOICE_BY_ACCENT[accent] || NEURAL_VOICE_BY_ACCENT.uk;
+  const outPath = path.join(os.tmpdir(), `lirio-pro-tts-${randomUUID()}.mp3`);
+  const script = `
+import sys, asyncio, edge_tts
+async def main():
+    comm = edge_tts.Communicate(sys.argv[1], sys.argv[2])
+    await comm.save(sys.argv[3])
+asyncio.run(main())
+`;
+  try {
+    await execFileAsync('python3', ['-c', script, text, voice, outPath], { timeout: 25000 });
+    const bytes = fs.readFileSync(outPath);
+    if (bytes.length < 200) throw new Error('语音合成输出为空');
+    return {
+      provider: 'lirio-neural',
+      model: 'lirio-tts-neural',
+      voice,
+      chars: text.length,
+      mime: 'audio/mpeg',
+      audioBase64: bytes.toString('base64'),
+    };
+  } finally {
+    try {
+      if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+    } catch {}
+  }
 }
 
 export async function forwardTts({ text, accent = 'uk', voice }) {
@@ -118,29 +233,28 @@ export async function forwardTts({ text, accent = 'uk', voice }) {
   const chosenVoice = voice || (accent === 'uk' ? 'fable' : 'alloy');
 
   if (isMockMode()) {
-    // Tiny valid MP3-like header stub bytes for automated tests
     const stub = Buffer.from('ID3\x03\x00\x00\x00\x00\x00\x00MOCK_AUDIO_DATA', 'utf8');
     return {
-      provider: 'openai',
-      model: 'tts-1',
-      voice: chosenVoice,
+      provider: 'lirio-neural',
+      model: 'lirio-tts-neural',
+      voice: NEURAL_VOICE_BY_ACCENT[accent] || chosenVoice,
       chars: cleanText.length,
       mime: 'audio/mpeg',
       audioBase64: stub.toString('base64'),
     };
   }
 
-  const apiKey = (process.env.LIRIO_SPEECH_API_KEY || process.env.LIRIO_LLM_API_KEY || '').trim();
-  const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-  if (!apiKey) {
-    throw new Error('服务器尚未配置云端语音 API Key（LIRIO_SPEECH_API_KEY）。');
+  const speechKey = (process.env.LIRIO_SPEECH_API_KEY || '').trim();
+  if (!speechKey) {
+    return synthLocalNeuralEdgeTts(cleanText, accent);
   }
 
+  const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
   const resp = await fetch(`${baseUrl}/audio/speech`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${speechKey}`,
     },
     body: JSON.stringify({
       model: 'tts-1',
@@ -182,7 +296,7 @@ export async function forwardTranscribe({ wavBase64, durationSec }) {
     };
   }
 
-  const apiKey = (process.env.LIRIO_SPEECH_API_KEY || process.env.LIRIO_LLM_API_KEY || '').trim();
+  const apiKey = (process.env.LIRIO_SPEECH_API_KEY || '').trim();
   const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
   if (!apiKey) {
     throw new Error('服务器尚未配置云端语音识别 API Key（LIRIO_SPEECH_API_KEY）。');

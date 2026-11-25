@@ -489,13 +489,16 @@ export function GlobalSettingsModal({
                       <div className="account-balance-strip">
                         <div className="account-balance-main">
                           <span>当前可用余额</span>
-                          <strong>{formatYuan(account.user.balanceUnits, 2)}</strong>
+                          <strong>{formatYuan(account.user.balanceUnits, 4)}</strong>
                         </div>
                         <div className="account-balance-stats">
                           <span>累计充值 {formatYuan(account.user.totalRechargedUnits, 2)}</span>
                           <span>累计消耗 {formatYuan(account.user.totalSpentUnits, 4)}</span>
                         </div>
                       </div>
+                      <small style={{ color: 'var(--muted)', fontSize: 11.5 }}>
+                        计费标准：DeepSeek 峰谷实价（输入 ¥1~2 / 缓存 ¥0.02~0.04 / 输出 ¥4~8 每百万 tok）· 语音合成 ¥0.03 / 千字
+                      </small>
 
                       <div className="account-recharge-grid">
                         {DEFAULT_RECHARGE_PACKS.map((p) => (
