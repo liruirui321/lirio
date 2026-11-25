@@ -153,9 +153,9 @@ try {
     cacheMissTokens: 500_000,
     now: offPeakDay,
   });
-  // Peak: 0.5*400 + 0.5*20000 + 80000 = 90200 units (¥9.02); Off-peak is exact half = 45100 units (¥4.51)
-  assert.equal(peakCost, 90200);
-  assert.equal(offPeakCost, 45100);
+  // Peak (3x): 0.5*1200 + 0.5*60000 + 240000 = 270600 units (¥27.06); Off-peak is exact half = 135300 units (¥13.53)
+  assert.equal(peakCost, 270600);
+  assert.equal(offPeakCost, 135300);
   // TTS: 1000 chars = ¥0.03 = 300 units
   assert.equal(calculateTtsCostUnits(1000), 300);
 
@@ -215,7 +215,19 @@ try {
     fs.rmSync(tmpRelDir, { recursive: true, force: true });
   }
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (9/9)');
+  // 10. Verify 4-platform download website (/site/ and /site/versions.json)
+  const siteHtml = await fetch(`${base}/site/`);
+  assert.equal(siteHtml.status, 200);
+  assert.ok((siteHtml.headers.get('content-type') || '').includes('text/html'));
+  const siteText = await siteHtml.text();
+  assert.ok(siteText.includes('Lirio'));
+
+  const siteVer = await fetch(`${base}/site/versions.json`);
+  assert.equal(siteVer.status, 200);
+  const verJson = await siteVer.json();
+  assert.ok(verJson.platforms.macos && verJson.platforms.windows && verJson.platforms.android && verJson.platforms.ios);
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (10/10)');
 } finally {
   server.close();
 }

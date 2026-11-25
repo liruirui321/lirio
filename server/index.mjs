@@ -78,6 +78,7 @@ function escapeHtml(s) {
 }
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
+const WEBSITE_DIR = path.resolve(SERVER_DIR, '..', 'website');
 
 function getReleasesDir() {
   return process.env.LIRIO_RELEASES_DIR || path.join(SERVER_DIR, 'releases');
@@ -192,11 +193,14 @@ function renderDashboardHtml(overview) {
       <span class="pill">运行中</span>
       <span id="periodPill" class="pill${overview.isPeak ? ' peak' : ''}">${escapeHtml(periodBadge)}</span>
     </div>
-    <button class="btn" id="refreshBtn" type="button">刷新</button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <a class="btn" href="/site" style="text-decoration:none;">官网下载页</a>
+      <button class="btn" id="refreshBtn" type="button">刷新</button>
+    </div>
   </div>
 
   <div class="rates">
-    <span>DeepSeek 文本：输入 ¥1~2 / 缓存 ¥0.02~0.04 / 输出 ¥4~8（每百万 tok）</span>
+    <span>文本：输入 ¥3~6 / 缓存 ¥0.06~0.12 / 输出 ¥12~24（每百万 tok）</span>
     <span>本地语音与音频自动切分：¥0（0 Token）</span>
     <span>可选云端语音：¥0.03 / 千字</span>
   </div>
@@ -409,6 +413,49 @@ export function createLirioServer({ dbPath } = {}) {
           res.end();
         } else {
           fs.createReadStream(filePath).pipe(res);
+        }
+        return;
+      }
+
+      if (isRead && (pathname === '/site' || pathname.startsWith('/site/'))) {
+        if (pathname === '/site') {
+          res.writeHead(302, { Location: '/site/' });
+          res.end();
+          return;
+        }
+        const rel = pathname.slice('/site/'.length) || 'index.html';
+        const resolved = path.resolve(WEBSITE_DIR, rel);
+        if (resolved !== WEBSITE_DIR && !resolved.startsWith(WEBSITE_DIR + path.sep)) {
+          sendJson(res, 404, { error: '页面不存在。' }, headOnly);
+          return;
+        }
+        const target = fs.existsSync(resolved) && fs.statSync(resolved).isFile()
+          ? resolved
+          : rel === ''
+            ? path.join(WEBSITE_DIR, 'index.html')
+            : null;
+        if (!target || !fs.existsSync(target)) {
+          sendJson(res, 404, { error: '页面不存在。' }, headOnly);
+          return;
+        }
+        const ext = path.extname(target).toLowerCase();
+        const mime =
+          ext === '.html'
+            ? 'text/html; charset=utf-8'
+            : ext === '.css'
+              ? 'text/css; charset=utf-8'
+              : ext === '.js'
+                ? 'application/javascript; charset=utf-8'
+                : ext === '.json'
+                  ? 'application/json; charset=utf-8'
+                  : ext === '.png'
+                    ? 'image/png'
+                    : 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
+        if (headOnly) {
+          res.end();
+        } else {
+          fs.createReadStream(target).pipe(res);
         }
         return;
       }

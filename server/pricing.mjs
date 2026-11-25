@@ -28,9 +28,9 @@ export const RECHARGE_PACKS = [
   },
 ];
 
-// Official DeepSeek CNY peak/off-peak pricing (per 1M tokens, 1 CNY = 10,000 units):
-// Peak (Beijing Mon-Fri 09:00-12:00 & 14:00-18:00): hit ¥0.04, miss ¥2.00, out ¥8.00
-// Off-peak (all other hours): hit ¥0.02, miss ¥1.00, out ¥4.00
+// 3x DeepSeek official CNY peak/off-peak rates (per 1M tokens, 1 CNY = 10,000 units):
+// Peak (Beijing Mon-Fri 09:00-12:00 & 14:00-18:00): hit ¥0.12, miss ¥6.00, out ¥24.00
+// Off-peak (all other hours): hit ¥0.06, miss ¥3.00, out ¥12.00
 export function isDeepSeekPeakBeijing(now = new Date()) {
   const bj = new Date(now.getTime() + 8 * 3600_000);
   const day = bj.getUTCDay(); // 0 Sun .. 6 Sat
@@ -45,9 +45,9 @@ export function getDeepSeekPeriodLabel(now = new Date()) {
 
 export function getDeepSeekRatesPer1M(now = new Date()) {
   if (isDeepSeekPeakBeijing(now)) {
-    return { hitUnits: 400, missUnits: 20000, outputUnits: 80000 };
+    return { hitUnits: 1200, missUnits: 60000, outputUnits: 240000 };
   }
-  return { hitUnits: 200, missUnits: 10000, outputUnits: 40000 };
+  return { hitUnits: 600, missUnits: 30000, outputUnits: 120000 };
 }
 
 const OTHER_MODEL_RATES_PER_1M = {

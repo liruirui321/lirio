@@ -438,7 +438,7 @@ export function GlobalSettingsModal({
                     </button>
                   </div>
                   <div className="settings-rate-tip" style={{ textAlign: 'center' }}>
-                    按量扣费 · 文本 ¥1~2/百万 tok · 语音 ¥0.03/千字
+                    按量扣费 · 文本 ¥3~6/百万 tok · 本地语音免费
                   </div>
                 </div>
               ) : (
@@ -477,8 +477,8 @@ export function GlobalSettingsModal({
                         </span>
                         <span>
                           {isDeepSeekPeakNow()
-                            ? '输入 ¥2 / 缓存 ¥0.04 / 输出 ¥8'
-                            : '输入 ¥1 / 缓存 ¥0.02 / 输出 ¥4'}{' '}
+                            ? '输入 ¥6 / 缓存 ¥0.12 / 输出 ¥24'
+                            : '输入 ¥3 / 缓存 ¥0.06 / 输出 ¥12'}{' '}
                           /百万
                         </span>
                       </div>
@@ -881,11 +881,11 @@ export function GlobalSettingsModal({
                   </p>
                 </div>
                 <div className="guide-block">
-                  <strong>DeepSeek 文本估算（¥10 约可用 250–800 场模考）</strong>
+                  <strong>官方余额估算（¥10 约可用 80–270 场模考）</strong>
                   <ul>
-                    <li>雅思全真模考 + 四维复盘：约 1–1.4 万 tok（约 ¥0.012–¥0.040 / 场）</li>
-                    <li>双语闲聊 10 轮 + 复盘：约 0.8–1.1 万 tok（约 ¥0.010–¥0.035 / 次）</li>
-                    <li>听力错因 AI 诊断：约 1–1.5 千 tok（约 ¥0.002–¥0.004 / 次）</li>
+                    <li>雅思全真模考 + 地道表达复盘：约 1–1.4 万 tok（约 ¥0.036–¥0.120 / 场）</li>
+                    <li>双语闲聊 10 轮 + 复盘：约 0.8–1.1 万 tok（约 ¥0.030–¥0.105 / 次）</li>
+                    <li>听力错因 AI 诊断：约 1–1.5 千 tok（约 ¥0.006–¥0.012 / 次）</li>
                   </ul>
                 </div>
               </div>

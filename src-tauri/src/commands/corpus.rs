@@ -83,6 +83,7 @@ fn fetch_youdao(word: &str, youdao_type: &str, dest: &Path) -> Result<Vec<u8>, S
     Ok(bytes)
 }
 
+#[cfg(target_os = "macos")]
 fn synth_macos_say(word: &str, voice: &str, dest_wav: &Path) -> Result<Vec<u8>, String> {
     let tmp_aiff = dest_wav.with_extension("aiff");
     let status = Command::new("say")
@@ -176,13 +177,63 @@ pub async fn corpus_fetch_audio(
             "in" => "Rishi",
             _ => "Daniel",
         };
-        let bytes = synth_macos_say(&trimmed, voice, &wav_path)?;
-        Ok(CorpusAudioResult {
-            bytes,
-            mime: "audio/wav".into(),
-            source: format!("macos-{voice}"),
-        })
+        #[cfg(target_os = "macos")]
+        {
+            let bytes = synth_macos_say(&trimmed, voice, &wav_path)?;
+            return Ok(CorpusAudioResult {
+                bytes,
+                mime: "audio/wav".into(),
+                source: format!("macos-{voice}"),
+            });
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let bytes = synth_windows_sapi(&trimmed, &acc, &wav_path)?;
+            return Ok(CorpusAudioResult {
+                bytes,
+                mime: "audio/wav".into(),
+                source: format!("win-sapi-{acc}"),
+            });
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            let _ = voice;
+            let _ = &wav_path;
+            Err("移动端请联网使用词典发音或云端语音".into())
+        }
     })
     .await
     .map_err(|e| format!("音频任务中断：{e}"))?
+}
+
+#[cfg(target_os = "windows")]
+fn synth_windows_sapi(word: &str, accent: &str, dest_wav: &Path) -> Result<Vec<u8>, String> {
+    let culture = match accent {
+        "us" => "en-US",
+        "au" => "en-AU",
+        "in" => "en-IN",
+        _ => "en-GB",
+    };
+    let ps_script = r#"
+Add-Type -AssemblyName System.Speech
+$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$v = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -eq $env:LIRIO_TTS_CULTURE } | Select-Object -First 1
+if (-not $v) { $v = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.TwoLetterISOLanguageName -eq 'en' } | Select-Object -First 1 }
+if ($v) { $s.SelectVoice($v.VoiceInfo.Name) }
+$s.SetOutputToWaveFile($env:LIRIO_TTS_OUT)
+$s.Speak($env:LIRIO_TTS_TEXT)
+$s.Dispose()
+"#;
+    let status = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", ps_script])
+        .env("LIRIO_TTS_CULTURE", culture)
+        .env("LIRIO_TTS_OUT", dest_wav.to_string_lossy().as_ref())
+        .env("LIRIO_TTS_TEXT", word)
+        .status()
+        .map_err(|e| format!("Windows 语音合成启动失败：{e}"))?;
+    if !status.success() {
+        let _ = std::fs::remove_file(dest_wav);
+        return Err("Windows 本地语音合成失败".into());
+    }
+    std::fs::read(dest_wav).map_err(|e| format!("读取合成音频失败：{e}"))
 }

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Lirio — 精听 · 拼写 · 雅思口语伴侣（Mac / Windows / Android / iOS）</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <div class="nav-inner">
+      <a class="brand" href="#top">
+        <img src="./assets/lirio-icon.png" alt="Lirio" />
+        <span>Lirio</span>
+        <em id="navVersion" class="ver-pill">v0.5.2</em>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">核心功能</a>
+        <a href="#download">四端下载</a>
+        <a href="#pricing">费用透明</a>
+        <a href="#versions">版本控制</a>
+      </nav>
+      <button type="button" id="themeBtn" class="theme-btn" aria-label="切换主题">深色</button>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <img class="hero-mark" src="./assets/lirio-icon.png" alt="Lirio" />
+      <h1>把精听、拼写和雅思模考<br />装进一个安静好用的 App</h1>
+      <p class="hero-sub">
+        ¥99 一次买断软件，内置免费本地语音模型；上传音频自动分句切分 0 Token 消耗，AI 对话与复盘按量计费。
+      </p>
+      <div class="hero-actions">
+        <a id="primaryDownloadBtn" class="btn-primary" href="#download">立即下载</a>
+        <a class="btn-ghost" href="#download">查看四端版本</a>
+      </div>
+      <div id="heroOsHint" class="hero-meta">支持 macOS · Windows · Android · iPhone</div>
+    </section>
+
+    <section id="features" class="section">
+      <h2>三大专注模块，从输入到开口闭环</h2>
+      <div class="feature-grid">
+        <article class="card">
+          <span class="tag">听力精听</span>
+          <h3>上传音频即自动切分（0 Token）</h3>
+          <p>导入任意本地音频，离线 Whisper + 本地意群引擎自动断句并裁剪静音；支持逐词分空、盲听批改与错因诊断，点击首页卡片直接续听上一句。</p>
+        </article>
+        <article class="card">
+          <span class="tag">单词拼写</span>
+          <h3>雅思高频词卡 · 错词专练</h3>
+          <p>精选雅思听力高频语料，支持卡片逐词、随身听与乱序听写；物理打字带清脆敲击音，语音输入自动静音，生词在精听/口语中可划词一键收录。</p>
+        </article>
+        <article class="card">
+          <span class="tag">口语与模考</span>
+          <h3>双语陪练 + 2026 雅思考官</h3>
+          <p>支持中英混说语音通话，考官严格按 Part 1 → 2 → 3 追问。每场对话与模考结束都生成四维评分、逐题高分示范与地道表达复盘。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="download" class="section">
+      <div class="section-head">
+        <div>
+          <h2>全平台客户端下载</h2>
+          <p class="section-sub">桌面端支持应用内静默检查与签名自动更新，四端共享统一版本号。</p>
+        </div>
+        <span id="releaseDateBadge" class="ver-pill">2026-11-26</span>
+      </div>
+      <div id="platformGrid" class="platform-grid"></div>
+    </section>
+
+    <section id="pricing" class="section">
+      <h2>为什么 ¥99 买断 + ¥10 余额能用很久？</h2>
+      <div class="pricing-box">
+        <div class="pricing-lead">
+          <div class="price-big">¥99 <span>一次买断软件</span></div>
+          <p>买回去即自带全套本地语音模型（ASR 识别 + 离线语音合成），日常听写、词卡、导入切分全部 ¥0。仅云端 AI 推理按量扣费（支持登录充值或填写自己的 API Key）。</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>使用场景</th>
+                <th>典型用量</th>
+                <th>单次估算</th>
+                <th>¥10 余额约可用</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>自定义上传音频 & 自动分句切分</strong></td>
+                <td>本机离线运行（0 Token）</td>
+                <td class="free">¥0 免费</td>
+                <td class="free">无限次</td>
+              </tr>
+              <tr>
+                <td><strong>默认本地语音朗读与识别</strong></td>
+                <td>本机离线运行（0 Token）</td>
+                <td class="free">¥0 免费</td>
+                <td class="free">无限次</td>
+              </tr>
+              <tr>
+                <td><strong>雅思考官全真模考（含地道表达复盘）</strong></td>
+                <td>约 1–1.4 万 tok</td>
+                <td>¥0.036 – ¥0.120 / 场</td>
+                <td>约 80 – 270 场</td>
+              </tr>
+              <tr>
+                <td><strong>双语语音闲聊（10 轮 + 复盘）</strong></td>
+                <td>约 0.8–1.1 万 tok</td>
+                <td>¥0.030 – ¥0.105 / 次</td>
+                <td>约 95 – 330 次</td>
+              </tr>
+              <tr>
+                <td><strong>听力错因 AI 诊断</strong></td>
+                <td>约 1–1.5 千 tok</td>
+                <td>¥0.006 – ¥0.012 / 次</td>
+                <td>约 800+ 次</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="versions" class="section">
+      <h2>版本控制与更新记录</h2>
+      <div id="historyList" class="history-list"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>Lirio · 精听 · 拼写 · 对话</span>
+    <span id="footerVersion">Version 0.5.2</span>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>
