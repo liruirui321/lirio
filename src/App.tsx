@@ -8,6 +8,13 @@ import { projectService } from './services/projectService';
 import { simplifyMaterialTitle } from './services/materialTitle';
 import { getActiveCorpusDraftSummary, loadCorpusState } from './services/corpusService';
 import { loadSpeakState } from './services/speakService';
+import {
+  formatYuan,
+  getAccountState,
+  refreshAccountMe,
+  subscribeAccount,
+  type AccountState,
+} from './services/accountService';
 import { hydrateStateFromDisk } from './services/stateSync';
 import {
   importAudioFilesToLibrary,
@@ -25,7 +32,7 @@ import { SubmissionAnalysis } from './components/Analysis/SubmissionAnalysis';
 import { CorpusDictation } from './components/Corpus/CorpusDictation';
 import { CustomSelect } from './components/Corpus/CustomSelect';
 import { SpeakCompanion } from './components/Speak/SpeakCompanion';
-import { GlobalSettingsModal } from './components/Settings/GlobalSettingsModal';
+import { GlobalSettingsModal, type GlobalSettingsTab } from './components/Settings/GlobalSettingsModal';
 import { Transport } from './components/Player/Transport';
 import { GlobalTooltip } from './components/GlobalTooltip';
 import { SelectionTools } from './components/SelectionTools';
@@ -64,6 +71,8 @@ export default function App() {
   const [importError, setImportError] = useState('');
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<GlobalSettingsTab>('account');
+  const [accountState, setAccountState] = useState<AccountState>(() => getAccountState());
   const [stateTick, setStateTick] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
@@ -80,9 +89,14 @@ export default function App() {
   useEffect(() => {
     hydrateStateFromDisk()
       .then((restored) => {
-        if (restored) setStateTick((t) => t + 1);
+        if (restored) {
+          setAccountState(getAccountState());
+          setStateTick((t) => t + 1);
+        }
+        return refreshAccountMe().catch(() => null);
       })
       .catch(() => {});
+    return subscribeAccount((next) => setAccountState(next));
   }, []);
 
   const [asrBusy, setAsrBusy] = useState(false);
@@ -501,10 +515,33 @@ export default function App() {
         )}
 
         <button
+          type="button"
+          className={`account-topbar-pill${
+            accountState.user && accountState.aiMode === 'pro_balance' && accountState.user.balanceUnits < 10000
+              ? ' low'
+              : ''
+          }`}
+          title="账户、余额与 AI 计费模式设置"
+          onClick={() => {
+            setSettingsTab('account');
+            setSettingsOpen(true);
+          }}
+        >
+          {accountState.user
+            ? accountState.aiMode === 'pro_balance'
+              ? `Pro · ${formatYuan(accountState.user.balanceUnits, 2)}`
+              : '自有 Key'
+            : '登录 / Pro'}
+        </button>
+
+        <button
           className={`icon-btn${settingsOpen ? ' active' : ''}`}
-          title="用户设置（AI 引擎、语音配置与数据备份）"
+          title="用户设置（账户、AI 引擎、语音与数据备份）"
           aria-label="用户设置"
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => {
+            setSettingsTab('ai');
+            setSettingsOpen(true);
+          }}
         >
           <IconSettings size={17} />
         </button>
@@ -609,12 +646,16 @@ export default function App() {
         <SpeakCompanion
           externalContext={speakContext}
           onClearExternalContext={() => setSpeakContext(null)}
-          onOpenGlobalSettings={() => setSettingsOpen(true)}
+          onOpenGlobalSettings={() => {
+            setSettingsTab('ai');
+            setSettingsOpen(true);
+          }}
         />
       )}
 
       <GlobalSettingsModal
         open={settingsOpen}
+        initialTab={settingsTab}
         onClose={() => setSettingsOpen(false)}
         theme={theme}
         onThemeChange={setTheme}

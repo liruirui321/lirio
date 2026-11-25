@@ -4,6 +4,21 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile } from '@tauri-apps/plugin-fs';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import type { Accent } from '../../services/corpusService';
+import {
+  DEFAULT_RECHARGE_PACKS,
+  fetchBillingLedger,
+  formatYuan,
+  getAccountState,
+  loginAccount,
+  logoutAccount,
+  rechargeAccount,
+  refreshAccountMe,
+  registerAccount,
+  subscribeAccount,
+  updateAccountState,
+  type AccountState,
+  type LedgerEntry,
+} from '../../services/accountService';
 import { exportAllStateJson, importAllStateJson } from '../../services/stateSync';
 import {
   PROVIDER_META,
@@ -17,9 +32,9 @@ import {
   type SpeakPersistedState,
   type TtsProviderId,
 } from '../../services/speakService';
-import { IconClose, IconEye, IconMoon, IconSun } from '../Icons';
+import { IconClose, IconEye, IconMoon, IconReplay, IconSun } from '../Icons';
 
-export type GlobalSettingsTab = 'ai' | 'data';
+export type GlobalSettingsTab = 'account' | 'ai' | 'data';
 
 const ACCENT_OPTS: SelectOption[] = [
   { value: 'uk', label: '英音 UK' },
@@ -53,19 +68,39 @@ const VOICE_OPTS: SelectOption[] = [
   { value: 'shimmer', label: 'Shimmer' },
 ];
 
+function formatLedgerUsage(entry: LedgerEntry): string {
+  if (entry.kind !== 'usage') return entry.note || '—';
+  if (entry.outputUnits > 0 && entry.model !== 'whisper-1') {
+    return `${entry.inputUnits + entry.outputUnits} tok`;
+  }
+  return entry.note || `${entry.inputUnits}`;
+}
+
 export function GlobalSettingsModal({
   open: isOpen,
+  initialTab = 'account',
   onClose,
   theme,
   onThemeChange,
 }: {
   open: boolean;
+  initialTab?: GlobalSettingsTab;
   onClose: () => void;
   theme: 'light' | 'dark';
   onThemeChange: (next: 'light' | 'dark') => void;
 }) {
-  const [tab, setTab] = useState<GlobalSettingsTab>('ai');
+  const [tab, setTab] = useState<GlobalSettingsTab>(initialTab);
   const [persisted, setPersisted] = useState<SpeakPersistedState>(() => loadSpeakState());
+  const [account, setAccount] = useState<AccountState>(() => getAccountState());
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [showServerUrl, setShowServerUrl] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [ledgerBusy, setLedgerBusy] = useState(false);
+
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingConn, setTestingConn] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
@@ -73,11 +108,33 @@ export function GlobalSettingsModal({
   const [busyData, setBusyData] = useState(false);
 
   useEffect(() => {
+    if (isOpen) setTab(initialTab);
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
     if (!isOpen) return;
     setPersisted(loadSpeakState());
+    const acct = getAccountState();
+    setAccount(acct);
     setStatusMsg('');
     setErrorMsg('');
-    return subscribeSpeakState((next) => setPersisted(next));
+    if (acct.token) {
+      setLedgerBusy(true);
+      refreshAccountMe()
+        .then((res) => {
+          if (res?.ledger) setLedger(res.ledger);
+        })
+        .catch(() => {})
+        .finally(() => setLedgerBusy(false));
+    } else {
+      setLedger([]);
+    }
+    const unsubSpeak = subscribeSpeakState((next) => setPersisted(next));
+    const unsubAcct = subscribeAccount((next) => setAccount(next));
+    return () => {
+      unsubSpeak();
+      unsubAcct();
+    };
   }, [isOpen]);
 
   // Silent auto-detect local DeepSeek key if empty
@@ -89,7 +146,7 @@ export function GlobalSettingsModal({
         .then((key) => {
           if (key) {
             const cur = loadSpeakState();
-            const next: SpeakPersistedState = {
+            saveSpeakState({
               ...cur,
               config: {
                 ...cur.config,
@@ -98,8 +155,7 @@ export function GlobalSettingsModal({
                   deepseek: { ...cur.config.providers.deepseek, apiKey: key },
                 },
               },
-            };
-            saveSpeakState(next);
+            });
           }
         })
         .catch(() => {});
@@ -110,7 +166,9 @@ export function GlobalSettingsModal({
 
   const config = persisted.config;
   const activeProviderLabel =
-    PROVIDER_META.find((p) => p.id === config.activeProvider)?.label || config.activeProvider;
+    account.aiMode === 'pro_balance'
+      ? 'Lirio Pro 余额托管'
+      : PROVIDER_META.find((p) => p.id === config.activeProvider)?.label || config.activeProvider;
 
   const updateConfig = (patch: Partial<SpeakConfig>) => {
     const latest = loadSpeakState();
@@ -141,10 +199,61 @@ export function GlobalSettingsModal({
     setPersisted(next);
   };
 
+  const handleAuthSubmit = async () => {
+    setAuthBusy(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    try {
+      const res =
+        authMode === 'register'
+          ? await registerAccount({ email, password, name: nickname })
+          : await loginAccount({ email, password });
+      setLedger(res.ledger || []);
+      setPassword('');
+      setStatusMsg(
+        authMode === 'register'
+          ? `注册成功！已赠送 ${formatYuan(res.user.balanceUnits)} 体验金，并切换至余额托管模式。`
+          : `欢迎回来，${res.user.name}！当前余额 ${formatYuan(res.user.balanceUnits)}。`,
+      );
+    } catch (e) {
+      setErrorMsg(String(e));
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleRecharge = async (packageId: string) => {
+    setAuthBusy(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    try {
+      const res = await rechargeAccount(packageId);
+      setLedger(res.ledger || []);
+      setStatusMsg(`充值成功！到账 ${formatYuan(res.entry.amountUnits)}，当前余额 ${formatYuan(res.user.balanceUnits)}`);
+    } catch (e) {
+      setErrorMsg(String(e));
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleRefreshLedger = async () => {
+    setLedgerBusy(true);
+    setErrorMsg('');
+    try {
+      const res = await fetchBillingLedger(50);
+      setLedger(res.ledger || []);
+    } catch (e) {
+      setErrorMsg(String(e));
+    } finally {
+      setLedgerBusy(false);
+    }
+  };
+
   const handleTestConn = async () => {
     setTestingConn(true);
     setErrorMsg('');
-    setStatusMsg('正在测试当前文本引擎连接…');
+    setStatusMsg(`正在测试「${activeProviderLabel}」连接…`);
     try {
       await testProviderConnection(config);
       setStatusMsg(`连接成功：${activeProviderLabel} 已就绪`);
@@ -210,9 +319,16 @@ export function GlobalSettingsModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="import-modal-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <h2>用户设置</h2>
             <div className="seg-pill" role="tablist">
+              <button
+                type="button"
+                className={tab === 'account' ? 'active' : ''}
+                onClick={() => setTab('account')}
+              >
+                账户与余额
+              </button>
               <button
                 type="button"
                 className={tab === 'ai' ? 'active' : ''}
@@ -247,9 +363,221 @@ export function GlobalSettingsModal({
           </div>
         )}
 
+        {tab === 'account' && (
+          <div className="settings-tab-body">
+            <div className="settings-section-title">全局 AI 计费模式（所有模块共用此设置）</div>
+            <div className="settings-theme-row">
+              <button
+                type="button"
+                className={`provider-card${account.aiMode === 'pro_balance' ? ' active' : ''}`}
+                onClick={() => updateAccountState({ aiMode: 'pro_balance' })}
+              >
+                <strong>Lirio Pro 余额托管</strong>
+                <small>免填 API Key，登录即用，按实际消耗实时扣减余额并记录账单</small>
+              </button>
+              <button
+                type="button"
+                className={`provider-card${account.aiMode === 'byok' ? ' active' : ''}`}
+                onClick={() => updateAccountState({ aiMode: 'byok' })}
+              >
+                <strong>自有 API Key（BYOK）</strong>
+                <small>使用你在「AI 与语音配置」填写的文本/语音 Key，不扣账号余额</small>
+              </button>
+            </div>
+
+            {!account.user ? (
+              <div className="account-auth-card">
+                <div className="account-auth-head">
+                  <div className="seg-pill">
+                    <button
+                      type="button"
+                      className={authMode === 'login' ? 'active' : ''}
+                      onClick={() => setAuthMode('login')}
+                    >
+                      登录账号
+                    </button>
+                    <button
+                      type="button"
+                      className={authMode === 'register' ? 'active' : ''}
+                      onClick={() => setAuthMode('register')}
+                    >
+                      新用户注册（赠 ¥5）
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="dict-slow-btn"
+                    onClick={() => setShowServerUrl((s) => !s)}
+                  >
+                    服务器地址
+                  </button>
+                </div>
+
+                {showServerUrl && (
+                  <div className="speak-field">
+                    <label>Lirio Pro 服务端 URL</label>
+                    <input
+                      type="text"
+                      value={account.serverUrl}
+                      onChange={(e) => updateAccountState({ serverUrl: e.target.value })}
+                    />
+                  </div>
+                )}
+
+                <div className="settings-two-col">
+                  <div className="speak-field">
+                    <label>邮箱</label>
+                    <input
+                      type="email"
+                      value={email}
+                      placeholder="name@example.com"
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="speak-field">
+                    <label>密码（至少 6 位）</label>
+                    <input
+                      type="password"
+                      value={password}
+                      placeholder="••••••"
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && email && password) void handleAuthSubmit();
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {authMode === 'register' && (
+                  <div className="speak-field">
+                    <label>昵称（可选）</label>
+                    <input
+                      type="text"
+                      value={nickname}
+                      placeholder="你的称呼…"
+                      onChange={(e) => setNickname(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div className="import-modal-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={authBusy || !email.trim() || password.length < 6}
+                    onClick={() => void handleAuthSubmit()}
+                  >
+                    {authBusy
+                      ? '请稍候…'
+                      : authMode === 'register'
+                        ? '注册并领取 ¥5 体验金'
+                        : '登录'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="account-profile-card">
+                  <div className="account-profile-top">
+                    <div className="account-avatar">{account.user.name.slice(0, 1).toUpperCase()}</div>
+                    <div className="account-profile-info">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <strong>{account.user.name}</strong>
+                        <span className={`tier-badge small${account.user.tier === 'pro' ? ' pro' : ''}`}>
+                          {account.user.tier === 'pro' ? 'PRO 会员' : '体验版'}
+                        </span>
+                      </div>
+                      <small>{account.user.email}</small>
+                    </div>
+                    <button type="button" onClick={logoutAccount}>
+                      退出登录
+                    </button>
+                  </div>
+
+                  <div className="account-balance-strip">
+                    <div className="account-balance-main">
+                      <span>当前可用余额</span>
+                      <strong>{formatYuan(account.user.balanceUnits, 2)}</strong>
+                    </div>
+                    <div className="account-balance-stats">
+                      <span>累计充值 {formatYuan(account.user.totalRechargedUnits, 2)}</span>
+                      <span>累计消耗 {formatYuan(account.user.totalSpentUnits, 4)}</span>
+                    </div>
+                  </div>
+
+                  <div className="account-recharge-grid">
+                    {DEFAULT_RECHARGE_PACKS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="recharge-pack-btn"
+                        disabled={authBusy}
+                        onClick={() => void handleRecharge(p.id)}
+                      >
+                        <strong>{p.label}</strong>
+                        <small>{p.note}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="ledger-section">
+                  <div className="ledger-head">
+                    <span>消费与充值账单明细</span>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      disabled={ledgerBusy}
+                      title="刷新账单"
+                      aria-label="刷新账单"
+                      onClick={() => void handleRefreshLedger()}
+                    >
+                      <IconReplay size={14} />
+                    </button>
+                  </div>
+                  {ledger.length === 0 ? (
+                    <div className="corpus-empty" style={{ padding: 14 }}>
+                      {ledgerBusy ? '正在读取账单…' : '暂无账单流水。'}
+                    </div>
+                  ) : (
+                    <div className="ledger-list">
+                      {ledger.map((row) => {
+                        const isPlus = row.amountUnits >= 0;
+                        return (
+                          <div key={row.id} className="ledger-row">
+                            <div className="ledger-col-main">
+                              <strong>{row.feature}</strong>
+                              <small>
+                                {new Date(row.createdAt).toLocaleString()} · {formatLedgerUsage(row)}
+                              </small>
+                            </div>
+                            <div className="ledger-col-amt">
+                              <strong className={isPlus ? 'plus' : 'minus'}>
+                                {isPlus ? '+' : '-'}
+                                {formatYuan(Math.abs(row.amountUnits), isPlus ? 2 : 4)}
+                              </strong>
+                              <small>余 {formatYuan(row.balanceAfterUnits, 2)}</small>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {tab === 'ai' && (
           <div className="settings-tab-body">
-            <div className="settings-section-title">文本 AI 引擎（用于口语对话、雅思考官、划词翻译、听力诊断）</div>
+            {account.aiMode === 'pro_balance' && (
+              <div className="corpus-banner" style={{ borderRadius: 10 }}>
+                当前为「Lirio Pro 余额托管」模式：文本 AI 自动走平台通道并扣减余额（当前 {formatYuan(account.user?.balanceUnits, 2)}）；切换到「自有 API Key」后将使用下方自有配置。
+              </div>
+            )}
+
+            <div className="settings-section-title">自有文本 AI 引擎（BYOK 模式生效）</div>
             <div className="provider-grid compact">
               {PROVIDER_META.map((p) => {
                 const active = config.activeProvider === p.id;
@@ -317,6 +645,17 @@ export function GlobalSettingsModal({
             <div className="settings-section-title" style={{ marginTop: 4 }}>
               语音合成与识别（TTS / ASR · 全局生效）
             </div>
+            {account.aiMode === 'pro_balance' && (
+              <label className="settings-check-line">
+                <input
+                  type="checkbox"
+                  checked={account.proCloudSpeech}
+                  onChange={(e) => updateAccountState({ proCloudSpeech: e.target.checked })}
+                />
+                语音合成与识别也使用 Lirio 云端高清（按量扣余额；关闭则使用免费 Edge TTS 与本机 Whisper）
+              </label>
+            )}
+
             <div className="settings-two-col">
               <div className="speak-field">
                 <label>朗读 / 考官语音（TTS）</label>
@@ -405,7 +744,7 @@ export function GlobalSettingsModal({
 
             <div className="import-modal-actions">
               <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
-                {testingConn ? '测试中…' : '测试 AI 连接'}
+                {testingConn ? '测试中…' : '测试当前 AI 连接'}
               </button>
               <button type="button" className="primary" onClick={onClose}>
                 完成

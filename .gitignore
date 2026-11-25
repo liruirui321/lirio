@@ -26,3 +26,9 @@ src-tauri/resources/llm/
 # Python CLI caches
 __pycache__/
 *.pyc
+
+# Commercial server local runtime state
+server/*.db
+server/*.db-*
+server/*.sqlite*
+server/.env

@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { loadCorpusState, lookupBuiltinWord, saveCorpusState, type Accent } from './corpusService';
+import { getAccountState, proxyChat, proxyTranscribe, proxyTts } from './accountService';
 import { saveStateBackup } from './stateSync';
 import ielts2026Q4Raw from '../data/ielts_speaking_2026_sep_dec.json';
 
@@ -647,6 +648,10 @@ function resolveSpeechCredentials(config: SpeakConfig) {
 }
 
 export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
+  const acct = getAccountState();
+  if (acct.aiMode === 'pro_balance' && acct.proCloudSpeech) {
+    return proxyTranscribe(wavBytes, '云端语音识别');
+  }
   const { config } = loadSpeakState();
   const { apiKey, baseUrl } = resolveSpeechCredentials(config);
   return invoke<string>('speak_transcribe', {
@@ -665,6 +670,10 @@ interface TtsResult {
 
 export async function synthesizeSpeech(text: string, accent: Accent): Promise<string> {
   const { config } = loadSpeakState();
+  const acct = getAccountState();
+  if (acct.aiMode === 'pro_balance' && acct.proCloudSpeech) {
+    return proxyTts(text, accent, config.speechVoice, '云端语音合成');
+  }
   const { apiKey, baseUrl } = resolveSpeechCredentials(config);
   const res = await invoke<TtsResult>('speak_tts', {
     text,
@@ -956,12 +965,17 @@ async function callActiveLlm(
   config: SpeakConfig,
   messages: { role: string; content: string }[],
   temperature = 0.7,
+  feature = 'AI 对话',
 ): Promise<string> {
+  const acct = getAccountState();
+  if (acct.aiMode === 'pro_balance') {
+    return proxyChat({ messages, temperature, feature });
+  }
   const provider = config.activeProvider;
   if (provider !== 'local') {
     const prof = config.providers[provider];
     if (provider !== 'ollama' && !prof.apiKey.trim()) {
-      throw new Error(`请先在右上角设置中填写 ${PROVIDER_META.find((p) => p.id === provider)?.label || provider} 的 API Key，或切换为「内置离线 Qwen」。`);
+      throw new Error(`请先在右上角用户设置中填写 ${PROVIDER_META.find((p) => p.id === provider)?.label || provider} 的 API Key，或登录账号使用「Lirio Pro 余额托管」。`);
     }
     return invoke<string>('speak_chat_remote', {
       baseUrl: prof.baseUrl,
@@ -993,6 +1007,7 @@ export async function testProviderConnection(config: SpeakConfig): Promise<strin
       { role: 'user', content: 'ping' },
     ],
     0.1,
+    '连接测试',
   );
 }
 
@@ -1010,7 +1025,7 @@ export async function generateCompanionReply(
     { role: 'system', content: system },
     ...turns.slice(-16).map((t) => ({ role: t.role, content: t.text })),
   ];
-  return callActiveLlm(config, messages, 0.75);
+  return callActiveLlm(config, messages, 0.75, '口语陪练');
 }
 
 export interface ExaminerReplyResult {
@@ -1030,7 +1045,7 @@ export async function generateExaminerReply(
     { role: 'system', content: system },
     ...stageTurns.slice(-18).map((t) => ({ role: t.role, content: t.text })),
   ];
-  const raw = await callActiveLlm(config, messages, 0.45);
+  const raw = await callActiveLlm(config, messages, 0.45, '雅思考官');
   let action: 'continue' | 'next_part' | 'end_test' = 'continue';
   if (/\[END_TEST\]/i.test(raw)) {
     action = 'end_test';
@@ -1143,6 +1158,7 @@ export async function generateSessionTakeaways(
       { role: 'user', content: transcript },
     ],
     0.3,
+    '课后复盘',
   );
 
   try {
@@ -1271,6 +1287,7 @@ export async function generateListeningDiagnosis(
       { role: 'user', content: JSON.stringify(payload) },
     ],
     0.35,
+    '听力诊断',
   );
   try {
     const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
@@ -1347,6 +1364,7 @@ export async function translateSelection(
       { role: 'user', content: userMsg },
     ],
     0.2,
+    '划词翻译',
   );
   try {
     const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
