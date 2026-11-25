@@ -46,6 +46,13 @@ export interface AccountState {
   proCloudSpeech: boolean;
 }
 
+export interface LastChargeEvent {
+  amountUnits: number;
+  feature: string;
+  balanceAfterUnits: number;
+  at: number;
+}
+
 export const DEFAULT_RECHARGE_PACKS: RechargePack[] = [
   { id: 'pack_10', label: '轻享包 ¥10', payYuan: 10, bonusYuan: 0, creditUnits: 100000, note: '¥10.00' },
   { id: 'pack_30', label: '备考包 ¥30（送¥3）', payYuan: 30, bonusYuan: 3, creditUnits: 330000, note: '到账 ¥33.00' },
@@ -62,12 +69,28 @@ const DEFAULT_STATE: AccountState = {
 };
 
 const listeners = new Set<(state: AccountState) => void>();
+const lastChargeListeners = new Set<(event: LastChargeEvent) => void>();
 
 export function subscribeAccount(listener: (state: AccountState) => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
+}
+
+export function subscribeLastCharge(listener: (event: LastChargeEvent) => void): () => void {
+  lastChargeListeners.add(listener);
+  return () => {
+    lastChargeListeners.delete(listener);
+  };
+}
+
+function emitLastCharge(event: LastChargeEvent) {
+  lastChargeListeners.forEach((fn) => {
+    try {
+      fn(event);
+    } catch {}
+  });
 }
 
 export function getAccountState(): AccountState {
@@ -108,6 +131,11 @@ export function updateAccountState(patch: Partial<AccountState>): AccountState {
 export function formatYuan(units: number | undefined | null, decimals = 2): string {
   const v = (Number(units) || 0) / 10000;
   return `¥${v.toFixed(decimals)}`;
+}
+
+export function formatSmartYuan(units: number | undefined | null): string {
+  const raw = Math.round(Math.abs(Number(units) || 0));
+  return formatYuan(units, raw % 100 === 0 ? 2 : 4);
 }
 
 async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
@@ -197,11 +225,19 @@ export async function proxyChat(opts: {
   if (!st.token) {
     throw new Error('当前处于「Lirio Pro 余额托管」模式，请先点击右上角头像或设置登录账号。');
   }
-  const res = await apiFetch<{ content: string; user: AccountUser }>('/api/ai/chat', {
+  const res = await apiFetch<{ content: string; costUnits?: number; user: AccountUser }>('/api/ai/chat', {
     method: 'POST',
     body: JSON.stringify(opts),
   });
   if (res.user) updateAccountState({ user: res.user });
+  if (res.costUnits && res.costUnits > 0) {
+    emitLastCharge({
+      amountUnits: res.costUnits,
+      feature: opts.feature || 'AI 对话',
+      balanceAfterUnits: res.user?.balanceUnits ?? 0,
+      at: Date.now(),
+    });
+  }
   return res.content;
 }
 
@@ -223,11 +259,19 @@ export async function proxyTts(text: string, accent: Accent, voice?: string, fea
   if (!st.token) {
     throw new Error('请先登录 Lirio 账号后再使用云端语音。');
   }
-  const res = await apiFetch<{ audioBase64: string; mime: string; user: AccountUser }>('/api/ai/tts', {
+  const res = await apiFetch<{ audioBase64: string; mime: string; costUnits?: number; user: AccountUser }>('/api/ai/tts', {
     method: 'POST',
     body: JSON.stringify({ text, accent, voice, feature }),
   });
   if (res.user) updateAccountState({ user: res.user });
+  if (res.costUnits && res.costUnits > 0) {
+    emitLastCharge({
+      amountUnits: res.costUnits,
+      feature,
+      balanceAfterUnits: res.user?.balanceUnits ?? 0,
+      at: Date.now(),
+    });
+  }
   return base64ToBlobUrl(res.audioBase64, res.mime);
 }
 
@@ -237,7 +281,7 @@ export async function proxyTranscribe(wavBytes: Uint8Array, feature = '云端语
     throw new Error('请先登录 Lirio 账号后再使用云端识别。');
   }
   const approxSec = Math.max(1, Math.round(wavBytes.length / 32000));
-  const res = await apiFetch<{ text: string; user: AccountUser }>('/api/ai/transcribe', {
+  const res = await apiFetch<{ text: string; costUnits?: number; user: AccountUser }>('/api/ai/transcribe', {
     method: 'POST',
     body: JSON.stringify({
       wavBase64: uint8ToBase64(wavBytes),
@@ -246,5 +290,13 @@ export async function proxyTranscribe(wavBytes: Uint8Array, feature = '云端语
     }),
   });
   if (res.user) updateAccountState({ user: res.user });
+  if (res.costUnits && res.costUnits > 0) {
+    emitLastCharge({
+      amountUnits: res.costUnits,
+      feature,
+      balanceAfterUnits: res.user?.balanceUnits ?? 0,
+      at: Date.now(),
+    });
+  }
   return res.text;
 }

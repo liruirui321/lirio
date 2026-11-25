@@ -2971,3 +2971,182 @@ textarea:focus { outline: none; }
   font-size: 11px;
   color: var(--subtle);
 }
+
+.account-charge-delta {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+  animation: tipFade 0.16s ease-out;
+}
+
+.settings-pricing-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pricing-mini-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pricing-period-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+/* ---------- Speak Left/Right Chat Bubbles ---------- */
+.speak-call-stage.chat-active {
+  justify-content: flex-end;
+  gap: 12px;
+  padding-bottom: 18px;
+}
+.cue-card-float.compact {
+  max-width: 100%;
+  padding: 12px 16px;
+}
+.cue-card-float.compact h3 {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+.cue-card-float.compact ul {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.speak-chat-thread {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 6px 4px 10px;
+}
+.speak-chat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+}
+.speak-chat-row.ai {
+  align-items: flex-start;
+}
+.speak-chat-row.user {
+  align-items: flex-end;
+}
+.speak-chat-meta {
+  font-size: 11px;
+  color: var(--subtle);
+  padding: 0 6px;
+}
+.speak-bubble-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 86%;
+}
+.speak-bubble {
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.speak-bubble.ai {
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 16px 4px;
+  color: var(--text-strong);
+  box-shadow: var(--card-shadow);
+}
+.speak-bubble.user {
+  max-width: 78%;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 16px 16px 4px 16px;
+  color: var(--text-strong);
+}
+.speak-bubble.pending {
+  opacity: 0.72;
+  font-style: italic;
+}
+.speak-bubble-play {
+  width: 26px !important;
+  height: 26px !important;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.speak-bubble-play:hover:not(:disabled) {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+.speak-chat-controls {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.speak-chat-orb-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.fluid-orb-wrap.compact {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.fluid-orb-wrap.compact .fluid-orb-halo {
+  inset: -4px;
+}
+.fluid-orb-wrap.compact .fluid-orb {
+  width: 34px;
+  height: 34px;
+  box-shadow: 0 6px 16px rgba(76, 122, 96, 0.24), inset 0 0 10px rgba(255, 255, 255, 0.22);
+}
+.speak-chat-status {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.speak-chat-dock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.dock-circle.sm {
+  width: 38px;
+  height: 38px;
+}
+.qa-transcript-list.chat-style {
+  gap: 10px;
+  padding: 14px;
+}
+.qa-transcript-list.chat-style .speak-bubble.user {
+  max-width: 78%;
+}
+.qa-transcript-list.chat-style .speak-bubble.ai {
+  max-width: 78%;
+}

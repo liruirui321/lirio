@@ -9,11 +9,14 @@ import { simplifyMaterialTitle } from './services/materialTitle';
 import { getActiveCorpusDraftSummary, loadCorpusState } from './services/corpusService';
 import { loadSpeakState } from './services/speakService';
 import {
+  formatSmartYuan,
   formatYuan,
   getAccountState,
   refreshAccountMe,
   subscribeAccount,
+  subscribeLastCharge,
   type AccountState,
+  type LastChargeEvent,
 } from './services/accountService';
 import { hydrateStateFromDisk } from './services/stateSync';
 import {
@@ -74,6 +77,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<GlobalSettingsTab>('ai');
   const [accountState, setAccountState] = useState<AccountState>(() => getAccountState());
+  const [recentCharge, setRecentCharge] = useState<LastChargeEvent | null>(null);
   const [stateTick, setStateTick] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
@@ -97,7 +101,18 @@ export default function App() {
         return refreshAccountMe().catch(() => null);
       })
       .catch(() => {});
-    return subscribeAccount((next) => setAccountState(next));
+    const unsubAcct = subscribeAccount((next) => setAccountState(next));
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubCharge = subscribeLastCharge((evt) => {
+      setRecentCharge(evt);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setRecentCharge(null), 4500);
+    });
+    return () => {
+      unsubAcct();
+      unsubCharge();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const [asrBusy, setAsrBusy] = useState(false);
@@ -608,7 +623,12 @@ export default function App() {
             }}
           >
             <IconUser size={15} />
-            <span>{formatYuan(accountState.user.balanceUnits, 2)}</span>
+            <span>{formatSmartYuan(accountState.user.balanceUnits)}</span>
+            {recentCharge && (
+              <span className="account-charge-delta" title={recentCharge.feature}>
+                -{formatYuan(recentCharge.amountUnits, 4)}
+              </span>
+            )}
           </button>
         ) : (
           <button

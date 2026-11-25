@@ -161,7 +161,24 @@ try {
   assert.equal(demo.balanceUnits, 1_000_000);
   assert.equal(demo.tier, 'pro');
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (7/7)');
+  // 8. Verify root dashboard (HTML + JSON negotiation) and /api/overview
+  const dashHtml = await fetch(`${base}/`);
+  assert.equal(dashHtml.status, 200);
+  assert.ok((dashHtml.headers.get('content-type') || '').includes('text/html'));
+  const htmlBody = await dashHtml.text();
+  assert.ok(htmlBody.includes('Lirio Pro'));
+
+  const dashJson = await fetch(`${base}/`, { headers: { Accept: 'application/json' } });
+  assert.equal(dashJson.status, 200);
+  const dashData = await dashJson.json();
+  assert.equal(dashData.ok, true);
+
+  const overviewRes = await req('GET', '/api/overview');
+  assert.equal(overviewRes.status, 200);
+  assert.ok(overviewRes.json.users.length >= 2);
+  assert.ok(overviewRes.json.ledger.length >= 1);
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (8/8)');
 } finally {
   server.close();
 }

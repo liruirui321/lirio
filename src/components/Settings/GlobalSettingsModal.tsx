@@ -39,10 +39,23 @@ const ACCENT_OPTS: SelectOption[] = [
   { value: 'in', label: '印音 IN' },
 ];
 
+function isDeepSeekPeakNow(now = new Date()): boolean {
+  const bj = new Date(now.getTime() + 8 * 3600_000);
+  const day = bj.getUTCDay();
+  if (day === 0 || day === 6) return false;
+  const hour = bj.getUTCHours();
+  return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
+}
+
 function formatLedgerUsage(entry: LedgerEntry): string {
   if (entry.kind !== 'usage') return entry.note || '';
+  const period = entry.note?.includes('高峰价')
+    ? ' · 高峰价'
+    : entry.note?.includes('空闲价')
+      ? ' · 空闲价'
+      : '';
   if (entry.outputUnits > 0 && entry.model !== 'whisper-1') {
-    return `${entry.inputUnits + entry.outputUnits} tok`;
+    return `${entry.inputUnits + entry.outputUnits} tok${period}`;
   }
   return `${entry.inputUnits} 字`;
 }
@@ -391,7 +404,7 @@ export function GlobalSettingsModal({
                     </div>
                   )}
 
-                  <div className="import-modal-actions">
+                    <div className="import-modal-actions">
                     <button
                       type="button"
                       className="primary"
@@ -400,6 +413,9 @@ export function GlobalSettingsModal({
                     >
                       {authBusy ? '请稍候…' : authMode === 'register' ? '注册' : '登录'}
                     </button>
+                  </div>
+                  <div className="settings-rate-tip" style={{ textAlign: 'center' }}>
+                    按量扣费 · 文本 ¥1~2/百万 tok · 语音 ¥0.03/千字
                   </div>
                 </div>
               ) : (
@@ -428,12 +444,24 @@ export function GlobalSettingsModal({
                       </div>
                       <div className="account-balance-stats">
                         <span>已充 {formatYuan(account.user.totalRechargedUnits, 2)} · 已用 {formatYuan(account.user.totalSpentUnits, 4)}</span>
-                        <span
-                          className="settings-rate-tip"
-                          title="DeepSeek 峰谷实价（输入 ¥1~2 / 缓存 ¥0.02~0.04 / 输出 ¥4~8 每百万 tok）· 语音合成 ¥0.03 / 千字"
-                        >
-                          DeepSeek 峰谷 · 语音 ¥0.03/千字
+                      </div>
+                    </div>
+
+                    <div className="settings-pricing-mini">
+                      <div className="pricing-mini-row">
+                        <span>
+                          文本 <span className="pricing-period-tag">{isDeepSeekPeakNow() ? '高峰' : '空闲'}</span>
                         </span>
+                        <span>
+                          {isDeepSeekPeakNow()
+                            ? '输入 ¥2 / 缓存 ¥0.04 / 输出 ¥8'
+                            : '输入 ¥1 / 缓存 ¥0.02 / 输出 ¥4'}{' '}
+                          /百万
+                        </span>
+                      </div>
+                      <div className="pricing-mini-row">
+                        <span>语音</span>
+                        <span>{account.proCloudSpeech ? '¥0.03 / 千字' : '本地免费'}</span>
                       </div>
                     </div>
 

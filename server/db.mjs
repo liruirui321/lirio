@@ -88,6 +88,31 @@ export function getUserById(db, userId) {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(userId) || null;
 }
 
+export function listAllUsers(db) {
+  const rows = db
+    .prepare('SELECT * FROM users ORDER BY created_at DESC, rowid DESC')
+    .all();
+  return rows.map(serializeUser);
+}
+
+export function listRecentLedger(db, limit = 30) {
+  const safeLimit = Math.max(1, Math.min(200, Number(limit) || 30));
+  const rows = db
+    .prepare(
+      `SELECT l.*, u.email AS user_email, u.name AS user_name
+       FROM ledger l
+       LEFT JOIN users u ON u.id = l.user_id
+       ORDER BY l.created_at DESC, l.rowid DESC
+       LIMIT ?`,
+    )
+    .all(safeLimit);
+  return rows.map((row) => ({
+    ...serializeLedger(row),
+    userEmail: row.user_email || '',
+    userName: row.user_name || '',
+  }));
+}
+
 export function listUserLedger(db, userId, limit = 50) {
   const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
   const rows = db

@@ -8,6 +8,8 @@ import {
   deductUserBalance,
   getUserByEmail,
   getUserById,
+  listAllUsers,
+  listRecentLedger,
   listUserLedger,
   openDatabase,
   serializeUser,
@@ -17,7 +19,10 @@ import {
   calculateAsrCostUnits,
   calculateChatCostUnits,
   calculateTtsCostUnits,
+  formatYuan,
   getDeepSeekPeriodLabel,
+  getDeepSeekRatesPer1M,
+  isDeepSeekPeakBeijing,
 } from './pricing.mjs';
 import { forwardChatCompletion, forwardTranscribe, forwardTts } from './aiProxy.mjs';
 
@@ -43,14 +48,183 @@ export function seedDemoUser(db) {
   return credited.user;
 }
 
-function sendJson(res, status, data) {
+function sendJson(res, status, data, headOnly = false) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, HEAD, OPTIONS',
   });
-  res.end(JSON.stringify(data));
+  res.end(headOnly ? undefined : JSON.stringify(data));
+}
+
+function sendHtml(res, status, html, headOnly = false) {
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
+  res.end(headOnly ? undefined : html);
+}
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildOverview(db) {
+  const isPeak = isDeepSeekPeakBeijing();
+  return {
+    ok: true,
+    service: 'lirio-pro-server',
+    isPeak,
+    period: getDeepSeekPeriodLabel(),
+    rates: {
+      deepseek: getDeepSeekRatesPer1M(),
+      ttsPer1kCharsYuan: 0.03,
+    },
+    users: listAllUsers(db),
+    ledger: listRecentLedger(db, 40),
+  };
+}
+
+function renderDashboardHtml(overview) {
+  const periodBadge = overview.isPeak ? '高峰价（工作日 09-12 / 14-18）' : '空闲价';
+  const userRows = overview.users.length
+    ? overview.users
+        .map(
+          (u) => `<tr>
+            <td><strong>${escapeHtml(u.name)}</strong><div class="sub">${escapeHtml(u.email)}</div></td>
+            <td><span class="tag">${u.tier === 'pro' ? 'PRO' : 'TRIAL'}</span></td>
+            <td class="num strong">${escapeHtml(formatYuan(u.balanceUnits, 4))}</td>
+            <td class="num">${escapeHtml(formatYuan(u.totalRechargedUnits, 2))}</td>
+            <td class="num">${escapeHtml(formatYuan(u.totalSpentUnits, 4))}</td>
+          </tr>`,
+        )
+        .join('')
+    : '<tr><td colspan="5" class="empty">暂无账号</td></tr>';
+
+  const ledgerRows = overview.ledger.length
+    ? overview.ledger
+        .map((r) => {
+          const isPlus = r.amountUnits >= 0;
+          const time = new Date(r.createdAt).toLocaleString('zh-CN', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+          return `<tr>
+            <td class="sub">${escapeHtml(time)}</td>
+            <td class="sub">${escapeHtml(r.userEmail || r.userName || '-')}</td>
+            <td>${escapeHtml(r.feature)}</td>
+            <td class="sub">${escapeHtml(r.note || r.model || '-')}</td>
+            <td class="num ${isPlus ? 'plus' : 'minus'}">${isPlus ? '+' : '-'}${escapeHtml(formatYuan(Math.abs(r.amountUnits), isPlus ? 2 : 4))}</td>
+            <td class="num">${escapeHtml(formatYuan(r.balanceAfterUnits, 4))}</td>
+          </tr>`;
+        })
+        .join('')
+    : '<tr><td colspan="6" class="empty">暂无计费流水</td></tr>';
+
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Lirio Pro 计费服务</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; background: #FBF9F5; color: #1D1B18; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 28px 20px 44px; display: flex; flex-direction: column; gap: 16px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #E9F2EC; color: #3D6B52; font-weight: 500; }
+  .pill.peak { background: #F8EFE3; color: #9A5B13; }
+  .btn { border: 1px solid #E4DFD4; background: #FFFDF9; color: #1D1B18; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; cursor: pointer; }
+  .btn:hover { border-color: #3D6B52; color: #3D6B52; }
+  .rates { background: #FFFDF9; border: 1px solid #EAE5DB; border-radius: 14px; padding: 12px 16px; font-size: 12.5px; color: #5F5A52; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .card { background: #FFFDF9; border: 1px solid #EAE5DB; border-radius: 16px; padding: 14px 16px; overflow-x: auto; }
+  .card h2 { margin: 0 0 10px; font-size: 13px; color: #5F5A52; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid #F0ECE3; vertical-align: middle; }
+  th { font-size: 11.5px; color: #7C766D; font-weight: 500; }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .strong { font-weight: 600; }
+  .sub { font-size: 11.5px; color: #7C766D; }
+  .tag { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #E9F2EC; color: #3D6B52; font-weight: 600; }
+  .plus { color: #3D6B52; font-weight: 600; }
+  .minus { color: #B85C38; font-weight: 600; }
+  .empty { text-align: center; color: #8D867C; padding: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="title-row">
+      <h1>Lirio Pro 计费服务</h1>
+      <span class="pill">运行中</span>
+      <span id="periodPill" class="pill${overview.isPeak ? ' peak' : ''}">${escapeHtml(periodBadge)}</span>
+    </div>
+    <button class="btn" id="refreshBtn" type="button">刷新</button>
+  </div>
+
+  <div class="rates">
+    <span>DeepSeek 文本：输入 ¥1~2 / 缓存 ¥0.02~0.04 / 输出 ¥4~8（每百万 tok）</span>
+    <span>云端语音合成：¥0.03 / 千字</span>
+  </div>
+
+  <div class="card">
+    <h2>账号与余额</h2>
+    <table>
+      <thead><tr><th>账号</th><th>身份</th><th class="num">当前余额</th><th class="num">累计充值</th><th class="num">累计消费</th></tr></thead>
+      <tbody id="usersBody">${userRows}</tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>最近计费流水</h2>
+    <table>
+      <thead><tr><th>时间</th><th>账号</th><th>项目</th><th>明细</th><th class="num">金额</th><th class="num">余额</th></tr></thead>
+      <tbody id="ledgerBody">${ledgerRows}</tbody>
+    </table>
+  </div>
+</div>
+<script>
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const yuan = (u, d = 2) => '¥' + ((Number(u) || 0) / 10000).toFixed(d);
+async function reloadOverview() {
+  const res = await fetch('/api/overview');
+  if (!res.ok) return;
+  const data = await res.json();
+  const pp = document.getElementById('periodPill');
+  pp.textContent = data.isPeak ? '高峰价（工作日 09-12 / 14-18）' : '空闲价';
+  pp.className = 'pill' + (data.isPeak ? ' peak' : '');
+  document.getElementById('usersBody').innerHTML = data.users.length ? data.users.map((u) =>
+    '<tr><td><strong>' + esc(u.name) + '</strong><div class="sub">' + esc(u.email) + '</div></td>' +
+    '<td><span class="tag">' + (u.tier === 'pro' ? 'PRO' : 'TRIAL') + '</span></td>' +
+    '<td class="num strong">' + yuan(u.balanceUnits, 4) + '</td>' +
+    '<td class="num">' + yuan(u.totalRechargedUnits, 2) + '</td>' +
+    '<td class="num">' + yuan(u.totalSpentUnits, 4) + '</td></tr>'
+  ).join('') : '<tr><td colspan="5" class="empty">暂无账号</td></tr>';
+  document.getElementById('ledgerBody').innerHTML = data.ledger.length ? data.ledger.map((r) => {
+    const plus = r.amountUnits >= 0;
+    const t = new Date(r.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return '<tr><td class="sub">' + esc(t) + '</td><td class="sub">' + esc(r.userEmail || r.userName || '-') + '</td>' +
+      '<td>' + esc(r.feature) + '</td><td class="sub">' + esc(r.note || r.model || '-') + '</td>' +
+      '<td class="num ' + (plus ? 'plus' : 'minus') + '">' + (plus ? '+' : '-') + yuan(Math.abs(r.amountUnits), plus ? 2 : 4) + '</td>' +
+      '<td class="num">' + yuan(r.balanceAfterUnits, 4) + '</td></tr>';
+  }).join('') : '<tr><td colspan="6" class="empty">暂无计费流水</td></tr>';
+}
+document.getElementById('refreshBtn').addEventListener('click', reloadOverview);
+</script>
+</body>
+</html>`;
 }
 
 async function readJsonBody(req, maxBytes = 12 * 1024 * 1024) {
@@ -107,10 +281,53 @@ export function createLirioServer({ dbPath } = {}) {
 
     const url = new URL(req.url || '/', `http://${req.headers.host || '127.0.0.1'}`);
     const pathname = url.pathname;
+    const isRead = req.method === 'GET' || req.method === 'HEAD';
+    const headOnly = req.method === 'HEAD';
 
     try {
-      if (req.method === 'GET' && pathname === '/api/health') {
-        sendJson(res, 200, { ok: true, service: 'lirio-pro-server', packs: RECHARGE_PACKS });
+      if (isRead && pathname === '/favicon.ico') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      if (isRead && pathname === '/api/overview') {
+        sendJson(res, 200, buildOverview(db), headOnly);
+        return;
+      }
+
+      if (isRead && pathname === '/') {
+        const accept = String(req.headers.accept || '');
+        const overview = buildOverview(db);
+        if (accept.includes('application/json') && !accept.includes('text/html')) {
+          sendJson(
+            res,
+            200,
+            {
+              ...overview,
+              endpoints: [
+                '/api/health',
+                '/api/overview',
+                '/api/auth/register',
+                '/api/auth/login',
+                '/api/auth/me',
+                '/api/billing/ledger',
+                '/api/billing/recharge',
+                '/api/ai/chat',
+                '/api/ai/tts',
+                '/api/ai/transcribe',
+              ],
+            },
+            headOnly,
+          );
+          return;
+        }
+        sendHtml(res, 200, renderDashboardHtml(overview), headOnly);
+        return;
+      }
+
+      if (isRead && pathname === '/api/health') {
+        sendJson(res, 200, { ok: true, service: 'lirio-pro-server', packs: RECHARGE_PACKS }, headOnly);
         return;
       }
 
