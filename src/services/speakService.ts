@@ -26,8 +26,14 @@ export interface SpeakConfig {
   showLiveSubtitles: boolean;
   ttsProvider?: TtsProviderId;
   asrProvider?: AsrProviderId;
+  textMode?: 'api' | 'local';
+  textApiUrl?: string;
+  textApiKey?: string;
+  textModel?: string;
+  speechMode?: 'local' | 'api';
   speechApiKey?: string;
   speechBaseUrl?: string;
+  speechModel?: string;
   speechVoice?: string;
 }
 
@@ -205,8 +211,14 @@ const DEFAULT_CONFIG: SpeakConfig = {
   showLiveSubtitles: true,
   ttsProvider: 'edge',
   asrProvider: 'local_whisper',
+  textMode: 'api',
+  textApiUrl: 'https://api.deepseek.com/v1',
+  textApiKey: '',
+  textModel: 'deepseek-chat',
+  speechMode: 'local',
   speechApiKey: '',
   speechBaseUrl: 'https://api.openai.com/v1',
+  speechModel: 'tts-1',
   speechVoice: 'alloy',
 };
 
@@ -246,16 +258,31 @@ export function loadSpeakState(): SpeakPersistedState {
         : [];
       const practicedTopics: Record<string, PracticedTopicStat> =
         parsed.practicedTopics && typeof parsed.practicedTopics === 'object' ? parsed.practicedTopics : {};
+      const rawCfg = parsed.config || {};
+      const providers = {
+        deepseek: { ...DEFAULT_CONFIG.providers.deepseek, ...(rawCfg.providers?.deepseek || {}) },
+        gemini: { ...DEFAULT_CONFIG.providers.gemini, ...(rawCfg.providers?.gemini || {}) },
+        openai: { ...DEFAULT_CONFIG.providers.openai, ...(rawCfg.providers?.openai || {}) },
+        ollama: { ...DEFAULT_CONFIG.providers.ollama, ...(rawCfg.providers?.ollama || {}) },
+      };
+      const legacyPid = rawCfg.activeProvider as ProviderId | undefined;
+      const legacyProf = legacyPid && legacyPid !== 'local' ? providers[legacyPid] : providers.deepseek;
+      const textMode: 'api' | 'local' =
+        rawCfg.textMode === 'local' || (!rawCfg.textMode && legacyPid === 'local') ? 'local' : 'api';
+      const speechMode: 'local' | 'api' =
+        rawCfg.speechMode === 'api' || (!rawCfg.speechMode && rawCfg.ttsProvider === 'openai') ? 'api' : 'local';
+
       return {
         config: {
           ...DEFAULT_CONFIG,
-          ...(parsed.config || {}),
-          providers: {
-            deepseek: { ...DEFAULT_CONFIG.providers.deepseek, ...(parsed.config?.providers?.deepseek || {}) },
-            gemini: { ...DEFAULT_CONFIG.providers.gemini, ...(parsed.config?.providers?.gemini || {}) },
-            openai: { ...DEFAULT_CONFIG.providers.openai, ...(parsed.config?.providers?.openai || {}) },
-            ollama: { ...DEFAULT_CONFIG.providers.ollama, ...(parsed.config?.providers?.ollama || {}) },
-          },
+          ...rawCfg,
+          providers,
+          textMode,
+          textApiUrl: rawCfg.textApiUrl ?? legacyProf?.baseUrl ?? DEFAULT_CONFIG.textApiUrl,
+          textApiKey: rawCfg.textApiKey ?? legacyProf?.apiKey ?? '',
+          textModel: rawCfg.textModel ?? legacyProf?.model ?? DEFAULT_CONFIG.textModel,
+          speechMode,
+          speechModel: rawCfg.speechModel || DEFAULT_CONFIG.speechModel,
         },
         memory: { ...DEFAULT_MEMORY, ...(parsed.memory || {}) },
         sessions,
@@ -640,12 +667,6 @@ export class VadVoiceRecorder {
   }
 }
 
-function resolveSpeechCredentials(config: SpeakConfig) {
-  const apiKey = (config.speechApiKey || '').trim() || (config.providers.openai?.apiKey || '').trim();
-  const baseUrl = (config.speechBaseUrl || '').trim() || 'https://api.openai.com/v1';
-  return { apiKey, baseUrl };
-}
-
 export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
   return invoke<string>('speak_transcribe', {
     wavBytes: Array.from(wavBytes),
@@ -660,13 +681,16 @@ interface TtsResult {
 
 export async function synthesizeSpeech(text: string, accent: Accent): Promise<string> {
   const { config } = loadSpeakState();
-  const { apiKey, baseUrl } = resolveSpeechCredentials(config);
+  const useCustomApi = config.speechMode === 'api';
+  const apiKey = (config.speechApiKey || '').trim();
+  const baseUrl = (config.speechBaseUrl || '').trim() || 'https://api.openai.com/v1';
   const res = await invoke<TtsResult>('speak_tts', {
     text,
     accent,
-    provider: config.ttsProvider || 'edge',
-    apiKey: apiKey || null,
+    provider: useCustomApi ? 'custom' : config.ttsProvider === 'macos' ? 'macos' : 'edge',
+    apiKey: useCustomApi ? apiKey || null : null,
     baseUrl,
+    model: config.speechModel || 'tts-1',
     voice: config.speechVoice || 'alloy',
   });
   const blob = new Blob([new Uint8Array(res.bytes)], { type: res.mime || 'audio/mpeg' });
@@ -952,16 +976,21 @@ async function callActiveLlm(
   messages: { role: string; content: string }[],
   temperature = 0.7,
 ): Promise<string> {
-  const provider = config.activeProvider;
-  if (provider !== 'local') {
-    const prof = config.providers[provider];
-    if (provider !== 'ollama' && !prof.apiKey.trim()) {
-      throw new Error(`请先在右上角设置中填写 ${PROVIDER_META.find((p) => p.id === provider)?.label || provider} 的 API Key，或切换为「内置离线 Qwen」。`);
+  if (config.textMode !== 'local') {
+    const baseUrl = (config.textApiUrl || '').trim();
+    const apiKey = (config.textApiKey || '').trim();
+    const model = (config.textModel || '').trim() || 'deepseek-chat';
+    if (!baseUrl) {
+      throw new Error('请先在「用户设置 → 模型配置」填写文本模型的 API URL。');
+    }
+    const isLocalEndpoint = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(baseUrl);
+    if (!isLocalEndpoint && !apiKey) {
+      throw new Error('请先在「用户设置 → 模型配置」填写文本模型的 API Key，或切换为「本地离线模型」。');
     }
     return invoke<string>('speak_chat_remote', {
-      baseUrl: prof.baseUrl,
-      apiKey: prof.apiKey,
-      model: prof.model,
+      baseUrl,
+      apiKey,
+      model,
       messages,
       temperature,
     });
