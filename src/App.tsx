@@ -322,35 +322,65 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [asrBusy, loading, isRec]);
 
-  const homeHints = useMemo(() => {
+  interface HomeCardProgress {
+    label: string;
+    value: string;
+    pct: number;
+  }
+
+  const homeCards = useMemo<{
+    listening: HomeCardProgress;
+    words: HomeCardProgress;
+    speak: HomeCardProgress;
+  }>(() => {
+    const empty: HomeCardProgress = { label: '暂未开始', value: '0%', pct: 0 };
     if (hub !== 'home') {
-      return { listening: '', words: '', speak: '' };
+      return { listening: empty, words: empty, speak: empty };
     }
-    let listeningHint = '阶梯精听库、拓展播客与逐句跟读';
+
+    let listening: HomeCardProgress = { label: '暂未开始', value: '—', pct: 0 };
     try {
       const raw = localStorage.getItem('aboboo-last-listening');
       if (raw) {
         const parsed = JSON.parse(raw) as { title?: string; index?: number; total?: number };
         if (parsed?.title) {
-          const total = typeof parsed.total === 'number' && parsed.total > 0 ? `/${parsed.total}` : '';
-          listeningHint = `上次：${parsed.title} · 第 ${(parsed.index ?? 0) + 1}${total} 句`;
+          const cur = (parsed.index ?? 0) + 1;
+          const total = typeof parsed.total === 'number' && parsed.total > 0 ? parsed.total : 0;
+          const pct = total > 0 ? Math.min(100, Math.max(4, Math.round((cur / total) * 100))) : 0;
+          listening = {
+            label: parsed.title,
+            value: total > 0 ? `${cur}/${total}` : `第 ${cur} 句`,
+            pct,
+          };
         }
       }
     } catch {}
 
-    let wordsHint = '暂无错词 · 词卡听写保持手感';
+    let words: HomeCardProgress = { label: '准备就绪', value: '0/30', pct: 0 };
     try {
       const cs = loadCorpusState();
       const mistakeCount = Object.keys(cs.mistakes || {}).length;
       const draft = getActiveCorpusDraftSummary(cs);
       if (draft) {
-        wordsHint = `进行中 ${draft.sectionTitle} · ${draft.doneCount}/${draft.total}${mistakeCount > 0 ? ` · ${mistakeCount} 错词` : ''}`;
+        const pct = Math.min(
+          100,
+          Math.max(draft.doneCount > 0 ? 5 : 0, Math.round((draft.doneCount / Math.max(1, draft.total)) * 100)),
+        );
+        words = {
+          label: mistakeCount > 0 ? `${draft.sectionTitle} · ${mistakeCount} 错词` : draft.sectionTitle,
+          value: `${draft.doneCount}/${draft.total}`,
+          pct,
+        };
       } else if (mistakeCount > 0) {
-        wordsHint = `错词本 ${mistakeCount} 词待清空`;
+        words = {
+          label: '错词待清',
+          value: `${mistakeCount} 词`,
+          pct: 0,
+        };
       }
     } catch {}
 
-    let speakHint = '随时开启双语陪练或雅思模考';
+    let speak: HomeCardProgress = { label: '暂未开聊', value: '0 次', pct: 0 };
     try {
       const ss = loadSpeakState();
       const sessionCount = ss.sessions?.length || 0;
@@ -359,14 +389,24 @@ export default function App() {
         (ss.memory?.habits?.length || 0) +
         (ss.memory?.recurringTopics?.length || 0) +
         (ss.memory?.targetPhrases?.length || 0);
-      if (sessionCount > 0) {
-        speakHint = `${sessionCount} 次对话复盘 · ${memCount} 条记忆`;
-      } else if (memCount > 0) {
-        speakHint = `已沉淀 ${memCount} 条私人记忆`;
+      const practicedCount = Object.keys(ss.practicedTopics || {}).length;
+      const totalTopics = ss.decks?.[0]?.items?.length || 165;
+      if (practicedCount > 0) {
+        speak = {
+          label: `${sessionCount} 次复盘 · ${memCount} 记忆`,
+          value: `${practicedCount}/${totalTopics} 题`,
+          pct: Math.min(100, Math.max(5, Math.round((practicedCount / Math.max(1, totalTopics)) * 100))),
+        };
+      } else if (sessionCount > 0 || memCount > 0) {
+        speak = {
+          label: `${sessionCount} 次对话`,
+          value: `${memCount} 记忆`,
+          pct: Math.min(100, Math.max(8, sessionCount * 15 + memCount * 2)),
+        };
       }
     } catch {}
 
-    return { listening: listeningHint, words: wordsHint, speak: speakHint };
+    return { listening, words, speak };
   }, [hub, stateTick]);
 
   return (
@@ -538,8 +578,16 @@ export default function App() {
                 <IconHeadphones size={26} />
               </span>
               <strong>听力</strong>
-              <small>阶梯精听库、拓展播客与逐句跟读</small>
-              <span className="home-card-meta">{homeHints.listening}</span>
+              <small>精听材料库、播客与逐句跟读</small>
+              <div className="home-card-progress">
+                <div className="home-progress-row">
+                  <span className="home-progress-label">{homeCards.listening.label}</span>
+                  <span className="home-progress-val">{homeCards.listening.value}</span>
+                </div>
+                <div className="home-progress-track">
+                  <i className="home-progress-fill" style={{ width: `${homeCards.listening.pct}%` }} />
+                </div>
+              </div>
             </button>
 
             <button type="button" className="home-card" onClick={() => setHub('words')}>
@@ -547,8 +595,16 @@ export default function App() {
                 <IconCorpus size={26} />
               </span>
               <strong>单词</strong>
-              <small>雅思高频词卡听写、乱序闯关与错词本</small>
-              <span className="home-card-meta">{homeHints.words}</span>
+              <small>雅思高频词卡听写与错词本</small>
+              <div className="home-card-progress">
+                <div className="home-progress-row">
+                  <span className="home-progress-label">{homeCards.words.label}</span>
+                  <span className="home-progress-val">{homeCards.words.value}</span>
+                </div>
+                <div className="home-progress-track">
+                  <i className="home-progress-fill" style={{ width: `${homeCards.words.pct}%` }} />
+                </div>
+              </div>
             </button>
 
             <button type="button" className="home-card" onClick={() => setHub('speak')}>
@@ -556,8 +612,16 @@ export default function App() {
                 <IconChat size={26} />
               </span>
               <strong>对话</strong>
-              <small>双语语音伴侣与雅思考官题单模考</small>
-              <span className="home-card-meta">{homeHints.speak}</span>
+              <small>双语语音伴侣与雅思考官</small>
+              <div className="home-card-progress">
+                <div className="home-progress-row">
+                  <span className="home-progress-label">{homeCards.speak.label}</span>
+                  <span className="home-progress-val">{homeCards.speak.value}</span>
+                </div>
+                <div className="home-progress-track">
+                  <i className="home-progress-fill" style={{ width: `${homeCards.speak.pct}%` }} />
+                </div>
+              </div>
             </button>
           </div>
         </div>
