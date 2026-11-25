@@ -13,7 +13,7 @@ import {
   type SpeakConfig,
   type SpeakPersistedState,
 } from '../../services/speakService';
-import { IconClose, IconEye, IconMoon, IconSun } from '../Icons';
+import { IconClose, IconEye } from '../Icons';
 
 export type GlobalSettingsTab = 'ai' | 'data';
 
@@ -52,7 +52,6 @@ export function GlobalSettingsModal({
     return subscribeSpeakState((next) => setPersisted(next));
   }, [isOpen]);
 
-  // Silent auto-detect local DeepSeek key if empty
   useEffect(() => {
     if (!isOpen) return;
     const latest = loadSpeakState();
@@ -63,10 +62,7 @@ export function GlobalSettingsModal({
             const cur = loadSpeakState();
             saveSpeakState({
               ...cur,
-              config: {
-                ...cur.config,
-                textApiKey: key,
-              },
+              config: { ...cur.config, textApiKey: key },
             });
           }
         })
@@ -91,17 +87,13 @@ export function GlobalSettingsModal({
   const handleTestConn = async () => {
     setTestingConn(true);
     setErrorMsg('');
-    setStatusMsg('正在测试文本模型连接…');
+    setStatusMsg('测试中…');
     try {
       await testProviderConnection(config);
-      setStatusMsg(
-        config.textMode === 'local'
-          ? '连接成功：本地离线模型已就绪'
-          : `连接成功：${config.textModel || '自定义文本 API'} 已就绪`,
-      );
+      setStatusMsg('已连接');
     } catch (e) {
       setStatusMsg('');
-      setErrorMsg('连接测试失败：' + String(e));
+      setErrorMsg(String(e));
     } finally {
       setTestingConn(false);
     }
@@ -117,11 +109,10 @@ export function GlobalSettingsModal({
         filters: [{ name: 'Lirio 备份文件', extensions: ['json'] }],
       });
       if (!target) return;
-      const payload = exportAllStateJson();
-      await writeFile(target, new TextEncoder().encode(payload));
-      setStatusMsg('学习记录与词库已导出。');
+      await writeFile(target, new TextEncoder().encode(exportAllStateJson()));
+      setStatusMsg('已导出');
     } catch (e) {
-      setErrorMsg('导出失败：' + String(e));
+      setErrorMsg(String(e));
     } finally {
       setBusyData(false);
     }
@@ -139,10 +130,10 @@ export function GlobalSettingsModal({
       if (!picked || typeof picked !== 'string') return;
       const raw = await readTextFile(picked);
       const { restoredKeys } = importAllStateJson(raw);
-      setStatusMsg(`已恢复 ${restoredKeys} 项本地数据，正在刷新界面…`);
+      setStatusMsg(`已恢复 ${restoredKeys} 项，即将刷新…`);
       setTimeout(() => window.location.reload(), 650);
     } catch (e) {
-      setErrorMsg('恢复失败：' + String(e));
+      setErrorMsg(String(e));
     } finally {
       setBusyData(false);
     }
@@ -154,30 +145,30 @@ export function GlobalSettingsModal({
         className="import-modal global-settings-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="全局用户设置"
+        aria-label="设置"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="import-modal-head">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h2>用户设置</h2>
+            <h2>设置</h2>
             <div className="seg-pill" role="tablist">
               <button
                 type="button"
                 className={tab === 'ai' ? 'active' : ''}
                 onClick={() => setTab('ai')}
               >
-                模型配置
+                AI
               </button>
               <button
                 type="button"
                 className={tab === 'data' ? 'active' : ''}
                 onClick={() => setTab('data')}
               >
-                外观与数据
+                通用
               </button>
             </div>
           </div>
-          <button type="button" className="icon-btn" aria-label="关闭设置" onClick={onClose}>
+          <button type="button" className="icon-btn" aria-label="关闭" onClick={onClose}>
             <IconClose size={15} />
           </button>
         </div>
@@ -185,7 +176,7 @@ export function GlobalSettingsModal({
         {(statusMsg || errorMsg) && (
           <div
             className={errorMsg ? 'app-error' : 'corpus-banner'}
-            style={{ borderRadius: 10, padding: '8px 12px' }}
+            style={{ borderRadius: 10, padding: '7px 12px' }}
             onClick={() => {
               setStatusMsg('');
               setErrorMsg('');
@@ -197,38 +188,35 @@ export function GlobalSettingsModal({
 
         {tab === 'ai' && (
           <div className="settings-tab-body">
-            {/* 1. Generic Text Model */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span className="settings-section-title">1. 文本模型（通用 OpenAI 接口格式）</span>
+            <div className="settings-row-between">
+              <span className="settings-section-title">文本模型</span>
               <div className="seg-pill">
                 <button
                   type="button"
                   className={config.textMode !== 'local' ? 'active' : ''}
                   onClick={() => updateConfig({ textMode: 'api' })}
                 >
-                  自定义 API
+                  API
                 </button>
                 <button
                   type="button"
                   className={config.textMode === 'local' ? 'active' : ''}
                   onClick={() => updateConfig({ textMode: 'local' })}
                 >
-                  本地离线模型
+                  本地
                 </button>
               </div>
             </div>
 
             {config.textMode === 'local' ? (
               <div className="provider-form">
-                <small style={{ color: 'var(--muted)' }}>
-                  使用本机内置离线 Qwen 模型，无需填写 URL 与 API Key。
-                </small>
+                <small style={{ color: 'var(--muted)' }}>内置离线 Qwen</small>
               </div>
             ) : (
               <div className="provider-form">
                 <div className="settings-two-col">
                   <div className="speak-field">
-                    <label>API URL</label>
+                    <label>URL</label>
                     <input
                       type="text"
                       value={config.textApiUrl || ''}
@@ -237,29 +225,29 @@ export function GlobalSettingsModal({
                     />
                   </div>
                   <div className="speak-field">
-                    <label>模型名称（Model）</label>
+                    <label>Model</label>
                     <input
                       type="text"
                       value={config.textModel || ''}
-                      placeholder="如 deepseek-chat / gpt-4o-mini"
+                      placeholder="deepseek-chat"
                       onChange={(e) => updateConfig({ textModel: e.target.value })}
                     />
                   </div>
                 </div>
                 <div className="speak-field">
-                  <label>API Key（仅保存在本机）</label>
+                  <label>API Key</label>
                   <div className="settings-key-row">
                     <input
                       type={showTextKey ? 'text' : 'password'}
                       value={config.textApiKey || ''}
-                      placeholder="填入文本模型 API Key…"
+                      placeholder="sk-..."
                       onChange={(e) => updateConfig({ textApiKey: e.target.value })}
                     />
                     <button
                       type="button"
                       className="icon-btn"
-                      title={showTextKey ? '隐藏 Key' : '显示 Key'}
-                      aria-label="切换密钥可见性"
+                      title={showTextKey ? '隐藏' : '显示'}
+                      aria-label="切换密钥"
                       onClick={() => setShowTextKey((s) => !s)}
                     >
                       <IconEye size={15} />
@@ -269,50 +257,42 @@ export function GlobalSettingsModal({
               </div>
             )}
 
-            {/* 2. Generic Speech Synthesis Model */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
-              <span className="settings-section-title">2. 语音合成模型</span>
+            <div className="settings-row-between" style={{ marginTop: 2 }}>
+              <span className="settings-section-title">语音合成</span>
               <div className="seg-pill">
                 <button
                   type="button"
                   className={config.speechMode !== 'api' ? 'active' : ''}
                   onClick={() => updateConfig({ speechMode: 'local' })}
                 >
-                  本地免费语音
+                  本地
                 </button>
                 <button
                   type="button"
                   className={config.speechMode === 'api' ? 'active' : ''}
                   onClick={() => updateConfig({ speechMode: 'api' })}
                 >
-                  自定义语音 API
+                  API
                 </button>
               </div>
             </div>
 
             <div className="provider-form">
-              <div className="settings-inline-row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-                <div className="speak-field">
-                  <label>默认口音</label>
-                  <CustomSelect
-                    value={config.accent}
-                    options={ACCENT_OPTS}
-                    minWidth={130}
-                    onChange={(val) => updateConfig({ accent: val as Accent })}
-                  />
-                </div>
-                {config.speechMode !== 'api' && (
-                  <small style={{ color: 'var(--muted)', flex: 1 }}>
-                    默认使用本地神经语音（Edge TTS），离线自动回退 macOS 系统语音，无需 API Key。
-                  </small>
-                )}
+              <div className="settings-row-between">
+                <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>口音</span>
+                <CustomSelect
+                  value={config.accent}
+                  options={ACCENT_OPTS}
+                  minWidth={118}
+                  onChange={(val) => updateConfig({ accent: val as Accent })}
+                />
               </div>
 
               {config.speechMode === 'api' && (
                 <>
                   <div className="settings-two-col">
                     <div className="speak-field">
-                      <label>语音 API URL</label>
+                      <label>URL</label>
                       <input
                         type="text"
                         value={config.speechBaseUrl || ''}
@@ -321,7 +301,7 @@ export function GlobalSettingsModal({
                       />
                     </div>
                     <div className="speak-field">
-                      <label>语音模型 & 音色</label>
+                      <label>Model / Voice</label>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <input
                           type="text"
@@ -333,26 +313,26 @@ export function GlobalSettingsModal({
                           type="text"
                           value={config.speechVoice || ''}
                           placeholder="alloy"
-                          style={{ width: 92 }}
+                          style={{ width: 84 }}
                           onChange={(e) => updateConfig({ speechVoice: e.target.value })}
                         />
                       </div>
                     </div>
                   </div>
                   <div className="speak-field">
-                    <label>语音 API Key（仅保存在本机）</label>
+                    <label>API Key</label>
                     <div className="settings-key-row">
                       <input
                         type={showSpeechKey ? 'text' : 'password'}
                         value={config.speechApiKey || ''}
-                        placeholder="填入语音合成 API Key…"
+                        placeholder="sk-..."
                         onChange={(e) => updateConfig({ speechApiKey: e.target.value })}
                       />
                       <button
                         type="button"
                         className="icon-btn"
-                        title={showSpeechKey ? '隐藏 Key' : '显示 Key'}
-                        aria-label="切换语音密钥可见性"
+                        title={showSpeechKey ? '隐藏' : '显示'}
+                        aria-label="切换语音密钥"
                         onClick={() => setShowSpeechKey((s) => !s)}
                       >
                         <IconEye size={15} />
@@ -365,7 +345,7 @@ export function GlobalSettingsModal({
 
             <div className="import-modal-actions">
               <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
-                {testingConn ? '测试中…' : '测试连接'}
+                {testingConn ? '测试中…' : '测试'}
               </button>
               <button type="button" className="primary" onClick={onClose}>
                 完成
@@ -376,44 +356,37 @@ export function GlobalSettingsModal({
 
         {tab === 'data' && (
           <div className="settings-tab-body">
-            <div className="settings-section-title">界面外观</div>
-            <div className="settings-theme-row">
-              <button
-                type="button"
-                className={`provider-card${theme === 'light' ? ' active' : ''}`}
-                onClick={() => onThemeChange('light')}
-              >
-                <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <IconSun size={15} /> Warm Paper（浅色暖纸）
-                </strong>
-                <small>适合白天长时间专注精听与记词</small>
-              </button>
-              <button
-                type="button"
-                className={`provider-card${theme === 'dark' ? ' active' : ''}`}
-                onClick={() => onThemeChange('dark')}
-              >
-                <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <IconMoon size={15} /> Warm Ink（夜间墨纸）
-                </strong>
-                <small>低眩光暗色调，柔和护眼</small>
-              </button>
-            </div>
+            <div className="provider-form">
+              <div className="settings-row-between">
+                <span className="settings-section-title">外观</span>
+                <div className="seg-pill">
+                  <button
+                    type="button"
+                    className={theme === 'light' ? 'active' : ''}
+                    onClick={() => onThemeChange('light')}
+                  >
+                    浅色
+                  </button>
+                  <button
+                    type="button"
+                    className={theme === 'dark' ? 'active' : ''}
+                    onClick={() => onThemeChange('dark')}
+                  >
+                    深色
+                  </button>
+                </div>
+              </div>
 
-            <div className="settings-section-title" style={{ marginTop: 6 }}>
-              学习记录自动备份与迁移
-            </div>
-            <div className="settings-data-card">
-              <p>
-                所有单词听写进度、错词本、口语记忆与复盘记录已实时镜像保存至本机应用数据目录（防止缓存清理丢失）。你也可以随时导出单文件手动迁移到其他设备。
-              </p>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button type="button" disabled={busyData} onClick={() => void handleExportBackup()}>
-                  导出全部学习记录 (.json)
-                </button>
-                <button type="button" disabled={busyData} onClick={() => void handleImportBackup()}>
-                  从备份文件恢复
-                </button>
+              <div className="settings-row-between">
+                <span className="settings-section-title">数据</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" disabled={busyData} onClick={() => void handleExportBackup()}>
+                    导出备份
+                  </button>
+                  <button type="button" disabled={busyData} onClick={() => void handleImportBackup()}>
+                    导入恢复
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -2525,7 +2525,7 @@ textarea:focus { outline: none; }
 }
 
 .global-settings-modal {
-  max-width: 640px;
+  max-width: 500px;
   max-height: 86vh;
   overflow-y: auto;
 }
@@ -2533,6 +2533,12 @@ textarea:focus { outline: none; }
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.settings-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .settings-section-title {
   font-size: 12px;
