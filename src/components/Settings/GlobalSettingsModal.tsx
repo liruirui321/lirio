@@ -11,7 +11,6 @@ import {
   saveSpeakState,
   subscribeSpeakState,
   testProviderConnection,
-  type AsrProviderId,
   type ProviderId,
   type SpeakConfig,
   type SpeakPersistedState,
@@ -28,21 +27,10 @@ const ACCENT_OPTS: SelectOption[] = [
   { value: 'in', label: '印音 IN' },
 ];
 
-const SILENCE_OPTS: SelectOption[] = [
-  { value: '1200', label: '1.2 秒停顿发送' },
-  { value: '1800', label: '1.8 秒停顿发送' },
-  { value: '2400', label: '2.4 秒停顿发送' },
-];
-
 const TTS_OPTS: SelectOption[] = [
-  { value: 'edge', label: 'Edge TTS（免费神经语音）' },
+  { value: 'edge', label: 'Edge TTS（默认免费）' },
   { value: 'openai', label: 'OpenAI TTS（tts-1）' },
-  { value: 'macos', label: 'macOS 系统离线语音' },
-];
-
-const ASR_OPTS: SelectOption[] = [
-  { value: 'local_whisper', label: '本地 Whisper（离线免费）' },
-  { value: 'openai', label: 'OpenAI Whisper API' },
+  { value: 'macos', label: 'macOS 离线语音' },
 ];
 
 const VOICE_OPTS: SelectOption[] = [
@@ -144,7 +132,7 @@ export function GlobalSettingsModal({
   const handleTestConn = async () => {
     setTestingConn(true);
     setErrorMsg('');
-    setStatusMsg('正在测试当前文本引擎连接…');
+    setStatusMsg('正在测试文本模型连接…');
     try {
       await testProviderConnection(config);
       setStatusMsg(`连接成功：${activeProviderLabel} 已就绪`);
@@ -197,9 +185,6 @@ export function GlobalSettingsModal({
     }
   };
 
-  const needsSpeechKey =
-    config.ttsProvider === 'openai' || config.asrProvider === 'openai';
-
   return (
     <div className="import-modal-backdrop" onClick={onClose}>
       <div
@@ -218,7 +203,7 @@ export function GlobalSettingsModal({
                 className={tab === 'ai' ? 'active' : ''}
                 onClick={() => setTab('ai')}
               >
-                AI 与语音配置
+                模型配置
               </button>
               <button
                 type="button"
@@ -249,7 +234,7 @@ export function GlobalSettingsModal({
 
         {tab === 'ai' && (
           <div className="settings-tab-body">
-            <div className="settings-section-title">文本 AI 引擎（用于口语对话、雅思考官、划词翻译、听力诊断）</div>
+            <div className="settings-section-title">1. 文本模型</div>
             <div className="provider-grid compact">
               {PROVIDER_META.map((p) => {
                 const active = config.activeProvider === p.id;
@@ -315,11 +300,11 @@ export function GlobalSettingsModal({
             })()}
 
             <div className="settings-section-title" style={{ marginTop: 4 }}>
-              语音合成与识别（TTS / ASR · 全局生效）
+              2. 语音合成模型
             </div>
             <div className="settings-two-col">
               <div className="speak-field">
-                <label>朗读 / 考官语音（TTS）</label>
+                <label>语音合成引擎</label>
                 <CustomSelect
                   value={config.ttsProvider || 'edge'}
                   options={TTS_OPTS}
@@ -328,40 +313,30 @@ export function GlobalSettingsModal({
                 />
               </div>
               <div className="speak-field">
-                <label>语音转文字（ASR）</label>
+                <label>默认口音</label>
                 <CustomSelect
-                  value={config.asrProvider || 'local_whisper'}
-                  options={ASR_OPTS}
-                  minWidth={180}
-                  onChange={(v) => updateConfig({ asrProvider: v as AsrProviderId })}
+                  value={config.accent}
+                  options={ACCENT_OPTS}
+                  minWidth={130}
+                  onChange={(val) => updateConfig({ accent: val as Accent })}
                 />
               </div>
             </div>
 
-            {needsSpeechKey && (
+            {config.ttsProvider === 'openai' && (
               <div className="provider-form">
                 <div className="settings-two-col">
                   <div className="speak-field">
-                    <label>语音 API Key（留空则复用上方 OpenAI Key）</label>
+                    <label>语音 API Key</label>
                     <input
                       type={showApiKey ? 'text' : 'password'}
                       value={config.speechApiKey || ''}
-                      placeholder="sk-..."
+                      placeholder="留空则自动复用上方 OpenAI Key"
                       onChange={(e) => updateConfig({ speechApiKey: e.target.value })}
                     />
                   </div>
                   <div className="speak-field">
-                    <label>语音 Base URL</label>
-                    <input
-                      type="text"
-                      value={config.speechBaseUrl || 'https://api.openai.com/v1'}
-                      onChange={(e) => updateConfig({ speechBaseUrl: e.target.value })}
-                    />
-                  </div>
-                </div>
-                {config.ttsProvider === 'openai' && (
-                  <div className="speak-field">
-                    <label>OpenAI 音色</label>
+                    <label>音色</label>
                     <CustomSelect
                       value={config.speechVoice || 'alloy'}
                       options={VOICE_OPTS}
@@ -369,43 +344,13 @@ export function GlobalSettingsModal({
                       onChange={(v) => updateConfig({ speechVoice: v })}
                     />
                   </div>
-                )}
+                </div>
               </div>
             )}
 
-            <div className="settings-inline-row">
-              <div className="speak-field">
-                <label>默认口音</label>
-                <CustomSelect
-                  value={config.accent}
-                  options={ACCENT_OPTS}
-                  minWidth={110}
-                  onChange={(val) => updateConfig({ accent: val as Accent })}
-                />
-              </div>
-              <div className="speak-field">
-                <label>通话断句等待</label>
-                <CustomSelect
-                  value={String(config.silenceMs)}
-                  options={SILENCE_OPTS}
-                  minWidth={155}
-                  onChange={(v) => updateConfig({ silenceMs: Number(v) })}
-                />
-              </div>
-            </div>
-
-            <label className="settings-check-line">
-              <input
-                type="checkbox"
-                checked={config.showLiveSubtitles}
-                onChange={(e) => updateConfig({ showLiveSubtitles: e.target.checked })}
-              />
-              对话通话时在光球下方显示渐隐实时字幕
-            </label>
-
             <div className="import-modal-actions">
               <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
-                {testingConn ? '测试中…' : '测试 AI 连接'}
+                {testingConn ? '测试中…' : '测试连接'}
               </button>
               <button type="button" className="primary" onClick={onClose}>
                 完成

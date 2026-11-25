@@ -647,13 +647,8 @@ function resolveSpeechCredentials(config: SpeakConfig) {
 }
 
 export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
-  const { config } = loadSpeakState();
-  const { apiKey, baseUrl } = resolveSpeechCredentials(config);
   return invoke<string>('speak_transcribe', {
     wavBytes: Array.from(wavBytes),
-    provider: config.asrProvider || 'local_whisper',
-    apiKey: apiKey || null,
-    baseUrl,
   });
 }
 
