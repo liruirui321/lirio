@@ -17,6 +17,8 @@ permissions:
 jobs:
   macos:
     runs-on: macos-14
+    env:
+      VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,6 +55,8 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    env:
+      VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -90,6 +94,8 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    env:
+      VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -125,6 +131,8 @@ jobs:
 
   ios:
     runs-on: macos-14
+    env:
+      VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

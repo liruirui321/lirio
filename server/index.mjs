@@ -2,7 +2,17 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { hashPassword, signToken, verifyPassword, verifyToken } from './auth.mjs';
+import {
+  constantTimeEquals,
+  createSignedAdminCookieValue,
+  hashPassword,
+  isProductionMode,
+  isWeakJwtSecret,
+  signToken,
+  verifyPassword,
+  verifySignedAdminCookieValue,
+  verifyToken,
+} from './auth.mjs';
 import {
   DEFAULT_TRIAL_UNITS,
   createRedeemCodes,
@@ -55,13 +65,142 @@ export const CODE_PRESETS = [
   },
 ];
 
+const __serverDir = path.dirname(fileURLToPath(import.meta.url));
+
+export function loadEnvFileIfPresent(envPath = path.join(__serverDir, '.env')) {
+  if (!fs.existsSync(envPath)) return false;
+  const raw = fs.readFileSync(envPath, 'utf8');
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const cleaned = line.replace(/^export\s+/, '');
+    const eqIdx = cleaned.indexOf('=');
+    if (eqIdx <= 0) continue;
+    const key = cleaned.slice(0, eqIdx).trim();
+    let val = cleaned.slice(eqIdx + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (key && process.env[key] === undefined) {
+      process.env[key] = val;
+    }
+  }
+  return true;
+}
+
+function getAdminToken(env = process.env) {
+  return String(env.LIRIO_ADMIN_TOKEN || env.LIRIO_ADMIN_KEY || '').trim();
+}
+
+function parseCookies(req) {
+  const out = {};
+  const raw = String(req.headers.cookie || '');
+  for (const part of raw.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx <= 0) continue;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    if (k) out[k] = decodeURIComponent(v);
+  }
+  return out;
+}
+
 function isAdminAuthorized(req) {
-  const adminKey = process.env.LIRIO_ADMIN_KEY;
-  if (!adminKey) return true;
-  const headerKey = String(req.headers['x-admin-key'] || '').trim();
+  const expected = getAdminToken();
+  if (!expected) return !isProductionMode();
+  const headerToken = String(req.headers['x-admin-token'] || req.headers['x-admin-key'] || '').trim();
+  if (headerToken && constantTimeEquals(headerToken, expected)) return true;
   const auth = String(req.headers.authorization || '');
   const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || '';
-  return headerKey === adminKey || bearer === adminKey;
+  if (bearer && constantTimeEquals(bearer, expected)) return true;
+  const cookies = parseCookies(req);
+  if (cookies.lirio_admin && verifySignedAdminCookieValue(cookies.lirio_admin, expected)) return true;
+  return false;
+}
+
+export function validateProductionConfig(env = process.env) {
+  if (!isProductionMode(env)) {
+    return { ok: true, mode: 'development', warnings: [] };
+  }
+  const errors = [];
+  if (isWeakJwtSecret(env.LIRIO_JWT_SECRET)) {
+    errors.push('LIRIO_JWT_SECRET 未设置或强度不足（生产环境需 >=32 位强随机字符串，可用 openssl rand -hex 32 生成）');
+  }
+  const adminToken = getAdminToken(env);
+  if (!adminToken || adminToken.length < 16 || /change-this|placeholder|example/i.test(adminToken)) {
+    errors.push('LIRIO_ADMIN_TOKEN 未设置或强度不足（生产环境需 >=16 位强随机口令）');
+  }
+  if (env.LIRIO_SEED_DEMO === '1' || env.LIRIO_SEED_DEMO === 'true') {
+    errors.push('生产环境禁止开启 LIRIO_SEED_DEMO=1（避免暴露预设余额测试账号）');
+  }
+  if (env.LIRIO_MOCK_AI === '1' || env.LIRIO_MOCK_AI === 'true') {
+    errors.push('生产环境禁止开启 LIRIO_MOCK_AI=1');
+  }
+  const provider = String(env.LIRIO_LLM_PROVIDER || 'deepseek').toLowerCase();
+  const llmKey = String(
+    env.LIRIO_LLM_API_KEY || (provider === 'deepseek' ? env.DEEPSEEK_API_KEY || '' : ''),
+  ).trim();
+  if (!llmKey || /^sk-your-/i.test(llmKey)) {
+    errors.push('生产环境必须配置有效的 LIRIO_LLM_API_KEY');
+  }
+  if (errors.length) {
+    throw new Error(`生产环境安全检查未通过：\n- ${errors.join('\n- ')}`);
+  }
+  return { ok: true, mode: 'production', warnings: [] };
+}
+
+function renderAdminLoginHtml() {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Lirio Pro 管理登录</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; background: #FBF9F5; color: #1D1B18; }
+  .box { width: min(380px, 90vw); background: #FFFDF9; border: 1px solid #EAE5DB; border-radius: 18px; padding: 24px 22px; box-sizing: border-box; }
+  h1 { margin: 0 0 6px; font-size: 18px; font-weight: 600; }
+  p { margin: 0 0 16px; font-size: 13px; color: #6F6A62; line-height: 1.5; }
+  form { display: flex; flex-direction: column; gap: 10px; }
+  input { border: 1px solid #E4DFD4; background: #FBF9F5; color: #1D1B18; border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; }
+  input:focus { border-color: #3D6B52; }
+  button { border: 0; background: #3D6B52; color: #fff; border-radius: 999px; padding: 10px 16px; font-size: 13.5px; font-weight: 500; cursor: pointer; }
+  button:hover { background: #315843; }
+  .err { min-height: 18px; font-size: 12.5px; color: #B85C38; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Lirio Pro 管理后台</h1>
+  <p>请输入管理员口令（LIRIO_ADMIN_TOKEN）以查看余额流水与生成卡密。</p>
+  <form id="loginForm">
+    <input id="tokenInput" type="password" placeholder="输入 LIRIO_ADMIN_TOKEN" autocomplete="current-password" required />
+    <button type="submit">进入看板</button>
+    <div id="errMsg" class="err"></div>
+  </form>
+</div>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('errMsg');
+  err.textContent = '';
+  const token = document.getElementById('tokenInput').value;
+  const res = await fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (res.ok) { location.reload(); return; }
+  const data = await res.json().catch(() => ({}));
+  err.textContent = data.error || '登录失败';
+});
+</script>
+</body>
+</html>`;
 }
 
 export function seedDemoUser(db) {
@@ -171,7 +310,7 @@ function buildOverview(db) {
   };
 }
 
-function renderDashboardHtml(overview) {
+function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
   const periodBadge = overview.isPeak ? '高峰价（工作日 09-12 / 14-18）' : '空闲价';
   const userRows = overview.users.length
     ? overview.users
@@ -279,6 +418,7 @@ function renderDashboardHtml(overview) {
       <span id="periodPill" class="pill${overview.isPeak ? ' peak' : ''}">${escapeHtml(periodBadge)}</span>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
+      ${adminAuthEnabled ? '<button class="btn" id="adminLogoutBtn" type="button">退出管理</button>' : '<span class="pill peak">未设管理口令（仅限本机）</span>'}
       <a class="btn" href="/site" style="text-decoration:none;">官网下载页</a>
       <button class="btn" id="refreshBtn" type="button">刷新</button>
     </div>
@@ -398,6 +538,13 @@ document.getElementById('codesBody').addEventListener('click', async (e) => {
   document.getElementById('codeMsg').textContent = '已复制 ' + btn.dataset.copy;
 });
 document.getElementById('refreshBtn').addEventListener('click', reloadOverview);
+const logoutBtn = document.getElementById('adminLogoutBtn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    await fetch('/api/admin/logout', { method: 'POST' });
+    location.reload();
+  });
+}
 </script>
 </body>
 </html>`;
@@ -448,7 +595,7 @@ export function createLirioServer({ dbPath } = {}) {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Token, X-Admin-Key',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       });
       res.end();
@@ -467,15 +614,60 @@ export function createLirioServer({ dbPath } = {}) {
         return;
       }
 
+      if (req.method === 'POST' && pathname === '/api/admin/login') {
+        const expected = getAdminToken();
+        if (!expected) {
+          sendJson(res, 200, { ok: true, mode: 'no_admin_token' });
+          return;
+        }
+        const body = await readJsonBody(req);
+        const supplied = String(body.token || '').trim();
+        if (!constantTimeEquals(supplied, expected)) {
+          sendJson(res, 401, { error: '管理员口令不正确。' });
+          return;
+        }
+        const secureAttr =
+          req.headers['x-forwarded-proto'] === 'https' || isProductionMode() ? '; Secure' : '';
+        const cookieVal = encodeURIComponent(createSignedAdminCookieValue(expected));
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Set-Cookie': `lirio_admin=${cookieVal}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secureAttr}`,
+        });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/admin/logout') {
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Set-Cookie': 'lirio_admin=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+        });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+
       if (isRead && pathname === '/api/overview') {
+        if (!isAdminAuthorized(req)) {
+          sendJson(res, 401, { error: '需要管理员口令（LIRIO_ADMIN_TOKEN）。' }, headOnly);
+          return;
+        }
         sendJson(res, 200, buildOverview(db), headOnly);
         return;
       }
 
       if (isRead && pathname === '/') {
         const accept = String(req.headers.accept || '');
+        const wantsJsonOnly = accept.includes('application/json') && !accept.includes('text/html');
+        if (!isAdminAuthorized(req)) {
+          if (wantsJsonOnly) {
+            sendJson(res, 401, { error: '需要管理员口令（LIRIO_ADMIN_TOKEN）。' }, headOnly);
+          } else {
+            sendHtml(res, 401, renderAdminLoginHtml(), headOnly);
+          }
+          return;
+        }
         const overview = buildOverview(db);
-        if (accept.includes('application/json') && !accept.includes('text/html')) {
+        if (wantsJsonOnly) {
           sendJson(
             res,
             200,
@@ -484,6 +676,8 @@ export function createLirioServer({ dbPath } = {}) {
               endpoints: [
                 '/api/health',
                 '/api/overview',
+                '/api/admin/login',
+                '/api/admin/logout',
                 '/api/auth/register',
                 '/api/auth/login',
                 '/api/auth/me',
@@ -501,7 +695,12 @@ export function createLirioServer({ dbPath } = {}) {
           );
           return;
         }
-        sendHtml(res, 200, renderDashboardHtml(overview), headOnly);
+        sendHtml(
+          res,
+          200,
+          renderDashboardHtml(overview, { adminAuthEnabled: Boolean(getAdminToken()) }),
+          headOnly,
+        );
         return;
       }
 
@@ -688,6 +887,10 @@ export function createLirioServer({ dbPath } = {}) {
           sendJson(res, 401, { error: '请先登录再充值。' });
           return;
         }
+        if (isProductionMode() && process.env.LIRIO_ALLOW_DIRECT_RECHARGE !== '1' && !isAdminAuthorized(req)) {
+          sendJson(res, 403, { error: '生产环境已关闭无验签直充接口，请使用卡密兑换码（/api/billing/redeem）。' });
+          return;
+        }
         const body = await readJsonBody(req);
         const pack = RECHARGE_PACKS.find((p) => p.id === body.packageId);
         if (!pack) {
@@ -745,7 +948,7 @@ export function createLirioServer({ dbPath } = {}) {
 
       if (isRead && pathname === '/api/admin/codes') {
         if (!isAdminAuthorized(req)) {
-          sendJson(res, 401, { error: '需要管理员密钥。' });
+          sendJson(res, 401, { error: '需要管理员口令（LIRIO_ADMIN_TOKEN）。' });
           return;
         }
         const limit = Number(url.searchParams.get('limit') || 60);
@@ -755,7 +958,7 @@ export function createLirioServer({ dbPath } = {}) {
 
       if (req.method === 'POST' && pathname === '/api/admin/codes/generate') {
         if (!isAdminAuthorized(req)) {
-          sendJson(res, 401, { error: '需要管理员密钥。' });
+          sendJson(res, 401, { error: '需要管理员口令（LIRIO_ADMIN_TOKEN）。' });
           return;
         }
         const body = await readJsonBody(req);
@@ -937,13 +1140,16 @@ export function createLirioServer({ dbPath } = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  loadEnvFileIfPresent();
+  const check = validateProductionConfig();
+  const host = process.env.HOST || '127.0.0.1';
   const port = Number(process.env.PORT || 8787);
   const { server, db } = createLirioServer();
-  if (process.env.LIRIO_SEED_DEMO === '1' || process.env.LIRIO_SEED_DEMO === 'true') {
+  if (!isProductionMode() && (process.env.LIRIO_SEED_DEMO === '1' || process.env.LIRIO_SEED_DEMO === 'true')) {
     const demo = seedDemoUser(db);
     console.log(`[lirio-pro-server] demo tester ready: ${demo.email} balance=${demo.balanceUnits}`);
   }
-  server.listen(port, '127.0.0.1', () => {
-    console.log(`[lirio-pro-server] listening on http://127.0.0.1:${port}`);
+  server.listen(port, host, () => {
+    console.log(`[lirio-pro-server] (${check.mode}) listening on http://${host}:${port}`);
   });
 }

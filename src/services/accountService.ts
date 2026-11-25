@@ -60,8 +60,18 @@ export const DEFAULT_RECHARGE_PACKS: RechargePack[] = [
 ];
 
 const ACCOUNT_KEY = 'lirio-account-v1';
+const BUILD_DEFAULT_SERVER_URL = (
+  (import.meta.env?.VITE_LIRIO_SERVER_URL as string | undefined) || 'http://127.0.0.1:8787'
+)
+  .trim()
+  .replace(/\/+$/, '');
+
+function isLocalhostUrl(url: string): boolean {
+  return /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(String(url || '').trim());
+}
+
 const DEFAULT_STATE: AccountState = {
-  serverUrl: 'http://127.0.0.1:8787',
+  serverUrl: BUILD_DEFAULT_SERVER_URL || 'http://127.0.0.1:8787',
   token: null,
   user: null,
   aiMode: 'byok',
@@ -98,9 +108,16 @@ export function getAccountState(): AccountState {
     const raw = localStorage.getItem(ACCOUNT_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      const shouldUpgradeUrl =
+        !isLocalhostUrl(BUILD_DEFAULT_SERVER_URL) &&
+        parsed?.serverUrl === 'http://127.0.0.1:8787' &&
+        !parsed?.token;
       return {
         ...DEFAULT_STATE,
         ...(parsed || {}),
+        serverUrl: shouldUpgradeUrl
+          ? BUILD_DEFAULT_SERVER_URL
+          : parsed?.serverUrl || DEFAULT_STATE.serverUrl,
         aiMode: parsed?.aiMode === 'pro_balance' ? 'pro_balance' : 'byok',
         proCloudSpeech: Boolean(parsed?.proCloudSpeech),
       };

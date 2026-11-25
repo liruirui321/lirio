@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createLirioServer, seedDemoUser } from './index.mjs';
+import { createLirioServer, seedDemoUser, validateProductionConfig } from './index.mjs';
 import { creditUserBalance, deductUserBalance } from './db.mjs';
 import { calculateChatCostUnits, calculateTtsCostUnits } from './pricing.mjs';
 
 process.env.LIRIO_MOCK_AI = '1';
-process.env.LIRIO_JWT_SECRET = 'test-secret-key';
+process.env.LIRIO_JWT_SECRET = 'lirio-test-jwt-secret-key-at-least-32-bytes-long-2026';
 
 const { server, db } = createLirioServer({ dbPath: ':memory:' });
 
@@ -257,7 +257,112 @@ try {
   const dupRedeem = await req('POST', '/api/billing/redeem', { code: generatedCode }, token);
   assert.equal(dupRedeem.status, 409);
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (11/11)');
+  // 12. Verify LIRIO_ADMIN_TOKEN protection for dashboard HTML, overview API, admin codes, and login/logout cookie
+  const testAdminToken = 'lirio-super-admin-token-2026-test';
+  process.env.LIRIO_ADMIN_TOKEN = testAdminToken;
+  try {
+    const unauthDash = await fetch(`${base}/`);
+    assert.equal(unauthDash.status, 401);
+    assert.ok((await unauthDash.text()).includes('LIRIO_ADMIN_TOKEN'));
+
+    const unauthJson = await fetch(`${base}/`, { headers: { Accept: 'application/json' } });
+    assert.equal(unauthJson.status, 401);
+
+    const unauthOverview = await fetch(`${base}/api/overview`);
+    assert.equal(unauthOverview.status, 401);
+
+    const unauthCodes = await fetch(`${base}/api/admin/codes`);
+    assert.equal(unauthCodes.status, 401);
+
+    const unauthGen = await req('POST', '/api/admin/codes/generate', { presetId: 'topup_10', count: 1 });
+    assert.equal(unauthGen.status, 401);
+
+    // Public endpoints stay reachable
+    assert.equal((await fetch(`${base}/api/health`)).status, 200);
+    assert.equal((await fetch(`${base}/site/`)).status, 200);
+
+    const badAdminLogin = await req('POST', '/api/admin/login', { token: 'wrong-token' });
+    assert.equal(badAdminLogin.status, 401);
+
+    const goodAdminLogin = await fetch(`${base}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: testAdminToken }),
+    });
+    assert.equal(goodAdminLogin.status, 200);
+    const setCookie = goodAdminLogin.headers.get('set-cookie') || '';
+    assert.ok(setCookie.includes('lirio_admin=') && setCookie.includes('HttpOnly'));
+    const cookieHeader = setCookie.split(';')[0];
+
+    const authDash = await fetch(`${base}/`, { headers: { Cookie: cookieHeader } });
+    assert.equal(authDash.status, 200);
+
+    const authOverview = await fetch(`${base}/api/overview`, { headers: { Cookie: cookieHeader } });
+    assert.equal(authOverview.status, 200);
+
+    const headerOverview = await fetch(`${base}/api/overview`, {
+      headers: { 'X-Admin-Token': testAdminToken },
+    });
+    assert.equal(headerOverview.status, 200);
+
+    const adminLogout = await fetch(`${base}/api/admin/logout`, { method: 'POST' });
+    assert.equal(adminLogout.status, 200);
+    assert.ok((adminLogout.headers.get('set-cookie') || '').includes('Max-Age=0'));
+  } finally {
+    delete process.env.LIRIO_ADMIN_TOKEN;
+  }
+
+  // 13. Verify production guardrails + blocking unsigned /api/billing/recharge while keeping /api/billing/redeem working
+  assert.throws(
+    () => validateProductionConfig({ NODE_ENV: 'production' }),
+    (err) =>
+      err.message.includes('LIRIO_JWT_SECRET') &&
+      err.message.includes('LIRIO_ADMIN_TOKEN') &&
+      err.message.includes('LIRIO_LLM_API_KEY'),
+  );
+  assert.throws(
+    () =>
+      validateProductionConfig({
+        NODE_ENV: 'production',
+        LIRIO_JWT_SECRET: 'a'.repeat(32),
+        LIRIO_ADMIN_TOKEN: 'b'.repeat(20),
+        LIRIO_LLM_API_KEY: 'sk-real-prod-key-123456',
+        LIRIO_SEED_DEMO: '1',
+      }),
+    (err) => err.message.includes('LIRIO_SEED_DEMO'),
+  );
+  const validProd = validateProductionConfig({
+    NODE_ENV: 'production',
+    LIRIO_JWT_SECRET: 'a'.repeat(32),
+    LIRIO_ADMIN_TOKEN: 'b'.repeat(20),
+    LIRIO_LLM_API_KEY: 'sk-real-prod-key-123456',
+  });
+  assert.equal(validProd.ok, true);
+  assert.equal(validProd.mode, 'production');
+
+  const prevNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  process.env.LIRIO_ADMIN_TOKEN = testAdminToken;
+  try {
+    const blockedRecharge = await req('POST', '/api/billing/recharge', { packageId: 'pack_10' }, token);
+    assert.equal(blockedRecharge.status, 403);
+
+    const prodGenRes = await fetch(`${base}/api/admin/codes/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': testAdminToken },
+      body: JSON.stringify({ presetId: 'topup_10', count: 1 }),
+    });
+    assert.equal(prodGenRes.status, 201);
+    const prodGenJson = await prodGenRes.json();
+    const prodRedeem = await req('POST', '/api/billing/redeem', { code: prodGenJson.codes[0].code }, token);
+    assert.equal(prodRedeem.status, 200);
+  } finally {
+    if (prevNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prevNodeEnv;
+    delete process.env.LIRIO_ADMIN_TOKEN;
+  }
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (13/13)');
 } finally {
   server.close();
 }
