@@ -55,6 +55,7 @@ export default function App() {
 
   const [hub, setHub] = useState<HubSection>('home');
   const [listeningMode, setListeningMode] = useState<ListeningMode>('library');
+  const [autoPlayDictation, setAutoPlayDictation] = useState(false);
   const [speakContext, setSpeakContext] = useState<{ title: string; excerpt: string } | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importLanguage, setImportLanguage] = useState('en');
@@ -188,15 +189,56 @@ export default function App() {
     setCurrentTime(0);
   };
 
-  const openMaterial = async (id: string) => {
+  const openMaterial = async (id: string, targetIndex?: number) => {
     setLoading('正在打开材料…');
     setError('');
     try {
-      await loadResult(projectService.parse(await invoke<string>('library_open', { id })));
+      const parsedResult = projectService.parse(await invoke<string>('library_open', { id }));
+      if (
+        parsedResult.project.dictation &&
+        typeof targetIndex === 'number' &&
+        targetIndex >= 0 &&
+        targetIndex < parsedResult.project.dictation.sentences.length
+      ) {
+        parsedResult.project.dictation.index = targetIndex;
+      }
+      await loadResult(parsedResult);
       setListeningMode('dictation');
     } finally {
       setLoading('');
     }
+  };
+
+  const handleEnterListening = async (autoPlay = true) => {
+    stopListeningAudio();
+    const currentProject = useProjectStore.getState().project;
+    if (
+      currentProject &&
+      ((currentProject.dictation?.sentences.length ?? 0) > 0 || currentProject.tracks.length > 0)
+    ) {
+      setAutoPlayDictation(autoPlay);
+      setListeningMode('dictation');
+      setHub('listening');
+      return;
+    }
+    try {
+      const raw = localStorage.getItem('aboboo-last-listening');
+      const parsed = raw
+        ? (JSON.parse(raw) as { libraryId?: string; index?: number } | null)
+        : null;
+      if (parsed?.libraryId) {
+        setAutoPlayDictation(autoPlay);
+        setListeningMode('dictation');
+        setHub('listening');
+        await openMaterial(parsed.libraryId, parsed.index);
+        return;
+      }
+    } catch {
+      setAutoPlayDictation(false);
+    }
+    setAutoPlayDictation(false);
+    setListeningMode('library');
+    setHub('listening');
   };
 
   const handleImportLocalAudioPaths = useCallback(
@@ -573,7 +615,7 @@ export default function App() {
             <p>精听 · 拼写 · 对话</p>
           </div>
           <div className="home-grid">
-            <button type="button" className="home-card" onClick={() => setHub('listening')}>
+            <button type="button" className="home-card" onClick={() => void handleEnterListening(true)}>
               <span className="home-card-icon">
                 <IconHeadphones size={26} />
               </span>
@@ -645,6 +687,8 @@ export default function App() {
             listeningMode === 'dictation' ? (
               <Dictation
                 onBusy={setAsrBusy}
+                autoPlayOnOpen={autoPlayDictation}
+                onAutoPlayConsumed={() => setAutoPlayDictation(false)}
                 onDiscussInSpeak={(topicTitle, excerpt) => {
                   stopListeningAudio();
                   setSpeakContext({ title: topicTitle, excerpt });
