@@ -106,6 +106,7 @@ export function GlobalSettingsModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [busyData, setBusyData] = useState(false);
   const [typingSound, setTypingSound] = useState<boolean>(() => isTypingSoundEnabled());
+  const [showGuide, setShowGuide] = useState<boolean>(false);
   const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export function GlobalSettingsModal({
     if (!isOpen) return;
     setPersisted(loadSpeakState());
     setTypingSound(isTypingSoundEnabled());
+    setShowGuide(false);
     setUpdateState(getUpdateState());
     void initAppVersion();
     const acct = getAccountState();
@@ -858,7 +860,36 @@ export function GlobalSettingsModal({
                   </button>
                 )}
               </div>
+
+              <div className="settings-row-between">
+                <div className="settings-version-meta">
+                  <span className="settings-section-title">手册</span>
+                  <small>费用与使用说明</small>
+                </div>
+                <button type="button" onClick={() => setShowGuide((v) => !v)}>
+                  {showGuide ? '收起' : '查看'}
+                </button>
+              </div>
             </div>
+
+            {showGuide && (
+              <div className="settings-guide-card">
+                <div className="guide-block">
+                  <strong>完全免费 · 0 Token（本地运行）</strong>
+                  <p>
+                    自定义上传音频与自动意群切分（本地 Whisper + 本地分句）、默认本地语音朗读与识别、听写与错词本均永久免费。
+                  </p>
+                </div>
+                <div className="guide-block">
+                  <strong>DeepSeek 文本估算（¥10 约可用 250–800 场模考）</strong>
+                  <ul>
+                    <li>雅思全真模考 + 四维复盘：约 1–1.4 万 tok（约 ¥0.012–¥0.040 / 场）</li>
+                    <li>双语闲聊 10 轮 + 复盘：约 0.8–1.1 万 tok（约 ¥0.010–¥0.035 / 次）</li>
+                    <li>听力错因 AI 诊断：约 1–1.5 千 tok（约 ¥0.002–¥0.004 / 次）</li>
+                  </ul>
+                </div>
+              </div>
+            )}
 
             <div className="import-modal-actions">
               <button type="button" className="primary" onClick={onClose}>

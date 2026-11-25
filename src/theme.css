@@ -3205,3 +3205,36 @@ textarea:focus { outline: none; }
   border-radius: 999px;
   transition: width 0.2s ease;
 }
+
+.settings-guide-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.settings-guide-card .guide-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-guide-card strong {
+  font-size: 12px;
+  color: var(--text-strong);
+}
+.settings-guide-card p {
+  margin: 0;
+  color: var(--muted);
+}
+.settings-guide-card ul {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

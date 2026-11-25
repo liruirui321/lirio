@@ -197,7 +197,8 @@ function renderDashboardHtml(overview) {
 
   <div class="rates">
     <span>DeepSeek 文本：输入 ¥1~2 / 缓存 ¥0.02~0.04 / 输出 ¥4~8（每百万 tok）</span>
-    <span>云端语音合成：¥0.03 / 千字</span>
+    <span>本地语音与音频自动切分：¥0（0 Token）</span>
+    <span>可选云端语音：¥0.03 / 千字</span>
   </div>
 
   <div class="card">
