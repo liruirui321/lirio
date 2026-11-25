@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { loadCorpusState, lookupBuiltinWord, saveCorpusState, type Accent } from './corpusService';
-import { getAccountState, proxyChat, proxyTranscribe, proxyTts } from './accountService';
+import { getAccountState, proxyChat, proxyTts } from './accountService';
 import { saveStateBackup } from './stateSync';
 import ielts2026Q4Raw from '../data/ielts_speaking_2026_sep_dec.json';
 
@@ -648,17 +648,8 @@ function resolveSpeechCredentials(config: SpeakConfig) {
 }
 
 export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
-  const acct = getAccountState();
-  if (acct.aiMode === 'pro_balance' && acct.proCloudSpeech) {
-    return proxyTranscribe(wavBytes, '云端语音识别');
-  }
-  const { config } = loadSpeakState();
-  const { apiKey, baseUrl } = resolveSpeechCredentials(config);
   return invoke<string>('speak_transcribe', {
     wavBytes: Array.from(wavBytes),
-    provider: config.asrProvider || 'local_whisper',
-    apiKey: apiKey || null,
-    baseUrl,
   });
 }
 
