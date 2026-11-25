@@ -33,7 +33,7 @@ import {
 } from '../../services/speakService';
 import { IconClose, IconEye, IconMoon, IconReplay, IconSun } from '../Icons';
 
-export type GlobalSettingsTab = 'account' | 'ai' | 'data';
+export type GlobalSettingsTab = 'ai' | 'data';
 
 const ACCENT_OPTS: SelectOption[] = [
   { value: 'uk', label: '英音 UK' },
@@ -66,7 +66,7 @@ function formatLedgerUsage(entry: LedgerEntry): string {
 
 export function GlobalSettingsModal({
   open: isOpen,
-  initialTab = 'account',
+  initialTab = 'ai',
   onClose,
   theme,
   onThemeChange,
@@ -155,7 +155,7 @@ export function GlobalSettingsModal({
   const config = persisted.config;
   const activeProviderLabel =
     account.aiMode === 'pro_balance'
-      ? 'Lirio Pro 余额托管'
+      ? 'Lirio 官方 API'
       : PROVIDER_META.find((p) => p.id === config.activeProvider)?.label || config.activeProvider;
 
   const updateConfig = (patch: Partial<SpeakConfig>) => {
@@ -187,6 +187,12 @@ export function GlobalSettingsModal({
     setPersisted(next);
   };
 
+  const handleSelectMode = (mode: 'pro_balance' | 'byok') => {
+    setStatusMsg('');
+    setErrorMsg('');
+    updateAccountState({ aiMode: mode });
+  };
+
   const handleAuthSubmit = async () => {
     setAuthBusy(true);
     setErrorMsg('');
@@ -200,7 +206,7 @@ export function GlobalSettingsModal({
       setPassword('');
       setStatusMsg(
         authMode === 'register'
-          ? `注册成功！已赠送 ${formatYuan(res.user.balanceUnits)} 体验金，并切换至余额托管模式。`
+          ? `注册成功！已赠送 ${formatYuan(res.user.balanceUnits)} 体验金。`
           : `欢迎回来，${res.user.name}！当前余额 ${formatYuan(res.user.balanceUnits)}。`,
       );
     } catch (e) {
@@ -300,7 +306,7 @@ export function GlobalSettingsModal({
         className="import-modal global-settings-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="全局用户设置"
+        aria-label="用户设置"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="import-modal-head">
@@ -309,17 +315,10 @@ export function GlobalSettingsModal({
             <div className="seg-pill" role="tablist">
               <button
                 type="button"
-                className={tab === 'account' ? 'active' : ''}
-                onClick={() => setTab('account')}
-              >
-                账户与余额
-              </button>
-              <button
-                type="button"
                 className={tab === 'ai' ? 'active' : ''}
                 onClick={() => setTab('ai')}
               >
-                模型配置
+                AI 服务
               </button>
               <button
                 type="button"
@@ -348,353 +347,377 @@ export function GlobalSettingsModal({
           </div>
         )}
 
-        {tab === 'account' && (
+        {tab === 'ai' && (
           <div className="settings-tab-body">
-            <div className="settings-section-title">全局 AI 计费模式（所有模块共用此设置）</div>
+            {/* Step 1: Choose service mode first */}
+            <div className="settings-section-title">第一步：选择服务方式</div>
             <div className="settings-theme-row">
               <button
                 type="button"
                 className={`provider-card${account.aiMode === 'pro_balance' ? ' active' : ''}`}
-                onClick={() => updateAccountState({ aiMode: 'pro_balance' })}
+                onClick={() => handleSelectMode('pro_balance')}
               >
-                <strong>Lirio Pro 余额托管</strong>
-                <small>免填 API Key，登录即用，按实际消耗实时扣减余额并记录账单</small>
+                <strong>使用 Lirio 官方 API</strong>
+                <small>免配任何 Key，登录充值按量计费</small>
               </button>
               <button
                 type="button"
                 className={`provider-card${account.aiMode === 'byok' ? ' active' : ''}`}
-                onClick={() => updateAccountState({ aiMode: 'byok' })}
+                onClick={() => handleSelectMode('byok')}
               >
-                <strong>自有 API Key（BYOK）</strong>
-                <small>使用你在「模型配置」填写的文本/语音合成 Key，不扣账号余额</small>
+                <strong>自配置 API Key</strong>
+                <small>使用自己的文本与语音合成模型 Key</small>
               </button>
             </div>
 
-            {!account.user ? (
-              <div className="account-auth-card">
-                <div className="account-auth-head">
-                  <div className="seg-pill">
-                    <button
-                      type="button"
-                      className={authMode === 'login' ? 'active' : ''}
-                      onClick={() => setAuthMode('login')}
-                    >
-                      登录账号
-                    </button>
-                    <button
-                      type="button"
-                      className={authMode === 'register' ? 'active' : ''}
-                      onClick={() => setAuthMode('register')}
-                    >
-                      新用户注册（赠 ¥5）
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    className="dict-slow-btn"
-                    onClick={() => setShowServerUrl((s) => !s)}
-                  >
-                    服务器地址
-                  </button>
+            {/* Step 2A: Official API -> Login / Balance / Recharge / Ledger ONLY */}
+            {account.aiMode === 'pro_balance' ? (
+              <>
+                <div className="settings-section-title" style={{ marginTop: 4 }}>
+                  第二步：{account.user ? '余额、充值与消费账单' : '登录或注册账号'}
                 </div>
 
-                {showServerUrl && (
-                  <div className="speak-field">
-                    <label>Lirio Pro 服务端 URL</label>
-                    <input
-                      type="text"
-                      value={account.serverUrl}
-                      onChange={(e) => updateAccountState({ serverUrl: e.target.value })}
-                    />
-                  </div>
-                )}
+                {!account.user ? (
+                  <div className="account-auth-card">
+                    <div className="account-auth-head">
+                      <div className="seg-pill">
+                        <button
+                          type="button"
+                          className={authMode === 'login' ? 'active' : ''}
+                          onClick={() => setAuthMode('login')}
+                        >
+                          登录账号
+                        </button>
+                        <button
+                          type="button"
+                          className={authMode === 'register' ? 'active' : ''}
+                          onClick={() => setAuthMode('register')}
+                        >
+                          新用户注册（赠 ¥5）
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className="dict-slow-btn"
+                        onClick={() => setShowServerUrl((s) => !s)}
+                      >
+                        服务器地址
+                      </button>
+                    </div>
 
+                    {showServerUrl && (
+                      <div className="speak-field">
+                        <label>Lirio Pro 服务端 URL</label>
+                        <input
+                          type="text"
+                          value={account.serverUrl}
+                          onChange={(e) => updateAccountState({ serverUrl: e.target.value })}
+                        />
+                      </div>
+                    )}
+
+                    <div className="settings-two-col">
+                      <div className="speak-field">
+                        <label>邮箱</label>
+                        <input
+                          type="email"
+                          value={email}
+                          placeholder="name@example.com"
+                          onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="speak-field">
+                        <label>密码（至少 6 位）</label>
+                        <input
+                          type="password"
+                          value={password}
+                          placeholder="••••••"
+                          onChange={(e) => setPassword(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && email && password) void handleAuthSubmit();
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {authMode === 'register' && (
+                      <div className="speak-field">
+                        <label>昵称（可选）</label>
+                        <input
+                          type="text"
+                          value={nickname}
+                          placeholder="你的称呼…"
+                          onChange={(e) => setNickname(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    <div className="import-modal-actions">
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={authBusy || !email.trim() || password.length < 6}
+                        onClick={() => void handleAuthSubmit()}
+                      >
+                        {authBusy
+                          ? '请稍候…'
+                          : authMode === 'register'
+                            ? '注册并领取 ¥5 体验金'
+                            : '登录并开始使用'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="account-profile-card">
+                      <div className="account-profile-top">
+                        <div className="account-avatar">{account.user.name.slice(0, 1).toUpperCase()}</div>
+                        <div className="account-profile-info">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <strong>{account.user.name}</strong>
+                            <span className={`tier-badge small${account.user.tier === 'pro' ? ' pro' : ''}`}>
+                              {account.user.tier === 'pro' ? 'PRO 会员' : '体验版'}
+                            </span>
+                          </div>
+                          <small>{account.user.email}</small>
+                        </div>
+                        <button type="button" onClick={logoutAccount}>
+                          退出登录
+                        </button>
+                      </div>
+
+                      <div className="account-balance-strip">
+                        <div className="account-balance-main">
+                          <span>当前可用余额</span>
+                          <strong>{formatYuan(account.user.balanceUnits, 2)}</strong>
+                        </div>
+                        <div className="account-balance-stats">
+                          <span>累计充值 {formatYuan(account.user.totalRechargedUnits, 2)}</span>
+                          <span>累计消耗 {formatYuan(account.user.totalSpentUnits, 4)}</span>
+                        </div>
+                      </div>
+
+                      <div className="account-recharge-grid">
+                        {DEFAULT_RECHARGE_PACKS.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className="recharge-pack-btn"
+                            disabled={authBusy}
+                            onClick={() => void handleRecharge(p.id)}
+                          >
+                            <strong>{p.label}</strong>
+                            <small>{p.note}</small>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="settings-inline-row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div className="speak-field">
+                        <label>默认口音</label>
+                        <CustomSelect
+                          value={config.accent}
+                          options={ACCENT_OPTS}
+                          minWidth={120}
+                          onChange={(val) => updateConfig({ accent: val as Accent })}
+                        />
+                      </div>
+                      <label className="settings-check-line" style={{ marginTop: 16 }}>
+                        <input
+                          type="checkbox"
+                          checked={account.proCloudSpeech}
+                          onChange={(e) => updateAccountState({ proCloudSpeech: e.target.checked })}
+                        />
+                        语音合成使用官方云端高清（按量扣余额；关闭则用免费 Edge TTS）
+                      </label>
+                    </div>
+
+                    <div className="ledger-section">
+                      <div className="ledger-head">
+                        <span>消费与充值账单明细</span>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          disabled={ledgerBusy}
+                          title="刷新账单"
+                          aria-label="刷新账单"
+                          onClick={() => void handleRefreshLedger()}
+                        >
+                          <IconReplay size={14} />
+                        </button>
+                      </div>
+                      {ledger.length === 0 ? (
+                        <div className="corpus-empty" style={{ padding: 14 }}>
+                          {ledgerBusy ? '正在读取账单…' : '暂无账单流水。'}
+                        </div>
+                      ) : (
+                        <div className="ledger-list">
+                          {ledger.map((row) => {
+                            const isPlus = row.amountUnits >= 0;
+                            return (
+                              <div key={row.id} className="ledger-row">
+                                <div className="ledger-col-main">
+                                  <strong>{row.feature}</strong>
+                                  <small>
+                                    {new Date(row.createdAt).toLocaleString()} · {formatLedgerUsage(row)}
+                                  </small>
+                                </div>
+                                <div className="ledger-col-amt">
+                                  <strong className={isPlus ? 'plus' : 'minus'}>
+                                    {isPlus ? '+' : '-'}
+                                    {formatYuan(Math.abs(row.amountUnits), isPlus ? 2 : 4)}
+                                  </strong>
+                                  <small>余 {formatYuan(row.balanceAfterUnits, 2)}</small>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="import-modal-actions">
+                      <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
+                        {testingConn ? '测试中…' : '测试官方通道'}
+                      </button>
+                      <button type="button" className="primary" onClick={onClose}>
+                        完成
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              /* Step 2B: Self-configured BYOK -> Text LLM + TTS ONLY (no login/recharge clutter) */
+              <>
+                <div className="settings-section-title" style={{ marginTop: 4 }}>
+                  第二步：配置自己的模型（文本模型 + 语音合成模型）
+                </div>
+
+                <div className="provider-grid compact">
+                  {PROVIDER_META.map((p) => {
+                    const active = config.activeProvider === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={`provider-card${active ? ' active' : ''}`}
+                        onClick={() => updateConfig({ activeProvider: p.id })}
+                      >
+                        <strong>{p.label}</strong>
+                        <small>{p.hint}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {config.activeProvider !== 'local' && (() => {
+                  const pid = config.activeProvider;
+                  const prof = config.providers[pid];
+                  return (
+                    <div className="provider-form">
+                      <div className="settings-two-col">
+                        <div className="speak-field">
+                          <label>API Base URL</label>
+                          <input
+                            type="text"
+                            value={prof.baseUrl}
+                            onChange={(e) => updateProviderField(pid, { baseUrl: e.target.value })}
+                          />
+                        </div>
+                        <div className="speak-field">
+                          <label>Model</label>
+                          <input
+                            type="text"
+                            value={prof.model}
+                            onChange={(e) => updateProviderField(pid, { model: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="speak-field">
+                        <label>文本模型 API Key（仅保存在本机）</label>
+                        <div className="settings-key-row">
+                          <input
+                            type={showApiKey ? 'text' : 'password'}
+                            value={prof.apiKey}
+                            placeholder="填入对应平台的 API Key…"
+                            onChange={(e) => updateProviderField(pid, { apiKey: e.target.value })}
+                          />
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title={showApiKey ? '隐藏 Key' : '显示 Key'}
+                            aria-label="切换密钥可见性"
+                            onClick={() => setShowApiKey((s) => !s)}
+                          >
+                            <IconEye size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="settings-section-title" style={{ marginTop: 4 }}>
+                  语音合成模型
+                </div>
                 <div className="settings-two-col">
                   <div className="speak-field">
-                    <label>邮箱</label>
-                    <input
-                      type="email"
-                      value={email}
-                      placeholder="name@example.com"
-                      onChange={(e) => setEmail(e.target.value)}
+                    <label>语音合成引擎</label>
+                    <CustomSelect
+                      value={config.ttsProvider || 'edge'}
+                      options={TTS_OPTS}
+                      minWidth={180}
+                      onChange={(v) => updateConfig({ ttsProvider: v as TtsProviderId })}
                     />
                   </div>
                   <div className="speak-field">
-                    <label>密码（至少 6 位）</label>
-                    <input
-                      type="password"
-                      value={password}
-                      placeholder="••••••"
-                      onChange={(e) => setPassword(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && email && password) void handleAuthSubmit();
-                      }}
+                    <label>默认口音</label>
+                    <CustomSelect
+                      value={config.accent}
+                      options={ACCENT_OPTS}
+                      minWidth={130}
+                      onChange={(val) => updateConfig({ accent: val as Accent })}
                     />
                   </div>
                 </div>
 
-                {authMode === 'register' && (
-                  <div className="speak-field">
-                    <label>昵称（可选）</label>
-                    <input
-                      type="text"
-                      value={nickname}
-                      placeholder="你的称呼…"
-                      onChange={(e) => setNickname(e.target.value)}
-                    />
+                {config.ttsProvider === 'openai' && (
+                  <div className="provider-form">
+                    <div className="settings-two-col">
+                      <div className="speak-field">
+                        <label>语音 API Key</label>
+                        <input
+                          type={showApiKey ? 'text' : 'password'}
+                          value={config.speechApiKey || ''}
+                          placeholder="留空则自动复用上方 OpenAI Key"
+                          onChange={(e) => updateConfig({ speechApiKey: e.target.value })}
+                        />
+                      </div>
+                      <div className="speak-field">
+                        <label>音色</label>
+                        <CustomSelect
+                          value={config.speechVoice || 'alloy'}
+                          options={VOICE_OPTS}
+                          minWidth={150}
+                          onChange={(v) => updateConfig({ speechVoice: v })}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 <div className="import-modal-actions">
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={authBusy || !email.trim() || password.length < 6}
-                    onClick={() => void handleAuthSubmit()}
-                  >
-                    {authBusy
-                      ? '请稍候…'
-                      : authMode === 'register'
-                        ? '注册并领取 ¥5 体验金'
-                        : '登录'}
+                  <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
+                    {testingConn ? '测试中…' : '测试连接'}
                   </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="account-profile-card">
-                  <div className="account-profile-top">
-                    <div className="account-avatar">{account.user.name.slice(0, 1).toUpperCase()}</div>
-                    <div className="account-profile-info">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <strong>{account.user.name}</strong>
-                        <span className={`tier-badge small${account.user.tier === 'pro' ? ' pro' : ''}`}>
-                          {account.user.tier === 'pro' ? 'PRO 会员' : '体验版'}
-                        </span>
-                      </div>
-                      <small>{account.user.email}</small>
-                    </div>
-                    <button type="button" onClick={logoutAccount}>
-                      退出登录
-                    </button>
-                  </div>
-
-                  <div className="account-balance-strip">
-                    <div className="account-balance-main">
-                      <span>当前可用余额</span>
-                      <strong>{formatYuan(account.user.balanceUnits, 2)}</strong>
-                    </div>
-                    <div className="account-balance-stats">
-                      <span>累计充值 {formatYuan(account.user.totalRechargedUnits, 2)}</span>
-                      <span>累计消耗 {formatYuan(account.user.totalSpentUnits, 4)}</span>
-                    </div>
-                  </div>
-
-                  <div className="account-recharge-grid">
-                    {DEFAULT_RECHARGE_PACKS.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className="recharge-pack-btn"
-                        disabled={authBusy}
-                        onClick={() => void handleRecharge(p.id)}
-                      >
-                        <strong>{p.label}</strong>
-                        <small>{p.note}</small>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="ledger-section">
-                  <div className="ledger-head">
-                    <span>消费与充值账单明细</span>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      disabled={ledgerBusy}
-                      title="刷新账单"
-                      aria-label="刷新账单"
-                      onClick={() => void handleRefreshLedger()}
-                    >
-                      <IconReplay size={14} />
-                    </button>
-                  </div>
-                  {ledger.length === 0 ? (
-                    <div className="corpus-empty" style={{ padding: 14 }}>
-                      {ledgerBusy ? '正在读取账单…' : '暂无账单流水。'}
-                    </div>
-                  ) : (
-                    <div className="ledger-list">
-                      {ledger.map((row) => {
-                        const isPlus = row.amountUnits >= 0;
-                        return (
-                          <div key={row.id} className="ledger-row">
-                            <div className="ledger-col-main">
-                              <strong>{row.feature}</strong>
-                              <small>
-                                {new Date(row.createdAt).toLocaleString()} · {formatLedgerUsage(row)}
-                              </small>
-                            </div>
-                            <div className="ledger-col-amt">
-                              <strong className={isPlus ? 'plus' : 'minus'}>
-                                {isPlus ? '+' : '-'}
-                                {formatYuan(Math.abs(row.amountUnits), isPlus ? 2 : 4)}
-                              </strong>
-                              <small>余 {formatYuan(row.balanceAfterUnits, 2)}</small>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <button type="button" className="primary" onClick={onClose}>
+                    完成
+                  </button>
                 </div>
               </>
             )}
-          </div>
-        )}
-
-        {tab === 'ai' && (
-          <div className="settings-tab-body">
-            {account.aiMode === 'pro_balance' && (
-              <div className="corpus-banner" style={{ borderRadius: 10 }}>
-                当前为「Lirio Pro 余额托管」模式：文本模型自动走平台通道并扣减余额（当前 {formatYuan(account.user?.balanceUnits, 2)}）；切换到「自有 API Key」后将使用下方配置。
-              </div>
-            )}
-
-            <div className="settings-section-title">1. 文本模型</div>
-            <div className="provider-grid compact">
-              {PROVIDER_META.map((p) => {
-                const active = config.activeProvider === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={`provider-card${active ? ' active' : ''}`}
-                    onClick={() => updateConfig({ activeProvider: p.id })}
-                  >
-                    <strong>{p.label}</strong>
-                    <small>{p.hint}</small>
-                  </button>
-                );
-              })}
-            </div>
-
-            {config.activeProvider !== 'local' && (() => {
-              const pid = config.activeProvider;
-              const prof = config.providers[pid];
-              return (
-                <div className="provider-form">
-                  <div className="settings-two-col">
-                    <div className="speak-field">
-                      <label>API Base URL</label>
-                      <input
-                        type="text"
-                        value={prof.baseUrl}
-                        onChange={(e) => updateProviderField(pid, { baseUrl: e.target.value })}
-                      />
-                    </div>
-                    <div className="speak-field">
-                      <label>Model</label>
-                      <input
-                        type="text"
-                        value={prof.model}
-                        onChange={(e) => updateProviderField(pid, { model: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="speak-field">
-                    <label>API Key（仅保存在本机）</label>
-                    <div className="settings-key-row">
-                      <input
-                        type={showApiKey ? 'text' : 'password'}
-                        value={prof.apiKey}
-                        placeholder="填入对应平台的 API Key…"
-                        onChange={(e) => updateProviderField(pid, { apiKey: e.target.value })}
-                      />
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title={showApiKey ? '隐藏 Key' : '显示 Key'}
-                        aria-label="切换密钥可见性"
-                        onClick={() => setShowApiKey((s) => !s)}
-                      >
-                        <IconEye size={15} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            <div className="settings-section-title" style={{ marginTop: 4 }}>
-              2. 语音合成模型
-            </div>
-            {account.aiMode === 'pro_balance' && (
-              <label className="settings-check-line">
-                <input
-                  type="checkbox"
-                  checked={account.proCloudSpeech}
-                  onChange={(e) => updateAccountState({ proCloudSpeech: e.target.checked })}
-                />
-                语音合成使用 Lirio 云端高清（按量扣余额；关闭则用免费 Edge TTS）
-              </label>
-            )}
-
-            <div className="settings-two-col">
-              <div className="speak-field">
-                <label>语音合成引擎</label>
-                <CustomSelect
-                  value={config.ttsProvider || 'edge'}
-                  options={TTS_OPTS}
-                  minWidth={180}
-                  onChange={(v) => updateConfig({ ttsProvider: v as TtsProviderId })}
-                />
-              </div>
-              <div className="speak-field">
-                <label>默认口音</label>
-                <CustomSelect
-                  value={config.accent}
-                  options={ACCENT_OPTS}
-                  minWidth={130}
-                  onChange={(val) => updateConfig({ accent: val as Accent })}
-                />
-              </div>
-            </div>
-
-            {config.ttsProvider === 'openai' && (
-              <div className="provider-form">
-                <div className="settings-two-col">
-                  <div className="speak-field">
-                    <label>语音 API Key</label>
-                    <input
-                      type={showApiKey ? 'text' : 'password'}
-                      value={config.speechApiKey || ''}
-                      placeholder="留空则自动复用上方 OpenAI Key"
-                      onChange={(e) => updateConfig({ speechApiKey: e.target.value })}
-                    />
-                  </div>
-                  <div className="speak-field">
-                    <label>音色</label>
-                    <CustomSelect
-                      value={config.speechVoice || 'alloy'}
-                      options={VOICE_OPTS}
-                      minWidth={150}
-                      onChange={(v) => updateConfig({ speechVoice: v })}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="import-modal-actions">
-              <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
-                {testingConn ? '测试中…' : '测试连接'}
-              </button>
-              <button type="button" className="primary" onClick={onClose}>
-                完成
-              </button>
-            </div>
           </div>
         )}
 

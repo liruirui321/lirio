@@ -71,7 +71,7 @@ export default function App() {
   const [importError, setImportError] = useState('');
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<GlobalSettingsTab>('account');
+  const [settingsTab, setSettingsTab] = useState<GlobalSettingsTab>('ai');
   const [accountState, setAccountState] = useState<AccountState>(() => getAccountState());
   const [stateTick, setStateTick] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -521,22 +521,22 @@ export default function App() {
               ? ' low'
               : ''
           }`}
-          title="账户、余额与 AI 计费模式设置"
+          title="选择官方 API 余额模式或自配置 Key"
           onClick={() => {
-            setSettingsTab('account');
+            setSettingsTab('ai');
             setSettingsOpen(true);
           }}
         >
-          {accountState.user
-            ? accountState.aiMode === 'pro_balance'
-              ? `Pro · ${formatYuan(accountState.user.balanceUnits, 2)}`
-              : '自有 Key'
-            : '登录 / Pro'}
+          {accountState.aiMode === 'pro_balance'
+            ? accountState.user
+              ? `官方 API · ${formatYuan(accountState.user.balanceUnits, 2)}`
+              : '官方 API · 去登录'
+            : '自配置 Key'}
         </button>
 
         <button
           className={`icon-btn${settingsOpen ? ' active' : ''}`}
-          title="用户设置（账户、AI 引擎、语音与数据备份）"
+          title="用户设置（AI 服务与数据备份）"
           aria-label="用户设置"
           onClick={() => {
             setSettingsTab('ai');
