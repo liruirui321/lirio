@@ -42,9 +42,13 @@ const gradedAnswer = (s: Sentence) => (s.submittedAnswer !== undefined ? s.submi
 export function Dictation({
   onBusy,
   onDiscussInSpeak,
+  autoPlayOnOpen,
+  onAutoPlayConsumed,
 }: {
   onBusy: (busy: boolean) => void;
   onDiscussInSpeak?: (topicTitle: string, excerpt: string) => void;
+  autoPlayOnOpen?: boolean;
+  onAutoPlayConsumed?: () => void;
 }) {
   const { project, updateProject } = useProjectStore();
   const [busy, setBusy] = useState(false);
@@ -167,8 +171,14 @@ export function Dictation({
     setEditing(false);
     setPosition(segStart);
     let cancelled = false;
-    const autoplay = autoPlaySentence.current === sentence?.id;
-    autoPlaySentence.current = null;
+    const shouldAutoOpen = Boolean(autoPlayOnOpen) && Boolean(sentence) && Boolean(original);
+    const autoplay = autoPlaySentence.current === sentence?.id || shouldAutoOpen;
+    if (autoPlaySentence.current === sentence?.id) {
+      autoPlaySentence.current = null;
+    }
+    if (shouldAutoOpen) {
+      onAutoPlayConsumed?.();
+    }
     if (autoplay && sentence && original) {
       setError('');
       starting.current = true;
@@ -190,7 +200,7 @@ export function Dictation({
     return () => {
       cancelled = true;
     };
-  }, [sentence?.id]);
+  }, [sentence?.id, autoPlayOnOpen]);
 
   useEffect(() => {
     if (!playing || !sentence || !original) return;
