@@ -215,6 +215,19 @@ export async function rechargeAccount(packageId: string): Promise<{
   return res;
 }
 
+export async function redeemCode(code: string): Promise<{
+  user: AccountUser;
+  entry: LedgerEntry;
+  ledger: LedgerEntry[];
+}> {
+  const res = await apiFetch<{ user: AccountUser; entry: LedgerEntry; ledger: LedgerEntry[] }>(
+    '/api/billing/redeem',
+    { method: 'POST', body: JSON.stringify({ code }) },
+  );
+  updateAccountState({ user: res.user, aiMode: 'pro_balance' });
+  return res;
+}
+
 export async function proxyChat(opts: {
   messages: Array<{ role: string; content: string }>;
   temperature?: number;

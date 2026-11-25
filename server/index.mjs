@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hashPassword, signToken, verifyPassword, verifyToken } from './auth.mjs';
 import {
   DEFAULT_TRIAL_UNITS,
+  createRedeemCodes,
   createUserWithTrial,
   creditUserBalance,
   deductUserBalance,
@@ -12,8 +13,10 @@ import {
   getUserById,
   listAllUsers,
   listRecentLedger,
+  listRedeemCodes,
   listUserLedger,
   openDatabase,
+  redeemCodeForUser,
   serializeUser,
 } from './db.mjs';
 import {
@@ -28,7 +31,60 @@ import {
 } from './pricing.mjs';
 import { forwardChatCompletion, forwardTranscribe, forwardTts } from './aiProxy.mjs';
 
+export const CODE_PRESETS = [
+  {
+    id: 'pro_99',
+    label: '¥99 买断卡密（含 ¥10 余额）',
+    amountUnits: 100000, // ¥10.00
+    upgradeToPro: true,
+    note: '¥99 买断激活 + ¥10 初始对话余额',
+  },
+  {
+    id: 'topup_10',
+    label: '¥10 余额充值码',
+    amountUnits: 100000, // ¥10.00
+    upgradeToPro: false,
+    note: '余额充值 ¥10.00',
+  },
+  {
+    id: 'topup_30',
+    label: '¥30 余额充值码（赠 ¥5）',
+    amountUnits: 350000, // ¥35.00
+    upgradeToPro: false,
+    note: '充值 ¥30.00 + 赠送 ¥5.00',
+  },
+];
+
+function isAdminAuthorized(req) {
+  const adminKey = process.env.LIRIO_ADMIN_KEY;
+  if (!adminKey) return true;
+  const headerKey = String(req.headers['x-admin-key'] || '').trim();
+  const auth = String(req.headers.authorization || '');
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || '';
+  return headerKey === adminKey || bearer === adminKey;
+}
+
 export function seedDemoUser(db) {
+  const existingCodes = listRedeemCodes(db, 1);
+  if (!existingCodes.length) {
+    createRedeemCodes(db, {
+      planId: 'pro_99',
+      label: '¥99 买断卡密（含 ¥10 余额）',
+      amountUnits: 100000,
+      upgradeToPro: true,
+      note: '演示 ¥99 买断卡密',
+      exactCodes: ['LIRIO-DEMO-9900-PRO1'],
+    });
+    createRedeemCodes(db, {
+      planId: 'topup_30',
+      label: '¥30 余额充值码（赠 ¥5）',
+      amountUnits: 350000,
+      upgradeToPro: false,
+      note: '演示 ¥30 充值卡密（含 ¥35 额度）',
+      exactCodes: ['LIRIO-DEMO-3000-TOP1'],
+    });
+  }
+
   const email = 'tester@lirio.app';
   const existing = getUserByEmail(db, email);
   if (existing) return serializeUser(existing);
@@ -110,6 +166,8 @@ function buildOverview(db) {
     },
     users: listAllUsers(db),
     ledger: listRecentLedger(db, 40),
+    codes: listRedeemCodes(db, 60),
+    codePresets: CODE_PRESETS,
   };
 }
 
@@ -152,6 +210,23 @@ function renderDashboardHtml(overview) {
         .join('')
     : '<tr><td colspan="6" class="empty">暂无计费流水</td></tr>';
 
+  const codeRows = (overview.codes || []).length
+    ? overview.codes
+        .map((c) => {
+          const status = c.redeemedAt
+            ? `<span class="tag used">已用 (${escapeHtml(c.redeemedByEmail || '-')})</span>`
+            : '<span class="tag">可用</span>';
+          return `<tr>
+            <td class="code-mono">${escapeHtml(c.code)}</td>
+            <td>${escapeHtml(c.label)}</td>
+            <td class="num strong">${escapeHtml(formatYuan(c.amountUnits, 2))}</td>
+            <td>${status}</td>
+            <td class="num"><button class="copy-btn" type="button" data-copy="${escapeHtml(c.code)}">复制</button></td>
+          </tr>`;
+        })
+        .join('')
+    : '<tr><td colspan="5" class="empty">暂无卡密</td></tr>';
+
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -183,6 +258,16 @@ function renderDashboardHtml(overview) {
   .plus { color: #3D6B52; font-weight: 600; }
   .minus { color: #B85C38; font-weight: 600; }
   .empty { text-align: center; color: #8D867C; padding: 18px; }
+  .code-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .code-bar select, .code-bar input { border: 1px solid #E4DFD4; background: #FFFDF9; color: #1D1B18; border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-family: inherit; }
+  .code-bar input[type="number"] { width: 70px; text-align: center; }
+  .btn.primary { background: #3D6B52; border-color: #3D6B52; color: #fff; }
+  .btn.primary:hover { background: #315843; color: #fff; }
+  .code-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; letter-spacing: 0.03em; }
+  .tag.used { background: #F0ECE3; color: #7C766D; }
+  .copy-btn { border: 1px solid #E4DFD4; background: transparent; color: #5F5A52; border-radius: 999px; padding: 2px 8px; font-size: 11px; cursor: pointer; }
+  .copy-btn:hover { border-color: #3D6B52; color: #3D6B52; }
+  .code-msg { font-size: 12px; color: #3D6B52; }
 </style>
 </head>
 <body>
@@ -206,6 +291,29 @@ function renderDashboardHtml(overview) {
   </div>
 
   <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <h2 style="margin:0;">卡密发码中心</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="codeMsg" class="code-msg"></span>
+        <button class="btn" id="copyUnusedBtn" type="button">复制全部未兑换</button>
+      </div>
+    </div>
+    <div class="code-bar">
+      <select id="codePreset">
+        <option value="pro_99">¥99 买断卡密（含 ¥10 余额）</option>
+        <option value="topup_10">¥10 余额充值码</option>
+        <option value="topup_30">¥30 余额充值码（赠 ¥5）</option>
+      </select>
+      <label class="sub">数量 <input id="codeCount" type="number" min="1" max="50" value="5" /></label>
+      <button class="btn primary" id="genCodeBtn" type="button">生成卡密</button>
+    </div>
+    <table>
+      <thead><tr><th>卡密</th><th>类型</th><th class="num">面额</th><th>状态</th><th class="num">操作</th></tr></thead>
+      <tbody id="codesBody">${codeRows}</tbody>
+    </table>
+  </div>
+
+  <div class="card">
     <h2>账号与余额</h2>
     <table>
       <thead><tr><th>账号</th><th>身份</th><th class="num">当前余额</th><th class="num">累计充值</th><th class="num">累计消费</th></tr></thead>
@@ -224,6 +332,18 @@ function renderDashboardHtml(overview) {
 <script>
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const yuan = (u, d = 2) => '¥' + ((Number(u) || 0) / 10000).toFixed(d);
+let latestCodes = [];
+function renderCodes(list) {
+  latestCodes = list || [];
+  document.getElementById('codesBody').innerHTML = latestCodes.length ? latestCodes.map((c) => {
+    const status = c.redeemedAt
+      ? '<span class="tag used">已用 (' + esc(c.redeemedByEmail || '-') + ')</span>'
+      : '<span class="tag">可用</span>';
+    return '<tr><td class="code-mono">' + esc(c.code) + '</td><td>' + esc(c.label) + '</td>' +
+      '<td class="num strong">' + yuan(c.amountUnits, 2) + '</td><td>' + status + '</td>' +
+      '<td class="num"><button class="copy-btn" type="button" data-copy="' + esc(c.code) + '">复制</button></td></tr>';
+  }).join('') : '<tr><td colspan="5" class="empty">暂无卡密</td></tr>';
+}
 async function reloadOverview() {
   const res = await fetch('/api/overview');
   if (!res.ok) return;
@@ -246,7 +366,37 @@ async function reloadOverview() {
       '<td class="num ' + (plus ? 'plus' : 'minus') + '">' + (plus ? '+' : '-') + yuan(Math.abs(r.amountUnits), plus ? 2 : 4) + '</td>' +
       '<td class="num">' + yuan(r.balanceAfterUnits, 4) + '</td></tr>';
   }).join('') : '<tr><td colspan="6" class="empty">暂无计费流水</td></tr>';
+  renderCodes(data.codes || []);
 }
+document.getElementById('genCodeBtn').addEventListener('click', async () => {
+  const presetId = document.getElementById('codePreset').value;
+  const count = Number(document.getElementById('codeCount').value) || 5;
+  const msg = document.getElementById('codeMsg');
+  msg.textContent = '生成中...';
+  const res = await fetch('/api/admin/codes/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ presetId, count }),
+  });
+  const data = await res.json().catch(() => ({}));
+  msg.textContent = res.ok ? ('已生成 ' + (data.codes?.length || 0) + ' 个卡密') : (data.error || '生成失败');
+  await reloadOverview();
+});
+document.getElementById('copyUnusedBtn').addEventListener('click', async () => {
+  const unused = (latestCodes.length ? latestCodes : Array.from(document.querySelectorAll('#codesBody tr')).filter((tr) => !tr.querySelector('.used')).map((tr) => ({ code: tr.querySelector('.code-mono')?.textContent })).filter((x) => x.code))
+    .filter((c) => !c.redeemedAt)
+    .map((c) => c.code);
+  const msg = document.getElementById('codeMsg');
+  if (!unused.length) { msg.textContent = '暂无未兑换卡密'; return; }
+  await navigator.clipboard.writeText(unused.join('\\n'));
+  msg.textContent = '已复制 ' + unused.length + ' 个未兑换卡密';
+});
+document.getElementById('codesBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-copy]');
+  if (!btn) return;
+  await navigator.clipboard.writeText(btn.dataset.copy);
+  document.getElementById('codeMsg').textContent = '已复制 ' + btn.dataset.copy;
+});
 document.getElementById('refreshBtn').addEventListener('click', reloadOverview);
 </script>
 </body>
@@ -339,6 +489,9 @@ export function createLirioServer({ dbPath } = {}) {
                 '/api/auth/me',
                 '/api/billing/ledger',
                 '/api/billing/recharge',
+                '/api/billing/redeem',
+                '/api/admin/codes',
+                '/api/admin/codes/generate',
                 '/api/ai/chat',
                 '/api/ai/tts',
                 '/api/ai/transcribe',
@@ -552,6 +705,75 @@ export function createLirioServer({ dbPath } = {}) {
         });
         const ledger = listUserLedger(db, user.id, 50);
         sendJson(res, 200, { user: result.user, entry: result.entry, ledger });
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/billing/redeem') {
+        const user = authenticateRequest(req, db);
+        if (!user) {
+          sendJson(res, 401, { error: '请先登录再兑换卡密。' });
+          return;
+        }
+        const body = await readJsonBody(req);
+        try {
+          const result = redeemCodeForUser(db, { userId: user.id, rawCode: body.code });
+          const ledger = listUserLedger(db, user.id, 50);
+          sendJson(res, 200, {
+            user: result.user,
+            entry: result.entry,
+            redeemCode: result.redeemCode,
+            ledger,
+          });
+        } catch (err) {
+          const codeErr = err?.message || String(err);
+          if (codeErr === 'INVALID_CODE') {
+            sendJson(res, 400, { error: '请输入卡密兑换码。' });
+            return;
+          }
+          if (codeErr === 'CODE_NOT_FOUND') {
+            sendJson(res, 404, { error: '卡密无效，请核对后重试。' });
+            return;
+          }
+          if (codeErr === 'CODE_ALREADY_REDEEMED') {
+            sendJson(res, 409, { error: '该卡密已被使用，无法重复兑换。' });
+            return;
+          }
+          throw err;
+        }
+        return;
+      }
+
+      if (isRead && pathname === '/api/admin/codes') {
+        if (!isAdminAuthorized(req)) {
+          sendJson(res, 401, { error: '需要管理员密钥。' });
+          return;
+        }
+        const limit = Number(url.searchParams.get('limit') || 60);
+        sendJson(res, 200, { ok: true, presets: CODE_PRESETS, codes: listRedeemCodes(db, limit) }, headOnly);
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/admin/codes/generate') {
+        if (!isAdminAuthorized(req)) {
+          sendJson(res, 401, { error: '需要管理员密钥。' });
+          return;
+        }
+        const body = await readJsonBody(req);
+        const preset = CODE_PRESETS.find((p) => p.id === body.presetId) || CODE_PRESETS[0];
+        const count = Math.max(1, Math.min(100, Math.round(Number(body.count) || 1)));
+        const amountUnits = body.amountUnits !== undefined ? Number(body.amountUnits) : preset.amountUnits;
+        const upgradeToPro = body.upgradeToPro !== undefined ? Boolean(body.upgradeToPro) : preset.upgradeToPro;
+        const label = String(body.label || preset.label);
+        const note = String(body.note ?? preset.note ?? '');
+        const codes = createRedeemCodes(db, {
+          count,
+          planId: preset.id,
+          label,
+          amountUnits,
+          upgradeToPro,
+          note,
+        });
+        sendJson(res, 201, { ok: true, codes });
         return;
       }
 

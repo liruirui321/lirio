@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,6 +43,21 @@ export function openDatabase(dbPath = process.env.LIRIO_DB_PATH || path.join(__d
     );
 
     CREATE INDEX IF NOT EXISTS idx_ledger_user_created ON ledger(user_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS redeem_codes (
+      code TEXT PRIMARY KEY,
+      plan_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      amount_units INTEGER NOT NULL,
+      upgrade_to_pro INTEGER NOT NULL DEFAULT 1,
+      note TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      redeemed_by TEXT,
+      redeemed_at INTEGER,
+      FOREIGN KEY(redeemed_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_redeem_codes_created ON redeem_codes(created_at DESC);
   `);
 
   return db;
@@ -248,6 +263,181 @@ export function deductUserBalance(
     const updated = serializeUser(getUserById(db, userId));
     const entry = serializeLedger(db.prepare('SELECT * FROM ledger WHERE id = ?').get(ledgerId));
     return { user: updated, entry, deductedUnits: actualDeduct };
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {}
+    throw err;
+  }
+}
+
+const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+function generateRandomCodeString(prefix = 'LIRIO') {
+  const block = () => {
+    let out = '';
+    for (let i = 0; i < 4; i++) {
+      out += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
+    }
+    return out;
+  };
+  return `${prefix}-${block()}-${block()}-${block()}`;
+}
+
+export function normalizeRedeemCode(code) {
+  return String(code || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+export function serializeRedeemCode(row) {
+  if (!row) return null;
+  return {
+    code: row.code,
+    planId: row.plan_id,
+    label: row.label,
+    amountUnits: Number(row.amount_units),
+    upgradeToPro: Number(row.upgrade_to_pro) === 1,
+    note: row.note || '',
+    createdAt: Number(row.created_at),
+    redeemedBy: row.redeemed_by || null,
+    redeemedByEmail: row.redeemed_by_email || null,
+    redeemedAt: row.redeemed_at ? Number(row.redeemed_at) : null,
+  };
+}
+
+export function createRedeemCodes(
+  db,
+  {
+    count = 1,
+    planId = 'pro_99',
+    label = '¥99 买断卡密（含 ¥10 余额）',
+    amountUnits = 100000,
+    upgradeToPro = true,
+    note = '',
+    prefix = 'LIRIO',
+    exactCodes = null,
+  } = {},
+) {
+  const now = Date.now();
+  const stmt = db.prepare(
+    `INSERT INTO redeem_codes (code, plan_id, label, amount_units, upgrade_to_pro, note, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const created = [];
+  if (Array.isArray(exactCodes) && exactCodes.length) {
+    for (const raw of exactCodes) {
+      const code = normalizeRedeemCode(raw);
+      if (!code) continue;
+      stmt.run(code, planId, label, Math.max(0, Math.round(amountUnits)), upgradeToPro ? 1 : 0, note, now);
+      created.push(
+        serializeRedeemCode({
+          code,
+          plan_id: planId,
+          label,
+          amount_units: Math.max(0, Math.round(amountUnits)),
+          upgrade_to_pro: upgradeToPro ? 1 : 0,
+          note,
+          created_at: now,
+          redeemed_by: null,
+          redeemed_at: null,
+        }),
+      );
+    }
+    return created;
+  }
+
+  const targetCount = Math.max(1, Math.min(100, Math.round(Number(count) || 1)));
+  for (let i = 0; i < targetCount; i++) {
+    let code = '';
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const candidate = generateRandomCodeString(prefix);
+      const exists = db.prepare('SELECT 1 FROM redeem_codes WHERE code = ?').get(candidate);
+      if (!exists) {
+        code = candidate;
+        break;
+      }
+    }
+    if (!code) throw new Error('CODE_GENERATION_FAILED');
+    stmt.run(code, planId, label, Math.max(0, Math.round(amountUnits)), upgradeToPro ? 1 : 0, note, now + i);
+    created.push(
+      serializeRedeemCode({
+        code,
+        plan_id: planId,
+        label,
+        amount_units: Math.max(0, Math.round(amountUnits)),
+        upgrade_to_pro: upgradeToPro ? 1 : 0,
+        note,
+        created_at: now + i,
+        redeemed_by: null,
+        redeemed_at: null,
+      }),
+    );
+  }
+  return created;
+}
+
+export function listRedeemCodes(db, limit = 60) {
+  const safeLimit = Math.max(1, Math.min(500, Number(limit) || 60));
+  const rows = db
+    .prepare(
+      `SELECT rc.*, u.email AS redeemed_by_email
+       FROM redeem_codes rc
+       LEFT JOIN users u ON rc.redeemed_by = u.id
+       ORDER BY rc.created_at DESC
+       LIMIT ?`,
+    )
+    .all(safeLimit);
+  return rows.map(serializeRedeemCode);
+}
+
+export function redeemCodeForUser(db, { userId, rawCode }) {
+  const code = normalizeRedeemCode(rawCode);
+  if (!code) throw new Error('INVALID_CODE');
+  const now = Date.now();
+  const ledgerId = randomUUID();
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const user = getUserById(db, userId);
+    if (!user) throw new Error('USER_NOT_FOUND');
+
+    const row = db.prepare('SELECT * FROM redeem_codes WHERE code = ?').get(code);
+    if (!row) throw new Error('CODE_NOT_FOUND');
+    if (row.redeemed_by || row.redeemed_at) throw new Error('CODE_ALREADY_REDEEMED');
+
+    const claim = db
+      .prepare('UPDATE redeem_codes SET redeemed_by = ?, redeemed_at = ? WHERE code = ? AND redeemed_by IS NULL')
+      .run(userId, now, code);
+    if (!claim || claim.changes !== 1) throw new Error('CODE_ALREADY_REDEEMED');
+
+    const units = Math.max(0, Math.round(Number(row.amount_units) || 0));
+    const newBalance = Number(user.balance_units) + units;
+    const newRecharged = Number(user.total_recharged_units) + units;
+    const newTier = Number(row.upgrade_to_pro) === 1 ? 'pro' : user.tier;
+
+    db.prepare(
+      'UPDATE users SET balance_units = ?, total_recharged_units = ?, tier = ? WHERE id = ?',
+    ).run(newBalance, newRecharged, newTier, userId);
+
+    const ledgerNote = row.note ? `${row.note} · 卡密 ${code}` : `卡密 ${code}`;
+    db.prepare(
+      `INSERT INTO ledger (id, user_id, kind, feature, provider, model, input_units, output_units, amount_units, balance_after_units, note, created_at)
+       VALUES (?, ?, 'recharge', ?, 'redeem', 'redeem-code', 0, 0, ?, ?, ?, ?)`,
+    ).run(ledgerId, userId, row.label || '卡密兑换', units, newBalance, ledgerNote, now);
+
+    db.exec('COMMIT');
+    const updatedUser = serializeUser(getUserById(db, userId));
+    const entry = serializeLedger(db.prepare('SELECT * FROM ledger WHERE id = ?').get(ledgerId));
+    const redeemedRow = db
+      .prepare(
+        `SELECT rc.*, u.email AS redeemed_by_email
+         FROM redeem_codes rc LEFT JOIN users u ON rc.redeemed_by = u.id WHERE rc.code = ?`,
+      )
+      .get(code);
+    return {
+      user: updatedUser,
+      entry,
+      redeemCode: serializeRedeemCode(redeemedRow),
+    };
   } catch (err) {
     try {
       db.exec('ROLLBACK');

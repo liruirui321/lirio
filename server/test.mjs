@@ -227,7 +227,37 @@ try {
   const verJson = await siteVer.json();
   assert.ok(verJson.platforms.macos && verJson.platforms.windows && verJson.platforms.android && verJson.platforms.ios);
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (10/10)');
+  // 11. Verify single-use redeem codes (admin generation + redemption + duplicate 409 + invalid 404)
+  const genRes = await req('POST', '/api/admin/codes/generate', { presetId: 'pro_99', count: 2 });
+  assert.equal(genRes.status, 201);
+  assert.equal(genRes.json.codes.length, 2);
+  const generatedCode = genRes.json.codes[0].code;
+  assert.ok(generatedCode.startsWith('LIRIO-'));
+
+  const listRes = await req('GET', '/api/admin/codes');
+  assert.equal(listRes.status, 200);
+  assert.ok(listRes.json.codes.some((c) => c.code === 'LIRIO-DEMO-9900-PRO1'));
+  assert.ok(listRes.json.codes.some((c) => c.code === generatedCode));
+
+  const badRedeem = await req('POST', '/api/billing/redeem', { code: 'LIRIO-NONE-0000-0000' }, token);
+  assert.equal(badRedeem.status, 404);
+
+  const beforeBal = refilled.user.balanceUnits;
+  const goodRedeem = await req(
+    'POST',
+    '/api/billing/redeem',
+    { code: `  ${generatedCode.toLowerCase()}  ` },
+    token,
+  );
+  assert.equal(goodRedeem.status, 200);
+  assert.equal(goodRedeem.json.user.balanceUnits, beforeBal + 100000);
+  assert.equal(goodRedeem.json.user.tier, 'pro');
+  assert.equal(goodRedeem.json.redeemCode.redeemedBy, userId);
+
+  const dupRedeem = await req('POST', '/api/billing/redeem', { code: generatedCode }, token);
+  assert.equal(dupRedeem.status, 409);
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (11/11)');
 } finally {
   server.close();
 }

@@ -2885,6 +2885,27 @@ textarea:focus { outline: none; }
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
+.redeem-code-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.redeem-code-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.redeem-code-row input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.redeem-code-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .recharge-pack-btn {
   padding: 10px 10px !important;
   border-radius: 12px !important;

@@ -5,13 +5,12 @@ import { readTextFile, writeFile } from '@tauri-apps/plugin-fs';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import type { Accent } from '../../services/corpusService';
 import {
-  DEFAULT_RECHARGE_PACKS,
   fetchBillingLedger,
   formatYuan,
   getAccountState,
   loginAccount,
   logoutAccount,
-  rechargeAccount,
+  redeemCode,
   refreshAccountMe,
   registerAccount,
   subscribeAccount,
@@ -96,6 +95,7 @@ export function GlobalSettingsModal({
   const [nickname, setNickname] = useState('');
   const [showServerUrl, setShowServerUrl] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
+  const [redeemInput, setRedeemInput] = useState('');
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [ledgerBusy, setLedgerBusy] = useState(false);
 
@@ -202,14 +202,20 @@ export function GlobalSettingsModal({
     }
   };
 
-  const handleRecharge = async (packageId: string) => {
+  const handleRedeemCode = async () => {
+    const code = redeemInput.trim();
+    if (!code) {
+      setErrorMsg('请输入卡密兑换码。');
+      return;
+    }
     setAuthBusy(true);
     setErrorMsg('');
     setStatusMsg('');
     try {
-      const res = await rechargeAccount(packageId);
+      const res = await redeemCode(code);
       setLedger(res.ledger || []);
-      setStatusMsg(`+${formatYuan(res.entry.amountUnits, 2)}`);
+      setRedeemInput('');
+      setStatusMsg(`兑换成功 +${formatYuan(res.entry.amountUnits, 2)}`);
     } catch (e) {
       setErrorMsg(String(e));
     } finally {
@@ -488,19 +494,33 @@ export function GlobalSettingsModal({
                       </div>
                     </div>
 
-                    <div className="account-recharge-grid">
-                      {DEFAULT_RECHARGE_PACKS.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className="recharge-pack-btn"
+                    <div className="redeem-code-wrap">
+                      <div className="redeem-code-row">
+                        <input
+                          type="text"
+                          value={redeemInput}
+                          onChange={(e) => setRedeemInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !authBusy) {
+                              e.preventDefault();
+                              void handleRedeemCode();
+                            }
+                          }}
+                          placeholder="输入卡密兑换码（如 LIRIO-XXXX-XXXX-XXXX）"
+                          spellCheck={false}
+                          autoCapitalize="characters"
                           disabled={authBusy}
-                          onClick={() => void handleRecharge(p.id)}
+                        />
+                        <button
+                          type="button"
+                          className="primary-btn"
+                          disabled={authBusy || !redeemInput.trim()}
+                          onClick={() => void handleRedeemCode()}
                         >
-                          <strong>¥{p.payYuan}</strong>
-                          <small>{p.bonusYuan > 0 ? `+¥${p.bonusYuan}` : '按量'}</small>
+                          兑换
                         </button>
-                      ))}
+                      </div>
+                      <div className="sub">支持 ¥99 买断激活码与余额充值码，兑换后立即到账</div>
                     </div>
                   </div>
 
