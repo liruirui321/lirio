@@ -48,8 +48,8 @@ import {
   IconLibrary,
   IconLirioMark,
   IconMoon,
-  IconSettings,
   IconSun,
+  IconUser,
   IconWave,
 } from './components/Icons';
 
@@ -514,42 +514,38 @@ export default function App() {
           </span>
         )}
 
-        <button
-          type="button"
-          className={`account-topbar-pill${
-            accountState.user && accountState.aiMode === 'pro_balance' && accountState.user.balanceUnits < 10000
-              ? ' low'
-              : ''
-          }`}
-          title="选择官方 API 余额模式或自配置 Key"
-          onClick={() => {
-            setSettingsTab('ai');
-            setSettingsOpen(true);
-          }}
-        >
-          {accountState.aiMode === 'pro_balance'
-            ? accountState.user
-              ? `官方 API · ${formatYuan(accountState.user.balanceUnits, 2)}`
-              : '官方 API · 去登录'
-            : '自配置 Key'}
-        </button>
-
-        <button
-          className={`icon-btn${settingsOpen ? ' active' : ''}`}
-          title="用户设置（AI 服务与数据备份）"
-          aria-label="用户设置"
-          onClick={() => {
-            setSettingsTab('ai');
-            setSettingsOpen(true);
-          }}
-        >
-          <IconSettings size={17} />
-        </button>
+        {accountState.aiMode === 'pro_balance' && accountState.user ? (
+          <button
+            type="button"
+            className={`account-topbar-pill${accountState.user.balanceUnits < 10000 ? ' low' : ''}`}
+            title="个人账号、余额与设置"
+            aria-label="个人账号与设置"
+            onClick={() => {
+              setSettingsTab('ai');
+              setSettingsOpen(true);
+            }}
+          >
+            <IconUser size={15} />
+            <span>{formatYuan(accountState.user.balanceUnits, 2)}</span>
+          </button>
+        ) : (
+          <button
+            className={`icon-btn${settingsOpen ? ' active' : ''}`}
+            title="账号与设置"
+            aria-label="账号与设置"
+            onClick={() => {
+              setSettingsTab('ai');
+              setSettingsOpen(true);
+            }}
+          >
+            <IconUser size={17} />
+          </button>
+        )}
 
         <button
           className="icon-btn"
-          title={theme === 'light' ? '切换至夜间护眼模式' : '切换至白天暖纸模式'}
-          aria-label="切换日夜主题"
+          title={theme === 'light' ? '切换深色' : '切换浅色'}
+          aria-label="切换主题"
           onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
         >
           {theme === 'light' ? <IconMoon size={17} /> : <IconSun size={17} />}

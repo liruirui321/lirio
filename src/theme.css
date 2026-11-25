@@ -2525,7 +2525,7 @@ textarea:focus { outline: none; }
 }
 
 .global-settings-modal {
-  max-width: 640px;
+  max-width: 500px;
   max-height: 86vh;
   overflow-y: auto;
 }
@@ -2533,6 +2533,21 @@ textarea:focus { outline: none; }
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.settings-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.settings-mode-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+.settings-rate-tip {
+  font-size: 11px;
+  color: var(--subtle);
 }
 .settings-section-title {
   font-size: 12px;
@@ -2704,7 +2719,10 @@ textarea:focus { outline: none; }
 
 /* ---------- Pro Account, Balance & Billing Ledger ---------- */
 .account-topbar-pill {
-  padding: 5px 12px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px !important;
   border-radius: 999px !important;
   border: 1px solid var(--line-strong) !important;
   background: var(--card-bg) !important;
