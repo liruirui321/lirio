@@ -423,13 +423,18 @@ pub async fn speak_tts(
 
         if prov != "macos" {
             // 1. Prefer persistent Python edge-tts worker (zero cold-start latency)
-            let neural_voice = match accent.as_str() {
+            let default_neural_voice = match accent.as_str() {
                 "uk" => "en-GB-SoniaNeural",
                 "us" => "en-US-AndrewMultilingualNeural",
                 "au" => "en-AU-NatashaNeural",
                 "in" => "en-IN-NeerjaNeural",
                 _ => "en-GB-SoniaNeural",
             };
+            let neural_voice = voice
+                .as_deref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty() && s.contains("Neural"))
+                .unwrap_or(default_neural_voice);
             let mp3_path: PathBuf = cache.join(format!("speak-tts-{id}.mp3"));
             if let Ok(bytes) = synth_via_persistent_edge_worker(&trimmed, neural_voice, &mp3_path) {
                 return Ok(CorpusAudioResult {

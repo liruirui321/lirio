@@ -10,6 +10,8 @@ export type ProviderId = 'deepseek' | 'gemini' | 'openai' | 'ollama' | 'local';
 export type TtsProviderId = 'edge' | 'openai' | 'macos';
 export type AsrProviderId = 'local_whisper' | 'openai';
 export type SpeakMode = 'companion' | 'examiner';
+export type CompanionPersonaId = 'clara' | 'noah' | 'oliver';
+export type CallViewMode = 'chat' | 'phone';
 export type IeltsPart = 'part1' | 'part2' | 'part3';
 export type IeltsCategory = 'new' | 'core' | 'retained' | 'overseas';
 
@@ -85,6 +87,7 @@ export interface PracticedTopicStat {
 export interface SpeakSessionRecord {
   id: string;
   mode: SpeakMode;
+  personaId?: CompanionPersonaId;
   topicId: string;
   topicTitle: string;
   timestamp: number;
@@ -122,6 +125,84 @@ export interface SpeakPersistedState {
   decks: IeltsDeck[];
   activeDeckId: string;
   practicedTopics?: Record<string, PracticedTopicStat>;
+  activePersonaId?: CompanionPersonaId;
+  callViewMode?: CallViewMode;
+}
+
+export interface CompanionPersona {
+  id: CompanionPersonaId;
+  name: string;
+  tag: string;
+  accent: Accent;
+  edgeVoice: string;
+  openaiVoice: string;
+  stylePrompt: string;
+  openers: Record<string, string>;
+  returningOpener: (hint?: string) => string;
+}
+
+export const COMPANION_PERSONAS: CompanionPersona[] = [
+  {
+    id: 'clara',
+    name: 'Clara',
+    tag: '美式 · 温暖轻松',
+    accent: 'us',
+    edgeVoice: 'en-US-AvaMultilingualNeural',
+    openaiVoice: 'shimmer',
+    stylePrompt:
+      'You are warm, lively, and genuinely empathetic. React naturally with light conversational touches ("Oh nice,", "Wait, really?", "Totally."), keep your pacing breezy, and make the caller feel completely at ease.',
+    openers: {
+      daily: "Hey! How's your day treating you so far? Anything fun or weird happen today?",
+      academic: "Hey! Tell me what you've been diving into lately—any research or study plans coming up?",
+      work: "Hey, good to hear from you! How's work feeling this week—busy or pretty chill?",
+    },
+    returningOpener: (hint) =>
+      hint
+        ? `Hey, good to hear from you again! How's ${hint} been going lately?`
+        : "Hey! Good to catch up again. What's been on your mind since we last talked?",
+  },
+  {
+    id: 'noah',
+    name: 'Noah',
+    tag: '美式 · 干练直率',
+    accent: 'us',
+    edgeVoice: 'en-US-AndrewMultilingualNeural',
+    openaiVoice: 'echo',
+    stylePrompt:
+      'You are sharp, grounded, and curious—like a thoughtful friend in tech or grad school. Keep things punchy and real, gently push back or ask "Wait, why?" when interesting, and skip fluff.',
+    openers: {
+      daily: "Hey, what's up? Anything interesting catch your attention today?",
+      academic: "Hey! What problem are you wrestling with lately in your research or reading?",
+      work: "Hey there. How are things moving on your projects right now—smooth sailing or chaos?",
+    },
+    returningOpener: (hint) =>
+      hint
+        ? `Hey, welcome back. Still thinking about ${hint}, or onto something new?`
+        : "Hey, good to talk again. Pick up where we left off, or start somewhere fresh?",
+  },
+  {
+    id: 'oliver',
+    name: 'Oliver',
+    tag: '英式 · 温和沉稳',
+    accent: 'uk',
+    edgeVoice: 'en-GB-RyanNeural',
+    openaiVoice: 'fable',
+    stylePrompt:
+      'You are a calm, articulate British friend with gentle dry humor. Speak at an unhurried, clear pace with natural UK phrasing ("Right,", "Fair enough,", "Mind you,"), keeping turns relaxed and conversational.',
+    openers: {
+      daily: "Hello there! How's your day shaping up? Done anything nice so far?",
+      academic: "Hello! Always curious what you're working through at the moment—anything exciting in your studies?",
+      work: "Hello, lovely to chat! How's the week been treating you on the work front?",
+    },
+    returningOpener: (hint) =>
+      hint
+        ? `Hello again! How have you been getting on with ${hint} lately?`
+        : "Hello again, lovely to catch up! How have things been since our last chat?",
+  },
+];
+
+export function getCompanionPersona(id?: string): CompanionPersona {
+  return COMPANION_PERSONAS.find((p) => p.id === id) || COMPANION_PERSONAS[0];
 }
 
 export const PROVIDER_META: { id: ProviderId; label: string; hint: string }[] = [
@@ -222,13 +303,15 @@ const DEFAULT_CONFIG: SpeakConfig = {
   speechVoice: 'alloy',
 };
 
-const DEFAULT_MEMORY: UserMemoryProfile = {
+export const EMPTY_USER_MEMORY: UserMemoryProfile = {
   aboutMe: [],
   habits: [],
   recurringTopics: [],
   targetPhrases: [],
   updatedAt: 0,
 };
+
+const DEFAULT_MEMORY: UserMemoryProfile = EMPTY_USER_MEMORY;
 
 const speakListeners = new Set<(state: SpeakPersistedState) => void>();
 
@@ -271,6 +354,11 @@ export function loadSpeakState(): SpeakPersistedState {
       const speechMode: 'local' | 'api' =
         rawCfg.speechMode === 'api' || (!rawCfg.speechMode && rawCfg.ttsProvider === 'openai') ? 'api' : 'local';
 
+      const activePersonaId: CompanionPersonaId = COMPANION_PERSONAS.some((p) => p.id === parsed.activePersonaId)
+        ? parsed.activePersonaId
+        : 'clara';
+      const callViewMode: CallViewMode = parsed.callViewMode === 'phone' ? 'phone' : 'chat';
+
       return {
         config: {
           ...DEFAULT_CONFIG,
@@ -288,6 +376,8 @@ export function loadSpeakState(): SpeakPersistedState {
         decks,
         activeDeckId,
         practicedTopics,
+        activePersonaId,
+        callViewMode,
       };
     }
   } catch {
@@ -300,6 +390,8 @@ export function loadSpeakState(): SpeakPersistedState {
     decks: [...BUILTIN_IELTS_DECKS],
     activeDeckId: BUILTIN_IELTS_DECKS[0].id,
     practicedTopics: {},
+    activePersonaId: 'clara',
+    callViewMode: 'chat',
   };
 }
 
@@ -678,23 +770,35 @@ interface TtsResult {
   source: string;
 }
 
-export async function synthesizeSpeech(text: string, accent: Accent): Promise<string> {
+export async function synthesizeSpeech(
+  text: string,
+  accent: Accent,
+  voiceOverride?: { accent?: Accent; edgeVoice?: string; openaiVoice?: string },
+): Promise<string> {
   const { config } = loadSpeakState();
+  const effectiveAccent = voiceOverride?.accent || accent;
   const acct = getAccountState();
   if (acct.aiMode === 'pro_balance' && acct.proCloudSpeech) {
-    return proxyTts(text, accent, config.speechVoice, '云端语音合成');
+    return proxyTts(
+      text,
+      effectiveAccent,
+      voiceOverride?.openaiVoice || config.speechVoice,
+      '云端语音合成',
+    );
   }
   const useCustomApi = config.speechMode === 'api';
   const apiKey = (config.speechApiKey || '').trim();
   const baseUrl = (config.speechBaseUrl || '').trim() || 'https://api.openai.com/v1';
   const res = await invoke<TtsResult>('speak_tts', {
     text,
-    accent,
+    accent: effectiveAccent,
     provider: useCustomApi ? 'custom' : config.ttsProvider === 'macos' ? 'macos' : 'edge',
     apiKey: useCustomApi ? apiKey || null : null,
     baseUrl,
     model: config.speechModel || 'tts-1',
-    voice: config.speechVoice || 'alloy',
+    voice: useCustomApi
+      ? voiceOverride?.openaiVoice || config.speechVoice || 'alloy'
+      : voiceOverride?.edgeVoice || config.speechVoice || 'alloy',
   });
   const blob = new Blob([new Uint8Array(res.bytes)], { type: res.mime || 'audio/mpeg' });
   return URL.createObjectURL(blob);
@@ -892,16 +996,54 @@ function formatMemoryForPrompt(memory: UserMemoryProfile): string {
   return `\nLong-term memory about this user (use naturally like a friend who remembers them—never recite it mechanically):\n${lines.join('\n')}`;
 }
 
-function buildCompanionSystemPrompt(topicGuide: string, memory: UserMemoryProfile): string {
+export function buildCompanionOpener(
+  persona: CompanionPersona,
+  topicId: string,
+  memory: UserMemoryProfile,
+  opts?: { incognito?: boolean; lastSession?: SpeakSessionRecord },
+): string {
+  const fallbackTopic = SPEAK_TOPICS.find((t) => t.id === topicId) || SPEAK_TOPICS[0];
+  if (opts?.incognito) {
+    return persona.openers[topicId] || fallbackTopic.opener;
+  }
+
+  if (topicId === 'daily') {
+    const candidates = [
+      memory.recurringTopics[0],
+      memory.targetPhrases[0],
+      opts?.lastSession?.topicTitle,
+    ];
+    const cleanEnglishHint = candidates
+      .map((c) => String(c || '').trim())
+      .find((c) => c.length >= 2 && c.length <= 48 && !/[\u4e00-\u9fff]/.test(c));
+    if (cleanEnglishHint) {
+      return persona.returningOpener(cleanEnglishHint);
+    }
+    if (memory.aboutMe.length + memory.recurringTopics.length > 0 || opts?.lastSession) {
+      return persona.returningOpener();
+    }
+  }
+
+  return persona.openers[topicId] || fallbackTopic.opener;
+}
+
+function buildCompanionSystemPrompt(
+  topicGuide: string,
+  memory: UserMemoryProfile,
+  persona?: CompanionPersona,
+): string {
+  const identity = persona
+    ? `Your name is ${persona.name}. ${persona.stylePrompt}`
+    : 'You are a warm, natural bilingual speaking companion on a live voice call inside Lirio.';
   return [
-    'You are a warm, natural bilingual speaking companion on a live voice call inside Lirio (inspired by Soyas).',
+    `${identity} You are on a live phone call inside Lirio.`,
     `Context: ${topicGuide}`,
     formatMemoryForPrompt(memory),
     'Rules:',
-    '1. Speak like a patient, attentive friend on a real phone call—NOT a teacher or customer support bot.',
-    '2. The user may code-switch (mix Chinese words/phrases into English when stuck). NEVER interrupt, scold, or lecture about grammar.',
-    '3. Understand their Chinese+English meaning seamlessly, react genuinely, and naturally weave the idiomatic English phrasing into your reply.',
-    '4. Keep every spoken turn concise (1 to 3 short natural sentences) and end with a light follow-up question.',
+    '1. Speak like a real friend on a voice call—NOT a teacher, textbook, or customer support bot.',
+    '2. Start or respond with natural spoken reactions when fitting ("Oh nice,", "Right,", "Honestly,", "Wait—") and keep every spoken turn tight (1 to 2 crisp, natural sentences plus a light follow-up).',
+    '3. The user may code-switch (mix Chinese words/phrases into English when stuck). NEVER interrupt, scold, or lecture about grammar.',
+    '4. Understand their Chinese+English meaning seamlessly, react genuinely, and naturally weave the idiomatic English phrasing into your reply.',
     '5. Output plain spoken English only (no markdown, no bullets, no emojis, no stage directions).',
   ]
     .filter(Boolean)
@@ -1012,10 +1154,11 @@ export async function generateCompanionReply(
   turns: SpeakTurn[],
   memory: UserMemoryProfile,
   customTopicGuide?: string,
+  persona?: CompanionPersona,
 ): Promise<string> {
   const topic = SPEAK_TOPICS.find((t) => t.id === topicId) || SPEAK_TOPICS[0];
   const guide = customTopicGuide?.trim() ? customTopicGuide : topic.guide;
-  const system = buildCompanionSystemPrompt(guide, memory);
+  const system = buildCompanionSystemPrompt(guide, memory, persona);
   const messages = [
     { role: 'system', content: system },
     ...turns.slice(-16).map((t) => ({ role: t.role, content: t.text })),

@@ -328,3 +328,19 @@ export const IconLirioMark = ({ size = 24, ...p }: IconProps) => {
     </svg>
   );
 };
+
+export const IconPhone = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M5.5 4.5h3.2l1.6 4.1-2.1 1.7a12.5 12.5 0 0 0 5.5 5.5l1.7-2.1 4.1 1.6v3.2a1.8 1.8 0 0 1-1.9 1.8C10 19.9 4.1 14 3.7 6.4A1.8 1.8 0 0 1 5.5 4.5Z" />
+  </svg>
+);
+
+export const IconIncognito = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M3.5 11.5h17" />
+    <path d="M6.5 11.5 8 6.5a1.5 1.5 0 0 1 1.4-1h5.2a1.5 1.5 0 0 1 1.4 1l1.5 5" />
+    <circle cx="8.5" cy="16.2" r="2.3" />
+    <circle cx="15.5" cy="16.2" r="2.3" />
+    <path d="M10.8 16.2h2.4" />
+  </svg>
+);

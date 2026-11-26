@@ -3,12 +3,15 @@ import { invoke } from '@tauri-apps/api/core';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import {
   IconBookmark,
+  IconChat,
   IconCheck,
   IconClipboard,
   IconClose,
+  IconIncognito,
   IconKeyboard,
   IconMic,
   IconPause,
+  IconPhone,
   IconPlus,
   IconSend,
   IconSettings,
@@ -19,15 +22,19 @@ import {
   IconVolume,
 } from '../Icons';
 import {
+  COMPANION_PERSONAS,
+  EMPTY_USER_MEMORY,
   SPEAK_TOPICS,
   VadVoiceRecorder,
   addPhraseToWordModule,
+  buildCompanionOpener,
   buildExaminerOpener,
   buildFullMockQueue,
   findLinkedPart3,
   generateCompanionReply,
   generateExaminerReply,
   generateSessionTakeaways,
+  getCompanionPersona,
   getTopWordMistakesForSpeak,
   loadSpeakState,
   mergeMemory,
@@ -39,6 +46,9 @@ import {
   subscribeSpeakState,
   synthesizeSpeech,
   transcribeVoice,
+  type CallViewMode,
+  type CompanionPersona,
+  type CompanionPersonaId,
   type IeltsDeck,
   type IeltsPart,
   type IeltsQuestionItem,
@@ -81,7 +91,16 @@ export function SpeakCompanion({
   const [libraryTab, setLibraryTab] = useState<'decks' | 'memory'>('decks');
   const [speakMode, setSpeakMode] = useState<SpeakMode>('companion');
   const [topicId, setTopicId] = useState<string>(SPEAK_TOPICS[0].id);
+  const [incognito, setIncognito] = useState<boolean>(false);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>(() => activeDeck?.items[0]?.id || '');
+
+  const activePersonaId: CompanionPersonaId = persisted.activePersonaId || 'clara';
+  const activePersona = useMemo(() => getCompanionPersona(activePersonaId), [activePersonaId]);
+  const callViewMode: CallViewMode = persisted.callViewMode === 'phone' ? 'phone' : 'chat';
+  const latestCompanionSession = useMemo(
+    () => persisted.sessions.find((s) => s.mode === 'companion' && Array.isArray(s.turns) && s.turns.length > 0) || null,
+    [persisted.sessions],
+  );
 
   // Live voice call state
   const [callActive, setCallActive] = useState<boolean>(false);
@@ -168,6 +187,10 @@ export function SpeakCompanion({
   const memoryRef = useRef<UserMemoryProfile>(memory);
   const speakModeRef = useRef<SpeakMode>(speakMode);
   const topicIdRef = useRef<string>(topicId);
+  const personaRef = useRef<CompanionPersona>(activePersona);
+  const incognitoRef = useRef<boolean>(incognito);
+  const activeSessionIdRef = useRef<string | null>(null);
+  const latestCompanionSessionRef = useRef<SpeakSessionRecord | null>(latestCompanionSession);
   const questionRef = useRef<IeltsQuestionItem | undefined>(activeQuestion);
   const part2DoneRef = useRef<boolean>(part2MonologueDone);
   const mutedRef = useRef<boolean>(muted);
@@ -179,6 +202,7 @@ export function SpeakCompanion({
   const part2MonologueRef = useRef<string>('');
   const handleNextMockStageRef = useRef<() => Promise<void>>(async () => {});
   const handleHangUpRef = useRef<() => Promise<void>>(async () => {});
+  const handleOrbTapRef = useRef<() => void>(() => {});
   const externalContextRef = useRef<SpeakExternalContext | null>(externalContext);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playSeqRef = useRef<number>(0);
@@ -188,6 +212,9 @@ export function SpeakCompanion({
   useEffect(() => { memoryRef.current = memory; }, [memory]);
   useEffect(() => { speakModeRef.current = speakMode; }, [speakMode]);
   useEffect(() => { topicIdRef.current = topicId; }, [topicId]);
+  useEffect(() => { personaRef.current = activePersona; }, [activePersona]);
+  useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
+  useEffect(() => { latestCompanionSessionRef.current = latestCompanionSession; }, [latestCompanionSession]);
   useEffect(() => { questionRef.current = activeQuestion; }, [activeQuestion]);
   useEffect(() => { part2DoneRef.current = part2MonologueDone; }, [part2MonologueDone]);
   useEffect(() => { mockQueueRef.current = mockQueue; }, [mockQueue]);
@@ -274,9 +301,9 @@ export function SpeakCompanion({
     }
   }, [subView, stopShadowRecorder]);
 
-  // Pipelined sentence-by-sentence TTS for minimal first-byte latency
+  // Pipelined sentence-by-sentence TTS for minimal first-byte latency; returns false if interrupted
   const playTtsAndWait = useCallback(
-    async (text: string): Promise<void> => {
+    async (text: string, opts?: { usePersonaVoice?: boolean }): Promise<boolean> => {
       stopAudio();
       const seq = playSeqRef.current;
       const sentences = text
@@ -284,15 +311,24 @@ export function SpeakCompanion({
         .map((s) => s.trim())
         .filter(Boolean);
       const chunks = sentences.length > 0 ? sentences : [text.trim()].filter(Boolean);
-      if (!chunks.length) return;
+      if (!chunks.length) return true;
 
       const accent = configRef.current.accent;
-      let nextPromise: Promise<string> | null = synthesizeSpeech(chunks[0], accent);
+      const voiceOverride =
+        speakModeRef.current === 'companion' && opts?.usePersonaVoice !== false
+          ? {
+              accent: personaRef.current.accent,
+              edgeVoice: personaRef.current.edgeVoice,
+              openaiVoice: personaRef.current.openaiVoice,
+            }
+          : undefined;
+      let nextPromise: Promise<string> | null = synthesizeSpeech(chunks[0], accent, voiceOverride);
 
       for (let i = 0; i < chunks.length; i++) {
-        if (seq !== playSeqRef.current) return;
+        if (seq !== playSeqRef.current) return false;
         const currentPromise = nextPromise!;
-        nextPromise = i + 1 < chunks.length ? synthesizeSpeech(chunks[i + 1], accent) : null;
+        nextPromise =
+          i + 1 < chunks.length ? synthesizeSpeech(chunks[i + 1], accent, voiceOverride) : null;
 
         let url: string;
         try {
@@ -302,7 +338,7 @@ export function SpeakCompanion({
         }
         if (seq !== playSeqRef.current) {
           URL.revokeObjectURL(url);
-          return;
+          return false;
         }
 
         await new Promise<void>((resolve) => {
@@ -327,7 +363,9 @@ export function SpeakCompanion({
           audio.onerror = done;
           audio.play().catch(done);
         });
+        if (seq !== playSeqRef.current) return false;
       }
+      return seq === playSeqRef.current;
     },
     [stopAudio],
   );
@@ -437,8 +475,9 @@ export function SpeakCompanion({
               configRef.current,
               topicIdRef.current,
               nextTurns,
-              memoryRef.current,
+              incognitoRef.current ? EMPTY_USER_MEMORY : memoryRef.current,
               customGuide,
+              personaRef.current,
             );
         if (!callActiveRef.current) return;
         const aiTurn: SpeakTurn = {
@@ -452,8 +491,8 @@ export function SpeakCompanion({
         setTurns(afterAi);
 
         setCallPhase('ai_speaking');
-        await playTtsAndWait(reply);
-        if (!callActiveRef.current) return;
+        const finished = await playTtsAndWait(reply);
+        if (!callActiveRef.current || !finished) return;
         if (examinerRes?.action === 'next_part' && mockStepRef.current + 1 < mockQueueRef.current.length) {
           await handleNextMockStageRef.current();
         } else if (examinerRes?.action === 'end_test') {
@@ -480,8 +519,10 @@ export function SpeakCompanion({
       setPart2PrepLeft((prev) => {
         if (prev <= 1) {
           window.clearInterval(timer);
-          playTtsAndWait('Your one minute preparation time is up. Please begin speaking now.').then(() => {
-            if (callActiveRef.current) beginListeningTurn();
+          playTtsAndWait('Your one minute preparation time is up. Please begin speaking now.', {
+            usePersonaVoice: false,
+          }).then((finished) => {
+            if (callActiveRef.current && finished) beginListeningTurn();
           });
           return 0;
         }
@@ -540,6 +581,7 @@ export function SpeakCompanion({
       }
       stageStartTurnIdxRef.current = 0;
       part2MonologueRef.current = '';
+      activeSessionIdRef.current = null;
       setStatusMsg('');
       setPart2PrepLeft(60);
       setPart2TalkSec(0);
@@ -554,8 +596,10 @@ export function SpeakCompanion({
       } else if (externalContextRef.current) {
         opener = `Hey! You just finished listening to ${externalContextRef.current.title}. What stood out to you the most?`;
       } else {
-        const topic = SPEAK_TOPICS.find((t) => t.id === topicIdRef.current) || SPEAK_TOPICS[0];
-        opener = topic.opener;
+        opener = buildCompanionOpener(personaRef.current, topicIdRef.current, memoryRef.current, {
+          incognito: incognitoRef.current,
+          lastSession: latestCompanionSessionRef.current || undefined,
+        });
       }
 
       const openerTurn: SpeakTurn = {
@@ -573,12 +617,13 @@ export function SpeakCompanion({
       setSubView('call');
 
       setCallPhase('ai_speaking');
+      let finished = true;
       try {
-        await playTtsAndWait(opener);
+        finished = await playTtsAndWait(opener);
       } catch (e) {
         setStatusMsg('语音播报失败：' + String(e));
       }
-      if (!callActiveRef.current) return;
+      if (!callActiveRef.current || !finished) return;
 
       if (modeToUse === 'examiner' && qToUse?.part === 'part2') {
         setCallPhase('part2_prep');
@@ -657,12 +702,13 @@ export function SpeakCompanion({
     setTurns(nextTurns);
 
     setCallPhase('ai_speaking');
+    let finished = true;
     try {
-      await playTtsAndWait(opener);
+      finished = await playTtsAndWait(opener);
     } catch (e) {
       setStatusMsg('语音播报失败：' + String(e));
     }
-    if (!callActiveRef.current) return;
+    if (!callActiveRef.current || !finished) return;
 
     if (nextQ.part === 'part2') {
       setCallPhase('part2_prep');
@@ -788,6 +834,80 @@ export function SpeakCompanion({
     }
   }, [callPhase, examLaunchMode, drawnSet, activeDeck, activeQuestion, handleStartFullMock, handleStartCall, handleSkipPart2Prep, stopAudio, beginListeningTurn, processUserTurnInCall]);
 
+  useEffect(() => {
+    handleOrbTapRef.current = () => {
+      void handleOrbTap();
+    };
+  }, [handleOrbTap]);
+
+  // Global Space key shortcut during active call: instant barge-in or turn finish
+  useEffect(() => {
+    if (subView !== 'call' || !callActive) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable)
+      ) {
+        return;
+      }
+      if (callPhase === 'ai_speaking' || callPhase === 'part2_prep' || callPhase === 'listening') {
+        e.preventDefault();
+        handleOrbTapRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [subView, callActive, callPhase]);
+
+  const handleResumeSession = useCallback(
+    async (session: SpeakSessionRecord) => {
+      stopAudio();
+      await stopRecorder();
+      setMockQueue([]);
+      mockQueueRef.current = [];
+      setMockStep(0);
+      mockStepRef.current = 0;
+
+      setSpeakMode(session.mode);
+      speakModeRef.current = session.mode;
+      if (session.mode === 'companion') {
+        if (SPEAK_TOPICS.some((t) => t.id === session.topicId)) {
+          setTopicId(session.topicId);
+          topicIdRef.current = session.topicId;
+        }
+        const restoredPersona = getCompanionPersona(session.personaId);
+        personaRef.current = restoredPersona;
+        setIncognito(false);
+        incognitoRef.current = false;
+        updatePersisted((prev) => ({
+          ...prev,
+          activePersonaId: restoredPersona.id,
+          callViewMode: 'chat',
+        }));
+      } else {
+        updatePersisted((prev) => ({ ...prev, callViewMode: 'chat' }));
+      }
+
+      const restoredTurns = Array.isArray(session.turns) ? [...session.turns] : [];
+      activeSessionIdRef.current = session.id;
+      turnsRef.current = restoredTurns;
+      setTurns(restoredTurns);
+      setActiveReview(null);
+      setShadowResults({});
+      setStatusMsg('');
+      callActiveRef.current = true;
+      setCallActive(true);
+      setSubView('call');
+      await beginListeningTurn();
+    },
+    [stopAudio, stopRecorder, updatePersisted, beginListeningTurn],
+  );
+
   const handleHangUp = useCallback(async () => {
     const mockPartsLabel =
       mockQueueRef.current.length > 1
@@ -809,12 +929,23 @@ export function SpeakCompanion({
     stopAudio();
     await stopRecorder();
 
+    const modeNow = speakModeRef.current;
+    if (modeNow === 'companion' && incognitoRef.current) {
+      turnsRef.current = [];
+      setTurns([]);
+      activeSessionIdRef.current = null;
+      setStatusMsg('无痕对话已结束（未写入记忆与历史）');
+      return;
+    }
+
     const currentTurns = turnsRef.current;
     const userCount = currentTurns.filter((t) => t.role === 'user').length;
-    if (!userCount) return;
+    if (!userCount) {
+      activeSessionIdRef.current = null;
+      return;
+    }
 
     setReviewing(true);
-    const modeNow = speakModeRef.current;
     setStatusMsg(
       modeNow === 'examiner'
         ? '模考结束，考官正在生成 4 维度 Band 评分与逐题润色示范…'
@@ -833,9 +964,12 @@ export function SpeakCompanion({
           ? `${questionRef.current.part.toUpperCase()} · ${questionRef.current.topic}`
           : (SPEAK_TOPICS.find((t) => t.id === topicIdRef.current) || SPEAK_TOPICS[0]).title;
 
+      const resumedId = activeSessionIdRef.current;
+      activeSessionIdRef.current = null;
       const record: SpeakSessionRecord = {
-        id: `sp-${Date.now()}`,
+        id: resumedId || `sp-${Date.now()}`,
         mode: modeNow,
+        personaId: modeNow === 'companion' ? personaRef.current.id : undefined,
         topicId: modeNow === 'examiner' ? questionRef.current?.id || 'ielts' : topicIdRef.current,
         topicTitle,
         timestamp: Date.now(),
@@ -848,7 +982,7 @@ export function SpeakCompanion({
       updatePersisted((prev) => ({
         ...prev,
         memory: mergeMemory(prev.memory, memoryPatch),
-        sessions: [record, ...prev.sessions].slice(0, 60),
+        sessions: [record, ...prev.sessions.filter((x) => x.id !== record.id)].slice(0, 60),
         practicedTopics:
           sessionTopicIds.length > 0
             ? recordPracticedTopics(prev.practicedTopics, sessionTopicIds, ieltsScore?.overall)
@@ -952,6 +1086,11 @@ export function SpeakCompanion({
     setStatusMsg('已重新抽题');
   };
 
+  const personaOptions: SelectOption[] = useMemo(
+    () => COMPANION_PERSONAS.map((p) => ({ value: p.id, label: p.name, meta: p.tag })),
+    [],
+  );
+
   const topicOptions: SelectOption[] = useMemo(
     () => SPEAK_TOPICS.map((t) => ({ value: t.id, label: t.title })),
     [],
@@ -971,8 +1110,8 @@ export function SpeakCompanion({
   const phaseLabel =
     callPhase === 'ai_speaking'
       ? speakMode === 'examiner'
-        ? '考官提问中…'
-        : '正在说话…'
+        ? '考官提问中 · 点光球或按空格插话'
+        : `${activePersona.name} 说话中 · 点光球或按空格插话`
       : callPhase === 'part2_prep'
         ? `Cue Card 准备中 · ${part2PrepLeft}s（点光球提前开讲）`
         : callPhase === 'listening'
@@ -991,11 +1130,13 @@ export function SpeakCompanion({
               ? '思考中…'
               : speakMode === 'examiner'
                 ? '点击光球，开始雅思口语模考'
-                : '点击光球，拨通双语语音通话';
+                : incognito
+                  ? `点击光球，与 ${activePersona.name} 无痕通话`
+                  : `点击光球，与 ${activePersona.name} 语音通话`;
 
   const orbScale = callPhase === 'listening' ? 1 + micLevel * 0.25 : 1;
-  const inChatLayout = callActive || turns.length > 0;
-  const teacherLabel = speakMode === 'examiner' ? '考官' : '老师';
+  const showPhoneStage = !callActive && turns.length === 0 ? true : callActive && callViewMode === 'phone';
+  const teacherLabel = speakMode === 'examiner' ? '考官' : activePersona.name;
 
   return (
     <div className="speak-workspace">
@@ -1030,6 +1171,19 @@ export function SpeakCompanion({
           <div className="speak-context-pills">
             {speakMode === 'companion' ? (
               <>
+                <CustomSelect
+                  value={activePersona.id}
+                  options={personaOptions}
+                  disabled={callActive}
+                  minWidth={94}
+                  menuWidth={206}
+                  onChange={(v) =>
+                    updatePersisted((prev) => ({
+                      ...prev,
+                      activePersonaId: v as CompanionPersonaId,
+                    }))
+                  }
+                />
                 <CustomSelect
                   value={topicId}
                   options={topicOptions}
@@ -1078,6 +1232,19 @@ export function SpeakCompanion({
         )}
 
         <div className="speak-top-actions">
+          {speakMode === 'companion' && (
+            <button
+              type="button"
+              className={`icon-btn${incognito ? ' incognito-on' : ''}`}
+              title={incognito ? '无痕模式已开启：不读取记忆，结束不写入历史' : '无痕对话（不写入记忆与历史）'}
+              aria-label="无痕对话开关"
+              aria-pressed={incognito}
+              disabled={callActive}
+              onClick={() => setIncognito((v) => !v)}
+            >
+              <IconIncognito size={16} />
+            </button>
+          )}
           <button
             type="button"
             className={`icon-btn${subView === 'library' ? ' active' : ''}`}
@@ -1117,24 +1284,32 @@ export function SpeakCompanion({
         </div>
       )}
 
-      {/* VIEW 1: Fluid Orb Stage -> Left/Right Chat Layout when active */}
-      {subView === 'call' && !inChatLayout && (
+      {/* VIEW 1: Clean Phone / Idle Orb Stage <-> Left/Right Chat Bubble Stage */}
+      {subView === 'call' && showPhoneStage && (
         <div className="speak-call-stage">
-          {/* Part 2 Cue Card Floating Glass Card (Only in Examiner Single Part 2) */}
-          {speakMode === 'examiner' && activeQuestion?.part === 'part2' && examLaunchMode === 'single' && (
-            <div className="cue-card-float">
-              <div className="cue-card-badge">PART 2 · CUE CARD</div>
-              <h3>{activeQuestion.topic}</h3>
-              <ul>
-                {activeQuestion.prompts.map((p, i) => (
-                  <li key={i}>{p}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Part 2 Cue Card Floating Glass Card */}
+          {speakMode === 'examiner' &&
+            activeQuestion?.part === 'part2' &&
+            (callActive || examLaunchMode === 'single') && (
+              <div className="cue-card-float">
+                <div className="cue-card-badge">PART 2 · CUE CARD</div>
+                <h3>{activeQuestion.topic}</h3>
+                <ul>
+                  {activeQuestion.prompts.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
           {/* Centered Fluid Organic Orb */}
           <div className="fluid-orb-stage">
+            {callActive && speakMode === 'companion' && (
+              <div className="speak-phone-persona">
+                {activePersona.name}
+                {incognito ? ' · 无痕' : ''}
+              </div>
+            )}
             <button
               type="button"
               className={`fluid-orb-wrap ${callPhase}`}
@@ -1149,6 +1324,28 @@ export function SpeakCompanion({
             </button>
 
             <div className="speak-orb-status">{phaseLabel}</div>
+
+            {!callActive &&
+              turns.length === 0 &&
+              speakMode === 'companion' &&
+              !incognito &&
+              latestCompanionSession && (
+                <button
+                  type="button"
+                  className="speak-resume-chip"
+                  title="回到上一次聊天内容继续对话"
+                  onClick={() => void handleResumeSession(latestCompanionSession)}
+                >
+                  <IconChat size={13} />
+                  <span>
+                    继续上次：
+                    {latestCompanionSession.personaId
+                      ? `${getCompanionPersona(latestCompanionSession.personaId).name} · `
+                      : ''}
+                    {latestCompanionSession.topicTitle}
+                  </span>
+                </button>
+              )}
           </div>
 
           {/* Expandable Quiet Text Fallback */}
@@ -1184,6 +1381,17 @@ export function SpeakCompanion({
 
           {/* Minimal Floating Bottom Dock */}
           <div className="speak-bottom-dock">
+            {callActive && (
+              <button
+                type="button"
+                className={`dock-circle${muted ? ' active' : ''}`}
+                title={muted ? '取消静音' : '静音'}
+                aria-label="静音"
+                onClick={() => setMuted((m) => !m)}
+              >
+                {muted ? <IconPause size={16} /> : <IconMic size={16} />}
+              </button>
+            )}
             <button
               type="button"
               className={`dock-circle${showKeyboard ? ' active' : ''}`}
@@ -1193,11 +1401,33 @@ export function SpeakCompanion({
             >
               <IconKeyboard size={17} />
             </button>
+            {callActive && (
+              <>
+                <button
+                  type="button"
+                  className="dock-circle"
+                  title="切换到聊天气泡模式"
+                  aria-label="切换到聊天气泡模式"
+                  onClick={() => updatePersisted((prev) => ({ ...prev, callViewMode: 'chat' }))}
+                >
+                  <IconChat size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="dock-circle danger"
+                  title={incognito && speakMode === 'companion' ? '结束无痕通话' : '结束通话并生成复盘'}
+                  aria-label="挂断"
+                  onClick={handleHangUp}
+                >
+                  <IconStop size={15} />
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {subView === 'call' && inChatLayout && (
+      {subView === 'call' && !showPhoneStage && (
         <div className="speak-call-stage chat-active">
           {speakMode === 'examiner' && activeQuestion?.part === 'part2' && (callActive || examLaunchMode === 'single') && (
             <div className="cue-card-float compact">
@@ -1345,18 +1575,38 @@ export function SpeakCompanion({
                 <IconKeyboard size={15} />
               </button>
               {callActive ? (
+                <>
+                  <button
+                    type="button"
+                    className="dock-circle sm"
+                    title="切换到电话模式"
+                    aria-label="切换到电话模式"
+                    onClick={() => updatePersisted((prev) => ({ ...prev, callViewMode: 'phone' }))}
+                  >
+                    <IconPhone size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="dock-circle sm danger"
+                    title={incognito && speakMode === 'companion' ? '结束无痕通话' : '结束通话并生成复盘'}
+                    aria-label="挂断"
+                    onClick={handleHangUp}
+                  >
+                    <IconStop size={14} />
+                  </button>
+                </>
+              ) : (
                 <button
                   type="button"
-                  className="dock-circle sm danger"
-                  title="结束通话并生成复盘"
-                  aria-label="挂断"
-                  onClick={handleHangUp}
+                  className="dock-circle sm"
+                  title="开启新对话"
+                  aria-label="开启新对话"
+                  onClick={() => {
+                    activeSessionIdRef.current = null;
+                    setTurns([]);
+                  }}
                 >
-                  <IconStop size={14} />
-                </button>
-              ) : (
-                <button type="button" onClick={() => setTurns([])}>
-                  新对话
+                  <IconPlus size={15} />
                 </button>
               )}
             </div>
@@ -1369,10 +1619,26 @@ export function SpeakCompanion({
         <div className="corpus-panel speak-review">
           <div className="speak-review-head">
             <div>
-              <h2>{activeReview.topicTitle}</h2>
+              <h2>
+                {activeReview.mode === 'companion' && activeReview.personaId
+                  ? `${getCompanionPersona(activeReview.personaId).name} · `
+                  : ''}
+                {activeReview.topicTitle}
+              </h2>
               <p>{activeReview.summary}</p>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {activeReview.mode === 'companion' && activeReview.turns?.length > 0 && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="回到这场对话继续聊"
+                  aria-label="继续对话"
+                  onClick={() => void handleResumeSession(activeReview)}
+                >
+                  <IconChat size={16} />
+                </button>
+              )}
               <button onClick={() => setSubView('call')}>返回</button>
               <button
                 className="primary"
@@ -1534,7 +1800,9 @@ export function SpeakCompanion({
                     ) : (
                       <div key={t.id} className="speak-chat-row ai">
                         <div className="speak-chat-meta">
-                          {activeReview.mode === 'examiner' ? '考官' : '老师'}
+                          {activeReview.mode === 'examiner'
+                            ? '考官'
+                            : getCompanionPersona(activeReview.personaId).name}
                         </div>
                         <div className="speak-bubble ai">{t.text}</div>
                       </div>
@@ -1902,24 +2170,41 @@ export function SpeakCompanion({
                   >
                     <strong>
                       {s.mode === 'examiner' && s.ieltsScore ? `[Band ${s.ieltsScore.overall}] ` : ''}
+                      {s.mode === 'companion' && s.personaId
+                        ? `${getCompanionPersona(s.personaId).name} · `
+                        : ''}
                       {s.topicTitle} · {s.takeaways.length} 条表达
                     </strong>
                     <p>{s.summary}</p>
                     <small>{new Date(s.timestamp).toLocaleString()}</small>
                   </div>
-                  <button
-                    className="icon-btn"
-                    title="删除"
-                    aria-label="删除"
-                    onClick={() =>
-                      updatePersisted((prev) => ({
-                        ...prev,
-                        sessions: prev.sessions.filter((x) => x.id !== s.id),
-                      }))
-                    }
-                  >
-                    <IconTrash size={14} />
-                  </button>
+                  <div className="speak-history-actions">
+                    {s.mode === 'companion' && Array.isArray(s.turns) && s.turns.length > 0 && (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="回到上次对话继续聊"
+                        aria-label="继续对话"
+                        onClick={() => void handleResumeSession(s)}
+                      >
+                        <IconChat size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="删除"
+                      aria-label="删除"
+                      onClick={() =>
+                        updatePersisted((prev) => ({
+                          ...prev,
+                          sessions: prev.sessions.filter((x) => x.id !== s.id),
+                        }))
+                      }
+                    >
+                      <IconTrash size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
