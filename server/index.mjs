@@ -91,7 +91,7 @@ export const CODE_PRESETS = [
     label: '¥10 积分加油包（1,000 积分）',
     shortTitle: '1,000 积分加油包',
     badge: '按量消耗',
-    subtitle: '¥1 = 100 积分 · 长期有效',
+    subtitle: '按量消耗积分 · 长期有效',
     amountUnits: 100000, // 1,000 积分
     upgradeToPro: false,
     note: '积分加油包 1,000 积分',
@@ -624,9 +624,9 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
 
   <section class="panel" id="panel-users">
     <div class="rates">
-      <span>积分汇率：¥1 = 100 积分（按实际用量扣除整数积分）</span>
-      <span>本地语音、转写与音频切分：0 积分（免费，速度较慢）</span>
-      <span>云端语音（更快）：播音约 1–3 积分/句（15 积分/千字节）· 语音转写 0 积分</span>
+      <span>积分制：¥1 = 100 积分 · 按量消耗</span>
+      <span>本地模式：免费（速度较慢）</span>
+      <span>云端模式：响应更快（消耗积分）</span>
     </div>
     <div class="card">
       <div class="toolbar-row">

@@ -16,7 +16,7 @@ const FALLBACK_STORE = {
       label: '¥10 积分加油包（1,000 积分）',
       shortTitle: '1,000 积分加油包',
       badge: '按量消耗',
-      subtitle: '¥1 = 100 积分 · 长期有效',
+      subtitle: '按量消耗积分 · 长期有效',
       amountUnits: 100000,
       upgradeToPro: false,
     },
@@ -79,16 +79,16 @@ function getShopUrlForPlan(planId) {
 function getPackBullets(preset) {
   if (preset.id === 'pro_99') {
     return [
-      '解锁精听、词卡与本地离线语音/转写（3 台设备，0 积分免费但速度较慢）',
-      '含 1,000 积分，开启云端语音与转写响应更快，按实际用量扣除整数积分',
+      '解锁精听、词卡与本地离线语音（3 台设备，免费但较慢）',
+      '含 1,000 积分，云端对话与语音响应更快',
       '应用内支持问题与功能反馈',
     ];
   }
   const creditPoints = Math.round((Number(preset.amountUnits) || 0) / 100).toLocaleString('en-US');
   return [
-    `到账 ${creditPoints} 积分（¥1 = 100 积分）`,
+    `到账 ${creditPoints} 积分，长期有效`,
     '可用于口语陪练、雅思考官、云端极速语音与字幕精校',
-    '按实际用量扣除整数积分，长期有效（云端更快，本地 0 积分免费）',
+    '云端模式更快，本地模式免费',
   ];
 }
 

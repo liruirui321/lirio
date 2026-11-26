@@ -389,7 +389,7 @@ export function LicenseGateModal({
                         <strong>Lirio Pro · 永久版（含 1,000 积分）</strong>
                         <span>¥99</span>
                       </div>
-                      <small>一码永久解锁本人 3 台设备 + 专属提需求通道，本地语音与转写 0 积分免费（云端模式更快）</small>
+                      <small>一码永久解锁本人 3 台设备 + 专属提需求通道，本地模式永久免费（云端模式更快）</small>
                       <div className="buy-pack-btns">
                         {storeConfig?.settings?.shopUrlPro99 && (
                           <button

@@ -830,7 +830,7 @@ export function GlobalSettingsModal({
                     </button>
                   </div>
                   <div className="settings-rate-tip" style={{ textAlign: 'center' }}>
-                    新用户赠 50 积分 · ¥1 = 100 积分 · 本地免费
+                    新用户赠 50 积分 · 本地模式免费
                   </div>
                   <button
                     type="button"
@@ -934,12 +934,12 @@ export function GlobalSettingsModal({
 
                     <div className="settings-pricing-mini">
                       <div className="pricing-mini-row">
-                        <span>对话 / 精校</span>
-                        <span>约 1–2 积分 / 次（¥1 = 100 积分）</span>
+                        <span>计费方式</span>
+                        <span>按量消耗积分 · 长期有效</span>
                       </div>
                       <div className="pricing-mini-row">
-                        <span>语音与转写</span>
-                        <span>{account.proCloudSpeech ? '云端极速 · 播音约 1–3 积分/句（转写 0 积分）' : '本地免费 · 0 积分（速度较慢）'}</span>
+                        <span>语音模式</span>
+                        <span>{account.proCloudSpeech ? '云端模式（更快，消耗积分）' : '本地模式（免费，较慢）'}</span>
                       </div>
                     </div>
 
@@ -1142,7 +1142,7 @@ export function GlobalSettingsModal({
                     </div>
                     <label
                       className="settings-check-line"
-                      title="开启后使用云端语音播音与转写，响应更快（播音约 1–3 积分/句，转写 0 积分）；关闭后使用本地语音与转写，0 积分免费但速度较慢"
+                      title="开启后使用云端语音，响应更快；关闭后使用本地语音，免费但较慢"
                     >
                       <input
                         type="checkbox"
@@ -1153,7 +1153,7 @@ export function GlobalSettingsModal({
                     </label>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -4, lineHeight: 1.5 }}>
-                    开启后使用云端语音播音与转写，响应更快（播音约 1–3 积分/句，转写 0 积分）；关闭后使用本地转写与播音，0 积分免费但速度会慢一些。
+                    云端模式响应更快（消耗积分）；关闭后使用本地模式，免费但速度会慢一些。
                   </div>
 
                   <div className="ledger-section">
@@ -1562,19 +1562,16 @@ export function GlobalSettingsModal({
             {showGuide && (
               <div className="settings-guide-card">
                 <div className="guide-block">
-                  <strong>免费本地功能（0 积分）</strong>
+                  <strong>本地免费功能</strong>
                   <p>
-                    导入音频、自动断句、本地语音与转写、单词听写与错词本均本地运行，0 积分免费不限次（本地转写与播音速度会慢一些）。
+                    导入音频、自动断句、本地语音与转写、单词听写与错词本均免费不限次（本地速度会慢一些）。
                   </p>
                 </div>
                 <div className="guide-block">
-                  <strong>积分消耗参考（¥1 = 100 积分，1,000 积分约可用 60–200 场）</strong>
-                  <ul>
-                    <li>单句对话 / 听力诊断 / 字幕精校：约 1–2 积分 / 次</li>
-                    <li>双语陪练 + 复盘：约 5–20 积分 / 场</li>
-                    <li>雅思模考 + 评分报告：约 10–30 积分 / 场</li>
-                    <li>云端极速语音：播音约 1–3 积分 / 句，云端转写 0 积分（比本地响应更快）</li>
-                  </ul>
+                  <strong>积分说明</strong>
+                  <p>
+                    口语对话、雅思考官、字幕精校与云端极速语音按量消耗积分，积分长期有效。
+                  </p>
                 </div>
               </div>
             )}
