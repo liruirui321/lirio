@@ -2,16 +2,37 @@ import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { simplifyMaterialTitle } from '../../services/materialTitle';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
-import { IconClose, IconExport, IconHeadphones, IconLibrary, IconPlay, IconReplay, IconUpload } from '../Icons';
+import {
+  IconCheck,
+  IconClose,
+  IconExport,
+  IconFolderAudio,
+  IconHeadphones,
+  IconLibrary,
+  IconPlay,
+  IconReplay,
+  IconTrash,
+  IconUpload,
+} from '../Icons';
 import './MaterialLibrary.css';
 
 interface Material {
   id: string;
   name: string;
+  sourceKind?: 'user' | 'builtin' | 'podcast';
+  createdAt?: string;
   duration: number;
   sentenceCount: number;
   completed: number;
   favorites: number;
+}
+
+const BUILTIN_NAME_RE = /^(?:\[L[1-4]\]|剑桥雅思|机经|IOT\b)/i;
+
+function isUserUpload(m: Material): boolean {
+  if (m.sourceKind === 'user') return true;
+  if (m.sourceKind === 'builtin' || m.sourceKind === 'podcast') return false;
+  return !BUILTIN_NAME_RE.test(m.name.trim());
 }
 
 type TierId = 'all' | 'L1' | 'L2' | 'L3' | 'L4';
@@ -202,12 +223,15 @@ export function MaterialLibrary({
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState('');
   const [downloadingSlug, setDownloadingSlug] = useState('');
-  const [subTab, setSubTab] = useState<'local' | 'podcasts'>('local');
+  const [subTab, setSubTab] = useState<'local' | 'uploads' | 'podcasts'>('local');
 
   const [tier, setTier] = useState<TierId>('all');
   const [kind, setKind] = useState('');
   const [group, setGroup] = useState('');
   const [search, setSearch] = useState('');
+  const [uploadSearch, setUploadSearch] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState('');
+  const [deletingId, setDeletingId] = useState('');
 
   const refresh = () => {
     setError('');
@@ -224,7 +248,20 @@ export function MaterialLibrary({
     return () => window.removeEventListener('lirio-library-updated', onUpdated);
   }, []);
 
-  const tagged = useMemo(() => items.map((item) => ({ item, ...classifyMaterial(item.name) })), [items]);
+  const gradedItems = useMemo(() => items.filter((m) => !isUserUpload(m)), [items]);
+
+  const userItems = useMemo(
+    () =>
+      items
+        .filter(isUserUpload)
+        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [items],
+  );
+
+  const tagged = useMemo(
+    () => gradedItems.map((item) => ({ item, ...classifyMaterial(item.name) })),
+    [gradedItems],
+  );
 
   const resumeInfo = useMemo(() => {
     if (!items.length) return null;
@@ -238,6 +275,7 @@ export function MaterialLibrary({
       if (!match) return null;
       return {
         item: match,
+        isUpload: isUserUpload(match),
         title: simplifyMaterialTitle(match.name).shortTitle,
         index: parsed.index ?? 0,
         total: parsed.total || match.sentenceCount,
@@ -246,6 +284,30 @@ export function MaterialLibrary({
       return null;
     }
   }, [items]);
+
+  const shownUploads = useMemo(() => {
+    const q = uploadSearch.trim().toLowerCase();
+    return q ? userItems.filter((m) => m.name.toLowerCase().includes(q)) : userItems;
+  }, [userItems, uploadSearch]);
+
+  const handleDeleteUpload = async (m: Material) => {
+    if (confirmDeleteId !== m.id) {
+      setConfirmDeleteId(m.id);
+      return;
+    }
+    setError('');
+    setDeletingId(m.id);
+    try {
+      await invoke('library_delete', { id: m.id });
+      setConfirmDeleteId('');
+      setItems((prev) => prev.filter((x) => x.id !== m.id));
+      window.dispatchEvent(new CustomEvent('lirio-library-updated'));
+    } catch (e) {
+      setError(`删除失败：${String(e)}`);
+    } finally {
+      setDeletingId('');
+    }
+  };
 
   const tierStats = useMemo(() => {
     const map: Record<Exclude<TierId, 'all'>, { total: number; started: number }> = {
@@ -319,12 +381,21 @@ export function MaterialLibrary({
     }
   };
 
+  const showResume =
+    resumeInfo &&
+    ((subTab === 'local' && !resumeInfo.isUpload) ||
+      (subTab === 'uploads' && resumeInfo.isUpload));
+
   return (
-    <section className="material-library" aria-label="阶梯听力材料库">
+    <section className="material-library" aria-label="听力材料仓库">
       <header className="library-head">
         <div>
-          <h1>阶梯精听库</h1>
-          <p>按听写能力分为四级循序精听（初学者 → 高中生 → 大学生 → 高阶进阶），音频自动保存在你的数据目录中。</p>
+          <h1>{subTab === 'uploads' ? '我的上传' : '阶梯精听库'}</h1>
+          <p>
+            {subTab === 'uploads'
+              ? '你自主上传并完成切句 / AI 精校的个人听写材料，独立保存不与阶梯库混杂。'
+              : '按听写能力分为四级循序精听（初学者 → 高中生 → 大学生 → 高阶进阶），音频自动保存在你的数据目录中。'}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {onOpenImport && (
@@ -332,35 +403,54 @@ export function MaterialLibrary({
               type="button"
               className="icon-btn primary library-import-btn"
               disabled={loading || !!opening}
-              title="导入本地音频，自动制作精听材料"
+              title="上传本地音频，自动制作个人精听材料"
               aria-label="导入我的音频"
               onClick={onOpenImport}
             >
               <IconUpload size={16} />
             </button>
           )}
-          <div className="corpus-tabs">
+          <div className="corpus-tabs" role="tablist" aria-label="材料仓库切换">
             <button
               type="button"
               className={subTab === 'local' ? 'active' : ''}
-              title={`本机阶梯库 (${items.length})`}
-              aria-label={`本机阶梯库 (${items.length})`}
-              onClick={() => setSubTab('local')}
+              title={`阶梯精听库（${gradedItems.length} 份）`}
+              aria-label={`阶梯精听库 (${gradedItems.length})`}
+              onClick={() => {
+                setConfirmDeleteId('');
+                setSubTab('local');
+              }}
             >
               <IconLibrary size={14} />
-              <span>{items.length}</span>
+              <span>{gradedItems.length}</span>
+            </button>
+            <button
+              type="button"
+              className={subTab === 'uploads' ? 'active' : ''}
+              title={`我的上传仓库（${userItems.length} 份）`}
+              aria-label={`我的上传 (${userItems.length})`}
+              onClick={() => {
+                setConfirmDeleteId('');
+                setSubTab('uploads');
+              }}
+            >
+              <IconFolderAudio size={14} />
+              <span>{userItems.length}</span>
             </button>
             <button
               type="button"
               className={subTab === 'podcasts' ? 'active' : ''}
               title="拓展播客 (awesome-english)"
               aria-label="拓展播客"
-              onClick={() => setSubTab('podcasts')}
+              onClick={() => {
+                setConfirmDeleteId('');
+                setSubTab('podcasts');
+              }}
             >
               <IconHeadphones size={14} />
             </button>
           </div>
-          {subTab === 'local' && (
+          {subTab !== 'podcasts' && (
             <button
               type="button"
               className="icon-btn"
@@ -376,7 +466,7 @@ export function MaterialLibrary({
       </header>
 
       {/* Resume Last Listening Session */}
-      {subTab === 'local' && resumeInfo && (
+      {showResume && resumeInfo && (
         <div className="library-resume-bar">
           <div className="library-resume-info">
             <span className="tier-badge small">继续上次</span>
@@ -404,36 +494,38 @@ export function MaterialLibrary({
         </div>
       )}
 
-      {/* 4-Tier Ladder Cards */}
-      <div className="tier-grid">
-        {TIERS.map((t) => {
-          const stat = tierStats[t.id];
-          const active = tier === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              className={`tier-card${active ? ' active' : ''}`}
-              onClick={() => {
-                setTier((prev) => (prev === t.id ? 'all' : t.id));
-                setGroup('');
-              }}
-            >
-              <div className="tier-card-top">
-                <span className="tier-badge">{t.code}</span>
-                <span className="tier-cefr">{t.cefr}</span>
-              </div>
-              <strong>{t.title}</strong>
-              <small>{t.subtitle}</small>
-              <div className="tier-meta">
-                {subTab === 'local'
-                  ? `${stat.total} 份材料 · 已练 ${stat.started}`
-                  : `${AWESOME_PODCASTS.filter((p) => p.tier === t.id).length} 档精选播客`}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {/* 4-Tier Ladder Cards (Only for Graded Library & Podcasts, hidden in My Uploads) */}
+      {subTab !== 'uploads' && (
+        <div className="tier-grid">
+          {TIERS.map((t) => {
+            const stat = tierStats[t.id];
+            const active = tier === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                className={`tier-card${active ? ' active' : ''}`}
+                onClick={() => {
+                  setTier((prev) => (prev === t.id ? 'all' : t.id));
+                  setGroup('');
+                }}
+              >
+                <div className="tier-card-top">
+                  <span className="tier-badge">{t.code}</span>
+                  <span className="tier-cefr">{t.cefr}</span>
+                </div>
+                <strong>{t.title}</strong>
+                <small>{t.subtitle}</small>
+                <div className="tier-meta">
+                  {subTab === 'local'
+                    ? `${stat.total} 份材料 · 已练 ${stat.started}`
+                    : `${AWESOME_PODCASTS.filter((p) => p.tier === t.id).length} 档精选播客`}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {error && (
         <div className="app-error" style={{ borderRadius: 8, marginBottom: 14 }} onClick={() => setError('')}>
@@ -486,8 +578,8 @@ export function MaterialLibrary({
 
           {loading ? (
             <p className="corpus-empty">正在读取材料…</p>
-          ) : !items.length ? (
-            <p className="corpus-empty">材料库为空。点击上方导入音频，或切到「拓展播客」一键拉取对应难度的分级播客开始精听。</p>
+          ) : !gradedItems.length ? (
+            <p className="corpus-empty">阶梯库为空。可切换「拓展播客」一键拉取分级播客开始精听。</p>
           ) : !shown.length ? (
             <p className="corpus-empty">当前阶梯筛选下没有匹配的材料。</p>
           ) : (
@@ -530,7 +622,110 @@ export function MaterialLibrary({
         </>
       )}
 
-      {/* SUBTAB 2: awesome-english Graded Podcasts -> Direct Download to SSD */}
+      {/* SUBTAB 2: User Uploads Repository */}
+      {subTab === 'uploads' && (
+        <>
+          {userItems.length > 0 && (
+            <div className="library-filter">
+              <input
+                aria-label="搜索我上传的材料"
+                placeholder="搜索我上传的材料…"
+                value={uploadSearch}
+                onChange={(e) => setUploadSearch(e.target.value)}
+              />
+              {uploadSearch && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="清除搜索"
+                  aria-label="清除搜索"
+                  onClick={() => setUploadSearch('')}
+                >
+                  <IconClose size={14} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {loading ? (
+            <p className="corpus-empty">正在读取个人上传…</p>
+          ) : !userItems.length ? (
+            <div className="upload-empty-card">
+              <div className="upload-empty-icon">
+                <IconFolderAudio size={28} />
+              </div>
+              <strong>还没有自主上传的音频</strong>
+              <p>选择你的本地音频（MP3 / M4A / WAV / MP4），自动完成切句转写与 AI 字幕精校后，全部保存在这里。</p>
+              {onOpenImport && (
+                <button
+                  type="button"
+                  className="icon-action-btn primary"
+                  title="上传本地音频"
+                  aria-label="上传本地音频"
+                  onClick={onOpenImport}
+                >
+                  <IconUpload size={20} />
+                </button>
+              )}
+            </div>
+          ) : !shownUploads.length ? (
+            <p className="corpus-empty">没有匹配「{uploadSearch}」的上传材料。</p>
+          ) : (
+            <div className="library-list">
+              {shownUploads.map((m) => {
+                const { shortTitle } = simplifyMaterialTitle(m.name);
+                const confirming = confirmDeleteId === m.id;
+                const deleting = deletingId === m.id;
+                return (
+                  <div key={m.id} className="material-row-wrap">
+                    <button
+                      type="button"
+                      className="material-row"
+                      title={m.name}
+                      disabled={!!opening || deleting}
+                      onClick={() => {
+                        setError('');
+                        setOpening(m.id);
+                        onOpen(m.id)
+                          .catch((e) => setError(String(e)))
+                          .finally(() => setOpening(''));
+                      }}
+                    >
+                      <span className="tier-badge small pro" aria-hidden="true">
+                        <IconFolderAudio size={12} />
+                      </span>
+                      <span className="material-name">
+                        <strong>{shortTitle}</strong>
+                        <small>
+                          {m.sentenceCount} 句 · 已练 {m.completed} 句
+                        </small>
+                      </span>
+                      <span className="material-duration">
+                        {Math.floor(m.duration / 60)}:{String(Math.floor(m.duration % 60)).padStart(2, '0')}
+                      </span>
+                      <span className="material-action" aria-label={m.completed ? '继续' : '开始'}>
+                        {opening === m.id ? '…' : <IconPlay size={14} />}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-btn upload-del-btn${confirming ? ' confirming' : ''}`}
+                      disabled={deleting || !!opening}
+                      title={confirming ? '再次点击确认删除' : '删除这份上传材料'}
+                      aria-label={confirming ? '确认删除' : '删除'}
+                      onClick={() => void handleDeleteUpload(m)}
+                    >
+                      {confirming ? <IconCheck size={14} /> : <IconTrash size={14} />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* SUBTAB 3: awesome-english Graded Podcasts -> Direct Download to SSD */}
       {subTab === 'podcasts' && (
         <div className="library-list">
           {AWESOME_PODCASTS.filter((p) => tier === 'all' || p.tier === tier).map((pod) => {

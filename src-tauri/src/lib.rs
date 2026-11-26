@@ -33,6 +33,7 @@ pub fn run() {
             commands::library::library_list,
             commands::library::library_open,
             commands::library::library_add,
+            commands::library::library_delete,
             commands::library::library_save_progress,
             commands::corpus::corpus_fetch_audio,
             commands::speak::speak_transcribe,

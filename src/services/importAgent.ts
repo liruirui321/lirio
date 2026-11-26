@@ -160,11 +160,12 @@ export async function prepareAudioFilesForImport(opts: {
   paths: string[];
   language: string;
   tier: ImportTierChoice;
+  sourceKind?: 'user' | 'podcast';
   aiPolish?: ImportAiPolishOption;
   signal?: { cancelled: boolean };
   onProgress: (p: ImportProgress) => void;
 }): Promise<{ prepared: PreparedImportItem[]; warnings: string[] }> {
-  const { paths, language, tier, aiPolish, signal, onProgress } = opts;
+  const { paths, language, tier, sourceKind = 'user', aiPolish, signal, onProgress } = opts;
   const prepared: PreparedImportItem[] = [];
   const warnings: string[] = [];
 
@@ -184,7 +185,10 @@ export async function prepareAudioFilesForImport(opts: {
     const rawName = baseWithExt.replace(/\.[^/.]+$/, '');
     const ext = baseWithExt.split('.').pop()?.toLowerCase() || '';
     const hasTierPrefix = /^\[(L[1-4])\]/i.test(rawName);
-    const finalTitle = tier !== 'auto' && !hasTierPrefix ? `[${tier}] ${rawName}` : rawName;
+    const finalTitle =
+      sourceKind === 'podcast' && tier !== 'auto' && !hasTierPrefix
+        ? `[${tier}] ${rawName}`
+        : rawName;
 
     let currentStage = '正在解码音频…';
     const emit = (
@@ -216,6 +220,7 @@ export async function prepareAudioFilesForImport(opts: {
       const arrayBuffer = await blob.arrayBuffer();
 
       const project = projectService.createProject(finalTitle, filePath, 0);
+      project.sourceKind = sourceKind;
       const trackId = project.tracks[0].id;
       const duration = await audioEngine.loadAudio(trackId, arrayBuffer);
       project.duration = duration;
@@ -399,6 +404,7 @@ export async function importAudioFilesToLibrary(opts: {
   paths: string[];
   language: string;
   tier: ImportTierChoice;
+  sourceKind?: 'user' | 'podcast';
   aiPolish?: ImportAiPolishOption;
   signal?: { cancelled: boolean };
   onProgress: (p: ImportProgress) => void;

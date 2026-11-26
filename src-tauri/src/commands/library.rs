@@ -40,8 +40,22 @@ pub fn library_add(app:tauri::AppHandle,document:String)->Result<String,String>{
     let dir=directory(&app)?;
     write_atomic(&dir.join(format!("{id}.abmac")),&doc)?;
     let ss=doc["dictation"]["sentences"].as_array();
-    write_atomic(&dir.join(format!("{id}.meta.json")),&json!({"id":id,"name":doc["name"],"duration":doc["duration"],"sentenceCount":ss.map_or(0,|s|s.len()),"completed":ss.map_or(0,|s|s.iter().filter(|s|s["submitted"]==true).count()),"favorites":doc["favorites"].as_array().map_or(0,|s|s.len())}))?;
+    let source_kind = doc["sourceKind"].as_str().unwrap_or("user");
+    let created_at = doc["metadata"]["createdAt"].as_str().unwrap_or("");
+    write_atomic(&dir.join(format!("{id}.meta.json")),&json!({"id":id,"name":doc["name"],"sourceKind":source_kind,"createdAt":created_at,"duration":doc["duration"],"sentenceCount":ss.map_or(0,|s|s.len()),"completed":ss.map_or(0,|s|s.iter().filter(|s|s["submitted"]==true).count()),"favorites":doc["favorites"].as_array().map_or(0,|s|s.len())}))?;
     library_save_progress(app,id.to_string(),json!({"dictation":doc["dictation"],"favorites":doc["favorites"],"dictationBackups":doc["dictationBackups"]}))?;Ok(id.to_string())
+}
+#[tauri::command]
+pub fn library_delete(app:tauri::AppHandle,id:String)->Result<(),String>{
+    valid(&id)?;
+    let dir=directory(&app)?;
+    for suffix in ["abmac","meta.json","progress.json"]{
+        let p=dir.join(format!("{id}.{suffix}"));
+        if p.is_file(){
+            fs::remove_file(&p).map_err(|e|e.to_string())?;
+        }
+    }
+    Ok(())
 }
 #[tauri::command]
 pub fn library_save_progress(app:tauri::AppHandle,id:String,progress:Value)->Result<(),String>{

@@ -111,7 +111,6 @@ export default function App() {
   const [speakContext, setSpeakContext] = useState<{ title: string; excerpt: string } | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importLanguage, setImportLanguage] = useState('en');
-  const [importTier, setImportTier] = useState<ImportTierChoice>('auto');
   const [importAiPolish, setImportAiPolish] = useState(true);
   const [importBusy, setImportBusy] = useState(false);
   const [importSaving, setImportSaving] = useState(false);
@@ -373,8 +372,9 @@ export default function App() {
   const handleImportLocalAudioPaths = useCallback(
     async (
       paths: string[],
-      tierOverride: ImportTierChoice = importTier,
+      tierOverride: ImportTierChoice = 'auto',
       languageOverride: string = importLanguage,
+      sourceKind: 'user' | 'podcast' = 'user',
     ) => {
       if (!paths.length) return;
       stopListeningAudio();
@@ -394,6 +394,7 @@ export default function App() {
           paths,
           language: languageOverride,
           tier: tierOverride,
+          sourceKind,
           aiPolish: {
             enabled: importAiPolish,
             fixText: true,
@@ -417,7 +418,7 @@ export default function App() {
         setAsrBusy(false);
       }
     },
-    [importLanguage, importTier, importAiPolish],
+    [importLanguage, importAiPolish],
   );
 
   const handleBatchImportAudio = async () => {
@@ -451,7 +452,8 @@ export default function App() {
       const { prepared, warnings } = await prepareAudioFilesForImport({
         paths,
         language: importLanguage,
-        tier: importTier,
+        tier: 'auto',
+        sourceKind: 'user',
         aiPolish: {
           enabled: importAiPolish,
           fixText: true,
@@ -1014,7 +1016,7 @@ export default function App() {
               onOpen={openMaterial}
               onOpenLocalPath={openLocalAudioPath}
               onImportDownloadedPodcast={(path, _title, tier) =>
-                handleImportLocalAudioPaths([path], tier || 'auto', 'en')
+                handleImportLocalAudioPaths([path], tier || 'auto', 'en', 'podcast')
               }
               onOpenImport={() => {
                 setImportError('');
@@ -1191,8 +1193,8 @@ export default function App() {
             <div className="import-modal-head">
               <h2>
                 {preparedImports.length > 0
-                  ? '字幕精校预览 · 确认加入材料库'
-                  : '导入音频 · 自动制作精听材料'}
+                  ? '字幕精校预览 · 确认加入我的上传'
+                  : '导入音频 · 加入我的上传'}
               </h2>
               <button
                 type="button"
@@ -1302,9 +1304,9 @@ export default function App() {
             ) : (
               <>
                 <p className="import-modal-desc">
-                  选择本地音频（MP3 / M4A / WAV / MP4），自动完成音频解码、识别分句并由 AI 精校字幕与中文译文，确认预览后即可直接作为听写材料使用。
+                  选择本地音频（MP3 / M4A / WAV / MP4），自动完成音频解码、识别分句并由 AI 精校字幕与中文译文，确认预览后保存到你的「我的上传」独立仓库。
                 </p>
-                <div className="import-modal-grid">
+                <div className="import-modal-grid single">
                   <label>
                     识别语言
                     <CustomSelect
@@ -1317,22 +1319,6 @@ export default function App() {
                       ]}
                       minWidth={150}
                       onChange={(v) => setImportLanguage(v)}
-                    />
-                  </label>
-                  <label>
-                    放入阶梯
-                    <CustomSelect
-                      value={importTier}
-                      disabled={importBusy}
-                      options={[
-                        { value: 'auto', label: '自动归类' },
-                        { value: 'L1', label: 'L1 初学者（A1–A2）' },
-                        { value: 'L2', label: 'L2 高中生（A2–B1）' },
-                        { value: 'L3', label: 'L3 大学生（B1–B2）' },
-                        { value: 'L4', label: 'L4 高阶进阶（C1–C2）' },
-                      ]}
-                      minWidth={150}
-                      onChange={(v) => setImportTier(v as ImportTierChoice)}
                     />
                   </label>
                 </div>

@@ -508,6 +508,16 @@ html[data-mobile="true"] .corpus-card-nav .icon-btn {
   height: 42px;
 }
 
+html[data-mobile="true"] .upload-empty-card {
+  margin-top: 10px;
+  padding: 28px 18px;
+}
+
+html[data-mobile="true"] .upload-del-btn {
+  width: 40px;
+  height: 40px;
+}
+
 html[data-mobile="true"] .community-modal-card {
   flex-direction: column;
   align-items: center;

@@ -18,6 +18,7 @@ export interface Track {
 export interface Project {
   id: string;
   name: string;
+  sourceKind?: 'user' | 'builtin' | 'podcast';
   originalAudioPath: string;
   duration: number;
   tracks: Track[];
