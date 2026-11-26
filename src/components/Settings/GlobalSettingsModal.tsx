@@ -962,7 +962,7 @@ export function GlobalSettingsModal({
                       </div>
                       <div className="pricing-mini-row">
                         <span>语音</span>
-                        <span>{account.proCloudSpeech ? '¥0.03 / 千字' : '本地免费'}</span>
+                        <span>本地免费</span>
                       </div>
                     </div>
 
@@ -1163,17 +1163,6 @@ export function GlobalSettingsModal({
                         onChange={(val) => updateConfig({ accent: val as Accent })}
                       />
                     </div>
-                    <label
-                      className="settings-check-line"
-                      title="按 ¥0.03/千字扣余额，关闭则使用免费本地语音"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={account.proCloudSpeech}
-                        onChange={(e) => updateAccountState({ proCloudSpeech: e.target.checked })}
-                      />
-                      云端语音
-                    </label>
                   </div>
 
                   <div className="ledger-section">

@@ -475,8 +475,73 @@ const demoController = (() => {
     return p;
   }
 
-  function runSpeakDemo(onDone) {
-    const DURATION = 11400;
+  function playChatBargeInTimeline(p, baseDelay, totalDuration, onDone) {
+    const chatOrbWrap = document.getElementById('demoChatOrbWrap');
+    const chatStatus = document.getElementById('demoChatStatus');
+    const spaceCap = document.getElementById('demoSpaceKeyCap');
+    const aiEl = document.getElementById('demoSpeakAi');
+    const thinkingEl = document.getElementById('demoSpeakThinking');
+    const ai2El = document.getElementById('demoSpeakAi2');
+    const userEl = document.getElementById('demoSpeakUser');
+    const userTextEl = document.getElementById('demoSpeakUserText');
+    const reviewEl = document.getElementById('demoSpeakReview');
+    if (!aiEl || !userEl || !userTextEl || !reviewEl) return;
+
+    later(baseDelay, () => {
+      aiEl.classList.add('visible');
+    });
+
+    // Barge-in interruption via Space key / orb tap
+    later(baseDelay + 1200, () => {
+      spaceCap?.classList.add('is-pressed');
+      setOrbState(chatOrbWrap, 'listening');
+      if (chatStatus) chatStatus.textContent = '已打断 · 正在聆听中英混说…';
+      userEl.classList.add('visible');
+    });
+    later(baseDelay + 1530, () => {
+      spaceCap?.classList.remove('is-pressed');
+    });
+
+    // Stream bilingual response while orb breathes with voice energy
+    let t = baseDelay + 1600;
+    let acc = '';
+    p.userChunks.forEach((part) => {
+      acc += part;
+      const snap = acc;
+      later(t, () => {
+        userTextEl.textContent = snap;
+      });
+      t += 620;
+    });
+
+    // Orb enters thinking state + thinking dots bubble
+    later(baseDelay + 4350, () => {
+      setOrbState(chatOrbWrap, 'thinking');
+      if (chatStatus) chatStatus.textContent = '思考中…';
+      if (thinkingEl) thinkingEl.hidden = false;
+    });
+
+    // Reply bubble appears + orb returns to speaking
+    later(baseDelay + 5450, () => {
+      if (thinkingEl) thinkingEl.hidden = true;
+      setOrbState(chatOrbWrap, 'speaking');
+      if (chatStatus) chatStatus.textContent = `${p.name} 回复中…`;
+      ai2El?.classList.add('visible');
+    });
+
+    // Native expression upgrade card slides in
+    later(baseDelay + 6650, () => {
+      reviewEl.classList.add('visible');
+    });
+
+    if (onDone) {
+      later(totalDuration, onDone);
+    }
+  }
+
+  function runSpeakDemo(onDone, opts) {
+    const startInChat = Boolean(opts?.startInChat);
+    const DURATION = startInChat ? 8600 : 11400;
     setProgressDuration(DURATION);
     const p = applySpeakPersona(activePersonaKey);
 
@@ -499,9 +564,8 @@ const demoController = (() => {
       return later(DURATION, onDone);
     }
 
-    // Reset to Phone Voice Stage
-    phoneStage.hidden = false;
-    chatStage.hidden = true;
+    phoneStage.hidden = startInChat;
+    chatStage.hidden = !startInChat;
     toChatBtn?.classList.remove('is-pressed');
     spaceCap?.classList.remove('is-pressed');
     aiEl.classList.remove('visible');
@@ -516,6 +580,11 @@ const demoController = (() => {
     if (phoneStatus) phoneStatus.textContent = `${p.name} 正在说…`;
     if (chatStatus) chatStatus.textContent = `${p.name} 正在说 · 空格随时插话`;
 
+    if (startInChat) {
+      playChatBargeInTimeline(p, 80, DURATION, onDone);
+      return;
+    }
+
     // 1. Tap the Chat dock button -> morph to Chat Bubble Stage
     later(2500, () => {
       toChatBtn?.classList.add('is-pressed');
@@ -524,65 +593,19 @@ const demoController = (() => {
       toChatBtn?.classList.remove('is-pressed');
       phoneStage.hidden = true;
       chatStage.hidden = false;
-      aiEl.classList.add('visible');
     });
 
-    // 2. Barge-in interruption via Space key / orb tap
-    later(4150, () => {
-      spaceCap?.classList.add('is-pressed');
-      setOrbState(chatOrbWrap, 'listening');
-      if (chatStatus) chatStatus.textContent = '已打断 · 正在聆听中英混说…';
-      userEl.classList.add('visible');
-    });
-    later(4480, () => {
-      spaceCap?.classList.remove('is-pressed');
-    });
-
-    // 3. Stream bilingual response while orb breathes with voice energy
-    let t = 4550;
-    let acc = '';
-    p.userChunks.forEach((part) => {
-      acc += part;
-      const snap = acc;
-      later(t, () => {
-        userTextEl.textContent = snap;
-      });
-      t += 620;
-    });
-
-    // 4. Orb enters thinking state + thinking dots bubble
-    later(7300, () => {
-      setOrbState(chatOrbWrap, 'thinking');
-      if (chatStatus) chatStatus.textContent = '思考中…';
-      if (thinkingEl) thinkingEl.hidden = false;
-    });
-
-    // 5. Reply bubble appears + orb returns to speaking
-    later(8400, () => {
-      if (thinkingEl) thinkingEl.hidden = true;
-      setOrbState(chatOrbWrap, 'speaking');
-      if (chatStatus) chatStatus.textContent = `${p.name} 回复中…`;
-      ai2El?.classList.add('visible');
-    });
-
-    // 6. Native expression upgrade card slides in
-    later(9600, () => {
-      reviewEl.classList.add('visible');
-    });
-
-    later(DURATION, onDone);
+    // 2-6. Play interactive barge-in timeline inside Chat Bubble Stage
+    playChatBargeInTimeline(p, 2950, DURATION, onDone);
   }
 
-  // Interactive Phone ↔ Chat toggle, Orb barge-in, and Persona switching
+  // Interactive Phone ↔ Chat toggle, Orb/Mic barge-in, Vocab speaker, and Persona switching
   document.getElementById('demoToChatBtn')?.addEventListener('click', () => {
     autoRotate = false;
     clearAllTimers();
-    const phoneStage = document.getElementById('demoSpeakPhone');
-    const chatStage = document.getElementById('demoSpeakChat');
-    if (phoneStage) phoneStage.hidden = true;
-    if (chatStage) chatStage.hidden = false;
-    document.getElementById('demoSpeakAi')?.classList.add('visible');
-    setOrbState(document.getElementById('demoChatOrbWrap'), 'speaking');
+    runSpeakDemo(() => {
+      if (!document.hidden) startTab('speak');
+    }, { startInChat: true });
   });
 
   document.getElementById('demoToPhoneBtn')?.addEventListener('click', () => {
@@ -595,20 +618,44 @@ const demoController = (() => {
     setOrbState(document.getElementById('demoPhoneOrbWrap'), 'speaking');
   });
 
+  function toggleOrbBargeIn(wrap, statusEl) {
+    if (!wrap) return;
+    const next = wrap.classList.contains('is-listening') ? 'speaking' : 'listening';
+    setOrbState(wrap, next);
+    const p = SPEAK_PERSONAS[activePersonaKey];
+    if (statusEl) {
+      statusEl.textContent = next === 'listening' ? '已插话 · 正在听你说…' : `${p.name} 正在说…`;
+    }
+  }
+
   [document.getElementById('demoPhoneOrb'), document.getElementById('demoChatOrb')].forEach((btn) => {
     btn?.addEventListener('click', () => {
       autoRotate = false;
       const wrap = btn.closest('.lirio-orb-wrap');
-      const next = wrap?.classList.contains('is-listening') ? 'speaking' : 'listening';
-      setOrbState(wrap, next);
-      const p = SPEAK_PERSONAS[activePersonaKey];
       const statusEl = wrap?.id === 'demoPhoneOrbWrap'
         ? document.getElementById('demoPhoneStatus')
         : document.getElementById('demoChatStatus');
-      if (statusEl) {
-        statusEl.textContent = next === 'listening' ? '已插话 · 正在听你说…' : `${p.name} 正在说…`;
-      }
+      toggleOrbBargeIn(wrap, statusEl);
     });
+  });
+
+  document.getElementById('demoPhoneMicBtn')?.addEventListener('click', (e) => {
+    autoRotate = false;
+    const btn = e.currentTarget;
+    btn.classList.remove('is-pressed');
+    void btn.offsetWidth;
+    btn.classList.add('is-pressed');
+    later(420, () => btn.classList.remove('is-pressed'));
+    toggleOrbBargeIn(
+      document.getElementById('demoPhoneOrbWrap'),
+      document.getElementById('demoPhoneStatus'),
+    );
+  });
+
+  document.getElementById('demoVocabAudio')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget;
+    btn.classList.add('is-playing');
+    later(1100, () => btn.classList.remove('is-playing'));
   });
 
   document.querySelectorAll('.lirio-persona-btn').forEach((btn) => {
@@ -1020,8 +1067,8 @@ async function initSite() {
   if (primary && !primary.comingSoon && primary.downloadUrl) {
     heroBtn.textContent = `下载 ${primary.label} 版（v${primary.version}）`;
     heroBtn.href = primary.downloadUrl;
-  } else if (os === 'ios') {
-    heroBtn.textContent = 'iPhone 端敬请期待 · 查看已支持平台';
+  } else {
+    heroBtn.textContent = `${primary?.label || '当前平台'} ${primary?.statusNote || '即将上线'} · 查看已支持版本`;
     heroBtn.href = '#download';
   }
 
@@ -1037,6 +1084,7 @@ async function initSite() {
         : p.statusNote
           ? `<span class="platform-meta">${esc(p.statusNote)}</span>`
           : `<span class="platform-meta">${esc(p.format)}</span>`;
+      const pendingText = p.statusNote ? `${p.label} ${p.statusNote}` : `${p.label} 敬请期待`;
       return `
         <div class="platform-card${isRec ? ' recommended' : ''}">
           <div class="platform-top">
@@ -1044,10 +1092,10 @@ async function initSite() {
             ${badge}
           </div>
           <div class="platform-meta">${esc(p.arch)} · ${esc(p.minOs)}</div>
-          <div class="platform-ver">${isComingSoon ? '暂不支持 · 敬请期待' : `v${esc(p.version)}${p.autoUpdate ? ' · 支持自动更新' : ''}`}</div>
+          <div class="platform-ver">${isComingSoon ? esc(p.statusNote || '暂不支持 · 敬请期待') : `v${esc(p.version)}${p.autoUpdate ? ' · 支持自动更新' : ''}`}</div>
           ${
             isComingSoon
-              ? '<span class="platform-btn disabled">iPhone 端敬请期待</span>'
+              ? `<span class="platform-btn disabled">${esc(pendingText)}</span>`
               : `<a class="platform-btn" href="${esc(p.downloadUrl)}">下载 ${esc(p.format)}</a>`
           }
         </div>
