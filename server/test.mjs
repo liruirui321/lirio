@@ -165,14 +165,14 @@ try {
   assert.equal(demo.balanceUnits, 1_000_000);
   assert.equal(demo.tier, 'pro');
 
-  // 8. Verify root dashboard (HTML + JSON negotiation) and /api/overview
-  const dashHtml = await fetch(`${base}/`);
+  // 8. Verify /admin dashboard (HTML + JSON negotiation) and /api/overview
+  const dashHtml = await fetch(`${base}/admin`);
   assert.equal(dashHtml.status, 200);
   assert.ok((dashHtml.headers.get('content-type') || '').includes('text/html'));
   const htmlBody = await dashHtml.text();
-  assert.ok(htmlBody.includes('Lirio Pro'));
+  assert.ok(htmlBody.includes('Lirio Pro 运营管理台'));
 
-  const dashJson = await fetch(`${base}/`, { headers: { Accept: 'application/json' } });
+  const dashJson = await fetch(`${base}/admin`, { headers: { Accept: 'application/json' } });
   assert.equal(dashJson.status, 200);
   const dashData = await dashJson.json();
   assert.equal(dashData.ok, true);
@@ -258,15 +258,15 @@ try {
   const dupRedeem = await req('POST', '/api/billing/redeem', { code: generatedCode }, token);
   assert.equal(dupRedeem.status, 409);
 
-  // 12. Verify LIRIO_ADMIN_TOKEN protection for dashboard HTML, overview API, admin codes, and login/logout cookie
+  // 12. Verify LIRIO_ADMIN_TOKEN protection for /admin dashboard HTML, overview API, admin codes, and login/logout cookie while / stays public
   const testAdminToken = 'lirio-super-admin-token-2026-test';
   process.env.LIRIO_ADMIN_TOKEN = testAdminToken;
   try {
-    const unauthDash = await fetch(`${base}/`);
+    const unauthDash = await fetch(`${base}/admin`);
     assert.equal(unauthDash.status, 401);
     assert.ok((await unauthDash.text()).includes('LIRIO_ADMIN_TOKEN'));
 
-    const unauthJson = await fetch(`${base}/`, { headers: { Accept: 'application/json' } });
+    const unauthJson = await fetch(`${base}/admin`, { headers: { Accept: 'application/json' } });
     assert.equal(unauthJson.status, 401);
 
     const unauthOverview = await fetch(`${base}/api/overview`);
@@ -278,8 +278,12 @@ try {
     const unauthGen = await req('POST', '/api/admin/codes/generate', { presetId: 'topup_10', count: 1 });
     assert.equal(unauthGen.status, 401);
 
-    // Public endpoints stay reachable
+    // Public endpoints & root landing page stay reachable
     assert.equal((await fetch(`${base}/api/health`)).status, 200);
+    assert.equal((await fetch(`${base}/`)).status, 200);
+    assert.equal((await fetch(`${base}/styles.css`)).status, 200);
+    assert.equal((await fetch(`${base}/app.js`)).status, 200);
+    assert.equal((await fetch(`${base}/versions.json`)).status, 200);
     assert.equal((await fetch(`${base}/site/`)).status, 200);
 
     const badAdminLogin = await req('POST', '/api/admin/login', { token: 'wrong-token' });
@@ -295,7 +299,7 @@ try {
     assert.ok(setCookie.includes('lirio_admin=') && setCookie.includes('HttpOnly'));
     const cookieHeader = setCookie.split(';')[0];
 
-    const authDash = await fetch(`${base}/`, { headers: { Cookie: cookieHeader } });
+    const authDash = await fetch(`${base}/admin`, { headers: { Cookie: cookieHeader } });
     assert.equal(authDash.status, 200);
 
     const authOverview = await fetch(`${base}/api/overview`, { headers: { Cookie: cookieHeader } });

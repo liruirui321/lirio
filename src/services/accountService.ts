@@ -500,7 +500,7 @@ export async function rechargeAccount(packageId: string): Promise<{
 export function getStoreWebsiteUrl(): string {
   const st = getAccountState();
   const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
-  return `${base}/site/#buy`;
+  return `${base}/#buy`;
 }
 
 export async function fetchStoreConfig(): Promise<StoreConfig> {

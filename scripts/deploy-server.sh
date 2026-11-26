@@ -19,5 +19,7 @@ echo "==> Restarting lirio.service ..."
 ssh "${REMOTE_HOST}" 'sudo systemctl restart lirio && sleep 1 && systemctl is-active lirio'
 
 echo "==> Smoke checking public endpoints ..."
-curl -fsS -o /dev/null -w "https://lirio.deltae.tech/site/ -> %{http_code}\n" https://lirio.deltae.tech/site/
+curl -fsS -o /dev/null -w "https://lirio.deltae.tech/ -> %{http_code}\n" https://lirio.deltae.tech/
 curl -fsS -o /dev/null -w "https://lirio.deltae.tech/api/store/config -> %{http_code}\n" https://lirio.deltae.tech/api/store/config
+admin_code=$(curl -s -o /dev/null -w "%{http_code}" https://lirio.deltae.tech/admin)
+echo "https://lirio.deltae.tech/admin -> ${admin_code} (expected 401 without token)"

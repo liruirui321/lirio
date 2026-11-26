@@ -470,7 +470,7 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       ${adminAuthEnabled ? '<button class="btn" id="adminLogoutBtn" type="button">退出管理</button>' : '<span class="pill peak">未设管理口令（仅限本机）</span>'}
-      <a class="btn" href="/site/" target="_blank" rel="noopener noreferrer">官网与购卡页 ↗</a>
+      <a class="btn" href="/" target="_blank" rel="noopener noreferrer">官网主页 ↗</a>
       <button class="btn" id="refreshBtn" type="button">刷新</button>
     </div>
   </div>
@@ -568,7 +568,7 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
   <section class="panel" id="panel-settings">
     <div class="card">
       <div class="toolbar-row">
-        <h2 style="margin:0;">收款码与第三方店铺配置（保存后官网 /site/ 与 App 买码同步生效）</h2>
+        <h2 style="margin:0;">收款码与第三方店铺配置（保存后官网主页与 App 买码同步生效）</h2>
         <div style="display:flex;gap:8px;align-items:center;">
           <span id="settingsMsg" class="status-msg"></span>
           <button type="button" class="btn primary" id="saveSettingsBtn">保存配置</button>
@@ -866,7 +866,7 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
   const data = await res.json().catch(() => ({}));
   if (res.ok) {
     settingsDirty = false;
-    msg.textContent = '已保存并同步到官网 /site/';
+    msg.textContent = '已保存并同步到官网主页';
     await reloadOverview();
   } else {
     msg.textContent = data.error || '保存失败';
@@ -1175,6 +1175,47 @@ function requireAuthenticatedUser(req, res, db, fallbackMsg = '登录已过期�
   return authState;
 }
 
+function serveWebsiteFile(res, rel, headOnly = false) {
+  const cleanRel = String(rel || '').replace(/^\/+/, '') || 'index.html';
+  const resolved = path.resolve(WEBSITE_DIR, cleanRel);
+  if (resolved !== WEBSITE_DIR && !resolved.startsWith(WEBSITE_DIR + path.sep)) {
+    return false;
+  }
+  const target =
+    fs.existsSync(resolved) && fs.statSync(resolved).isFile()
+      ? resolved
+      : cleanRel === 'index.html'
+        ? path.join(WEBSITE_DIR, 'index.html')
+        : null;
+  if (!target || !fs.existsSync(target)) {
+    return false;
+  }
+  const ext = path.extname(target).toLowerCase();
+  const mime =
+    ext === '.html'
+      ? 'text/html; charset=utf-8'
+      : ext === '.css'
+        ? 'text/css; charset=utf-8'
+        : ext === '.js'
+          ? 'application/javascript; charset=utf-8'
+          : ext === '.json'
+            ? 'application/json; charset=utf-8'
+            : ext === '.png'
+              ? 'image/png'
+              : ext === '.svg'
+                ? 'image/svg+xml'
+                : ext === '.ico'
+                  ? 'image/x-icon'
+                  : 'application/octet-stream';
+  res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
+  if (headOnly) {
+    res.end();
+  } else {
+    fs.createReadStream(target).pipe(res);
+  }
+  return true;
+}
+
 export function createLirioServer({ dbPath } = {}) {
   const db = openDatabase(dbPath);
 
@@ -1243,6 +1284,26 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (isRead && pathname === '/') {
+        if (!serveWebsiteFile(res, 'index.html', headOnly)) {
+          sendJson(res, 404, { error: '页面不存在。' }, headOnly);
+        }
+        return;
+      }
+
+      if (
+        isRead &&
+        (pathname === '/styles.css' ||
+          pathname === '/app.js' ||
+          pathname === '/versions.json' ||
+          pathname.startsWith('/assets/'))
+      ) {
+        if (!serveWebsiteFile(res, pathname.slice(1), headOnly)) {
+          sendJson(res, 404, { error: '文件不存在。' }, headOnly);
+        }
+        return;
+      }
+
+      if (isRead && (pathname === '/admin' || pathname === '/admin/')) {
         const accept = String(req.headers.accept || '');
         const wantsJsonOnly = accept.includes('application/json') && !accept.includes('text/html');
         if (!isAdminAuthorized(req)) {
@@ -1358,43 +1419,13 @@ export function createLirioServer({ dbPath } = {}) {
 
       if (isRead && (pathname === '/site' || pathname.startsWith('/site/'))) {
         if (pathname === '/site') {
-          res.writeHead(302, { Location: '/site/' });
+          res.writeHead(302, { Location: '/' });
           res.end();
           return;
         }
         const rel = pathname.slice('/site/'.length) || 'index.html';
-        const resolved = path.resolve(WEBSITE_DIR, rel);
-        if (resolved !== WEBSITE_DIR && !resolved.startsWith(WEBSITE_DIR + path.sep)) {
+        if (!serveWebsiteFile(res, rel, headOnly)) {
           sendJson(res, 404, { error: '页面不存在。' }, headOnly);
-          return;
-        }
-        const target = fs.existsSync(resolved) && fs.statSync(resolved).isFile()
-          ? resolved
-          : rel === ''
-            ? path.join(WEBSITE_DIR, 'index.html')
-            : null;
-        if (!target || !fs.existsSync(target)) {
-          sendJson(res, 404, { error: '页面不存在。' }, headOnly);
-          return;
-        }
-        const ext = path.extname(target).toLowerCase();
-        const mime =
-          ext === '.html'
-            ? 'text/html; charset=utf-8'
-            : ext === '.css'
-              ? 'text/css; charset=utf-8'
-              : ext === '.js'
-                ? 'application/javascript; charset=utf-8'
-                : ext === '.json'
-                  ? 'application/json; charset=utf-8'
-                  : ext === '.png'
-                    ? 'image/png'
-                    : 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
-        if (headOnly) {
-          res.end();
-        } else {
-          fs.createReadStream(target).pipe(res);
         }
         return;
       }
