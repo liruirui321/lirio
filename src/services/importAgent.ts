@@ -173,7 +173,14 @@ export async function prepareAudioFilesForImport(opts: {
       throw new Error('已取消导入处理。');
     }
     const filePath = paths[i];
-    const baseWithExt = filePath.split(/[/\\]/).pop() || `Audio-${i + 1}`;
+    const isContentUri = filePath.startsWith('content://');
+    let decodedTail = filePath;
+    if (isContentUri) {
+      try {
+        decodedTail = decodeURIComponent(filePath);
+      } catch {}
+    }
+    const baseWithExt = decodedTail.split(/[/:\\]/).pop() || `Audio-${i + 1}`;
     const rawName = baseWithExt.replace(/\.[^/.]+$/, '');
     const ext = baseWithExt.split('.').pop()?.toLowerCase() || '';
     const hasTierPrefix = /^\[(L[1-4])\]/i.test(rawName);
@@ -199,7 +206,9 @@ export async function prepareAudioFilesForImport(opts: {
     let unlisten: (() => void) | undefined;
     try {
       emit('decode', '正在检查并解码音频…');
-      await invoke('inspect_audio_file', { path: filePath });
+      if (!isContentUri) {
+        await invoke('inspect_audio_file', { path: filePath });
+      }
       const bytes = await readFile(filePath);
       if (signal?.cancelled) throw new Error('已取消导入处理。');
       const mime = MIME_BY_EXT[ext] || 'application/octet-stream';

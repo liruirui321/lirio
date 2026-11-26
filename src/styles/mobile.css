@@ -469,6 +469,28 @@ html[data-mobile="true"] .analysis-kpi-row {
   grid-template-columns: 1fr;
 }
 
+html[data-mobile="true"] .import-modal.wide {
+  max-width: 100%;
+  max-height: 92dvh;
+}
+
+html[data-mobile="true"] .import-steps-bar {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+html[data-mobile="true"] .import-preview-scroll {
+  max-height: 44dvh;
+}
+
+html[data-mobile="true"] .import-preview-title-row input {
+  font-size: 16px;
+}
+
+html[data-mobile="true"] .library-import-btn {
+  min-height: 36px;
+}
+
 /* Floating Toasts stay safely above MobileBottomNav */
 html[data-mobile="true"] .update-toast,
 html[data-mobile="true"] .mistake-reminder-toast {

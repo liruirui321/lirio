@@ -207,6 +207,8 @@ pub async fn corpus_fetch_audio(
 
 #[cfg(target_os = "windows")]
 fn synth_windows_sapi(word: &str, accent: &str, dest_wav: &Path) -> Result<Vec<u8>, String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let culture = match accent {
         "us" => "en-US",
         "au" => "en-AU",
@@ -228,6 +230,7 @@ $s.Dispose()
         .env("LIRIO_TTS_CULTURE", culture)
         .env("LIRIO_TTS_OUT", dest_wav.to_string_lossy().as_ref())
         .env("LIRIO_TTS_TEXT", word)
+        .creation_flags(CREATE_NO_WINDOW)
         .status()
         .map_err(|e| format!("Windows 语音合成启动失败：{e}"))?;
     if !status.success() {

@@ -58,9 +58,16 @@ fn recognize(app: &tauri::AppHandle, id: &str, language: &str) -> Result<Segment
             clip[4..8].copy_from_slice(&(len+36).to_le_bytes()); clip[40..44].copy_from_slice(&len.to_le_bytes());
             clip.extend_from_slice(&wav[44+start*2..44+end*2]); fs::write(&audio,clip).map_err(|e|e.to_string())?;
             let log=fs::File::create(dir.join(format!("{n}.log"))).map_err(|e|e.to_string())?;
-            let mut child=Command::new(&cli).args(["-m"]).arg(&model).arg("-f").arg(&audio)
+            let mut child_cmd = Command::new(&cli);
+            child_cmd.args(["-m"]).arg(&model).arg("-f").arg(&audio)
                 .args(["-l",language,"-mc","0","-oj","-ml","1","-sow","-of"]).arg(&output)
-                .stdout(Stdio::null()).stderr(Stdio::from(log)).spawn().map_err(|e|format!("无法启动离线识别：{e}"))?;
+                .stdout(Stdio::null()).stderr(Stdio::from(log));
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                child_cmd.creation_flags(0x08000000);
+            }
+            let mut child = child_cmd.spawn().map_err(|e|format!("无法启动离线识别：{e}"))?;
             let began=Instant::now();
             let status=loop {
                 if state.cancel.load(Ordering::SeqCst) || began.elapsed()>Duration::from_secs(1800) {

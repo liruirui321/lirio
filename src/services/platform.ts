@@ -32,6 +32,15 @@ export function isMobileDevice(): boolean {
   return isAndroidNative() || isIosNative();
 }
 
+export function isWindowsPlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /win/i.test(navigator.userAgent || '') && !isMobileDevice();
+}
+
+export function shouldDefaultCloudSpeech(): boolean {
+  return isMobileDevice() || isWindowsPlatform();
+}
+
 export function hasNativeAndroidInsets(): boolean {
   return typeof window !== 'undefined' && Boolean(window.LirioAndroid?.hasNativeInsets?.());
 }

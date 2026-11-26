@@ -1,5 +1,5 @@
 import type { Accent } from './corpusService';
-import { isMobileDevice } from './platform';
+import { isMobileDevice, isWindowsPlatform, shouldDefaultCloudSpeech } from './platform';
 import { saveStateBackup } from './stateSync';
 
 export type AiMode = 'byok' | 'pro_balance';
@@ -251,7 +251,10 @@ export function getAccountState(): AccountState {
         ...(parsed || {}),
         serverUrl: DEFAULT_STATE.serverUrl,
         aiMode: parsed?.aiMode === 'pro_balance' ? 'pro_balance' : 'byok',
-        proCloudSpeech: Boolean(parsed?.proCloudSpeech),
+        proCloudSpeech:
+          typeof parsed?.proCloudSpeech === 'boolean'
+            ? parsed.proCloudSpeech
+            : shouldDefaultCloudSpeech(),
       };
     }
   } catch {}
@@ -259,6 +262,12 @@ export function getAccountState(): AccountState {
     return {
       ...DEFAULT_STATE,
       aiMode: 'pro_balance',
+      proCloudSpeech: true,
+    };
+  }
+  if (isWindowsPlatform()) {
+    return {
+      ...DEFAULT_STATE,
       proCloudSpeech: true,
     };
   }
@@ -367,6 +376,7 @@ export async function registerAccount(opts: { email: string; password: string; n
     entitlement?: AccountEntitlement;
     devices?: BoundDevice[];
   }>('/api/auth/register', { method: 'POST', body: JSON.stringify({ ...opts, ...dev }) });
+  const keepCloudSpeech = getAccountState().proCloudSpeech || shouldDefaultCloudSpeech();
   updateAccountState({
     token: res.token,
     user: res.user,
@@ -374,7 +384,7 @@ export async function registerAccount(opts: { email: string; password: string; n
     devices: res.devices || [],
     lastAuthNotice: null,
     aiMode: 'pro_balance',
-    proCloudSpeech: false,
+    proCloudSpeech: keepCloudSpeech,
   });
   return res;
 }
@@ -388,6 +398,7 @@ export async function loginAccount(opts: { email: string; password: string }) {
     entitlement?: AccountEntitlement;
     devices?: BoundDevice[];
   }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ ...opts, ...dev }) });
+  const keepCloudSpeech = getAccountState().proCloudSpeech || shouldDefaultCloudSpeech();
   updateAccountState({
     token: res.token,
     user: res.user,
@@ -395,7 +406,7 @@ export async function loginAccount(opts: { email: string; password: string }) {
     devices: res.devices || [],
     lastAuthNotice: null,
     aiMode: 'pro_balance',
-    proCloudSpeech: false,
+    proCloudSpeech: keepCloudSpeech,
   });
   return res;
 }

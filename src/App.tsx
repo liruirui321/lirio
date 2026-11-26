@@ -242,17 +242,24 @@ export default function App() {
     setLoading('正在检查音频…');
     let url: string | null = null;
     try {
-      await invoke('inspect_audio_file', { path: selected });
+      const isContentUri = selected.startsWith('content://');
+      if (!isContentUri) {
+        await invoke('inspect_audio_file', { path: selected });
+      }
       setLoading('正在读取音频…');
       const bytes = await readFile(selected);
-      const ext = selected.split('.').pop()?.toLowerCase() ?? '';
+      let decodedName = selected;
+      if (isContentUri) {
+        try { decodedName = decodeURIComponent(selected); } catch {}
+      }
+      const ext = decodedName.split('.').pop()?.toLowerCase() ?? '';
       const mime = ({ mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac', aif: 'audio/aiff', aiff: 'audio/aiff', ogg: 'audio/ogg' } as Record<string, string>)[ext] || 'application/octet-stream';
       const blob = new Blob([bytes], { type: mime });
       url = URL.createObjectURL(blob);
       const arrayBuffer = await blob.arrayBuffer();
 
       const newProject = projectService.createProject(
-        customTitle || selected.split('/').pop()?.replace(/\.[^.]+$/, '') || 'Project',
+        customTitle || decodedName.split(/[/:\\]/).pop()?.replace(/\.[^.]+$/, '') || 'Project',
         selected,
         0,
       );
@@ -725,6 +732,8 @@ export default function App() {
           }}
           onOpenImport={() => {
             setImportError('');
+            setImportWarnings([]);
+            setPreparedImports([]);
             setShowImportModal(true);
           }}
         />

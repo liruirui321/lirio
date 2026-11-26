@@ -13,6 +13,15 @@ fn build_http_agent(timeout_secs: u64) -> ureq::Agent {
         .build()
 }
 
+fn configure_hidden_cmd(cmd: &mut Command) -> &mut Command {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 use super::corpus::CorpusAudioResult;
 
 struct EdgeWorker {
@@ -50,8 +59,9 @@ fn spawn_edge_worker() -> Option<EdgeWorker> {
     let mut child = ["python3", "python"]
         .into_iter()
         .find_map(|py| {
-            Command::new(py)
-                .args(["-u", "-c", EDGE_WORKER_PY])
+            let mut cmd = Command::new(py);
+            configure_hidden_cmd(&mut cmd);
+            cmd.args(["-u", "-c", EDGE_WORKER_PY])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
@@ -131,7 +141,11 @@ fn find_edge_tts() -> Option<String> {
     let probe_cmd = "where";
     #[cfg(not(target_os = "windows"))]
     let probe_cmd = "which";
-    if let Ok(out) = Command::new(probe_cmd).arg("edge-tts").output() {
+    if let Ok(out) = {
+        let mut cmd = Command::new(probe_cmd);
+        configure_hidden_cmd(&mut cmd);
+        cmd.arg("edge-tts").output()
+    } {
         if out.status.success() {
             let s = String::from_utf8_lossy(&out.stdout)
                 .lines()
@@ -244,7 +258,9 @@ pub async fn speak_transcribe(
             .map(|n| n.get().clamp(4, 8))
             .unwrap_or(6)
             .to_string();
-        let status = Command::new(&cli)
+        let mut asr_cmd = Command::new(&cli);
+        configure_hidden_cmd(&mut asr_cmd);
+        let status = asr_cmd
             .args(["-m"])
             .arg(&model)
             .arg("-f")
@@ -457,7 +473,9 @@ pub async fn speak_tts(
 
             // 1b. CLI fallback if persistent worker unavailable
             if let Some(edge_bin) = find_edge_tts() {
-                let ok = Command::new(&edge_bin)
+                let mut edge_cmd = Command::new(&edge_bin);
+                configure_hidden_cmd(&mut edge_cmd);
+                let ok = edge_cmd
                     .args(["--voice", neural_voice, "--text", &trimmed, "--write-media"])
                     .arg(&mp3_path)
                     .stdout(Stdio::null())
@@ -542,7 +560,9 @@ $s.SetOutputToWaveFile($env:LIRIO_TTS_OUT)
 $s.Speak($env:LIRIO_TTS_TEXT)
 $s.Dispose()
 "#;
-            let status = Command::new("powershell")
+            let mut ps_cmd = Command::new("powershell");
+            configure_hidden_cmd(&mut ps_cmd);
+            let status = ps_cmd
                 .args(["-NoProfile", "-NonInteractive", "-Command", ps_script])
                 .env("LIRIO_TTS_CULTURE", culture)
                 .env("LIRIO_TTS_OUT", wav.to_string_lossy().as_ref())
@@ -736,8 +756,9 @@ pub fn open_mic_settings() -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd")
-            .args(["/C", "start", "", "ms-settings:privacy-microphone"])
+        let mut cmd = Command::new("cmd");
+        configure_hidden_cmd(&mut cmd);
+        cmd.args(["/C", "start", "", "ms-settings:privacy-microphone"])
             .status()
             .map_err(|e| format!("无法打开系统设置：{e}"))?;
         return Ok(());
