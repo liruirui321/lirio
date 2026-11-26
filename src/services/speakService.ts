@@ -129,7 +129,6 @@ export const PROVIDER_META: { id: ProviderId; label: string; hint: string }[] = 
   { id: 'gemini', label: 'Gemini', hint: '响应极快，口语表达地道自然' },
   { id: 'openai', label: 'GPT (OpenAI)', hint: '对话细腻，考官模拟稳健' },
   { id: 'ollama', label: '本地 Ollama', hint: '本机大模型服务，免费隐私' },
-  { id: 'local', label: '内置离线 Qwen', hint: '零配置离线兜底模型' },
 ];
 
 export const SPEAK_TOPICS = [
@@ -268,8 +267,7 @@ export function loadSpeakState(): SpeakPersistedState {
       };
       const legacyPid = rawCfg.activeProvider as ProviderId | undefined;
       const legacyProf = legacyPid && legacyPid !== 'local' ? providers[legacyPid] : providers.deepseek;
-      const textMode: 'api' | 'local' =
-        rawCfg.textMode === 'local' || (!rawCfg.textMode && legacyPid === 'local') ? 'local' : 'api';
+      const textMode: 'api' | 'local' = 'api';
       const speechMode: 'local' | 'api' =
         rawCfg.speechMode === 'api' || (!rawCfg.speechMode && rawCfg.ttsProvider === 'openai') ? 'api' : 'local';
 
@@ -967,15 +965,6 @@ function buildExaminerSystemPrompt(
   ].join('\n');
 }
 
-function buildLocalQwenPrompt(system: string, turns: SpeakTurn[]): string {
-  const parts = [`<|im_start|>system\n${system}<|im_end|>`];
-  for (const t of turns.slice(-8)) {
-    parts.push(`<|im_start|>${t.role}\n${t.text}<|im_end|>`);
-  }
-  parts.push('<|im_start|>assistant\n');
-  return parts.join('\n');
-}
-
 async function callActiveLlm(
   config: SpeakConfig,
   messages: { role: string; content: string }[],
@@ -986,37 +975,23 @@ async function callActiveLlm(
   if (acct.aiMode === 'pro_balance') {
     return proxyChat({ messages, temperature, feature });
   }
-  if (config.textMode !== 'local') {
-    const baseUrl = (config.textApiUrl || '').trim();
-    const apiKey = (config.textApiKey || '').trim();
-    const model = (config.textModel || '').trim() || 'deepseek-chat';
-    if (!baseUrl) {
-      throw new Error('请先在「用户设置 → AI 服务」填写文本模型的 API URL。');
-    }
-    const isLocalEndpoint = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(baseUrl);
-    if (!isLocalEndpoint && !apiKey) {
-      throw new Error('请先在「用户设置 → AI 服务」填写文本模型的 API Key，或切换为「使用 Lirio 官方 API」。');
-    }
-    return invoke<string>('speak_chat_remote', {
-      baseUrl,
-      apiKey,
-      model,
-      messages,
-      temperature,
-    });
+  const baseUrl = (config.textApiUrl || '').trim();
+  const apiKey = (config.textApiKey || '').trim();
+  const model = (config.textModel || '').trim() || 'deepseek-chat';
+  if (!baseUrl) {
+    throw new Error('请先在「用户设置 → AI 与账号」填写文本模型的 API URL。');
   }
-
-  const system = messages.find((m) => m.role === 'system')?.content || '';
-  const convTurns: SpeakTurn[] = messages
-    .filter((m) => m.role !== 'system')
-    .map((m, i) => ({
-      id: String(i),
-      role: m.role === 'user' ? 'user' : 'assistant',
-      text: m.content,
-      timestamp: 0,
-    }));
-  const prompt = buildLocalQwenPrompt(system, convTurns);
-  return invoke<string>('speak_chat_local', { prompt });
+  const isLocalEndpoint = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(baseUrl);
+  if (!isLocalEndpoint && !apiKey) {
+    throw new Error('请先在「用户设置 → AI 与账号」填写文本模型的 API Key，或切换为「使用 Lirio 官方 API」。');
+  }
+  return invoke<string>('speak_chat_remote', {
+    baseUrl,
+    apiKey,
+    model,
+    messages,
+    temperature,
+  });
 }
 
 export async function testProviderConnection(config: SpeakConfig): Promise<string> {

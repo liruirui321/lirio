@@ -39,8 +39,7 @@
       "entitlements": "./entitlements.plist"
     },
     "resources": [
-      "resources/asr/*",
-      "resources/llm/*"
+      "resources/asr/*"
     ]
   },
   "plugins": {

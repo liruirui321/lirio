@@ -180,11 +180,19 @@ pub fn refine_segments(raw_segments:Vec<Segment>,all_words:&[Segment])->Vec<Segm
 pub fn segment_words<F:Fn(String)>(words:Vec<Segment>,resources:&Path,work:&Path,cancel:&AtomicBool,progress:F)->Result<Segmentation,String>{
  if words.is_empty(){return Err("没有可分句的文字".into());}
  let cli=resources.join("llama-completion");let model=resources.join("qwen.gguf");
+ let has_local_llm=cli.is_file()&&model.is_file();
  let mut out=Vec::new();let mut accepted=0;let mut total=0;let mut start=0;
  while start<words.len(){
   if cancel.load(Ordering::SeqCst){return Err("识别已取消。".into());}
   let mut end=(start+180).min(words.len());while end<words.len()&&!terminal(&words[end-1].text){end+=1;}
-  let slice=&words[start..end];total+=1;progress(format!("正在进行 LLM 单句拆分：第 {total} 组…"));
+  let slice=&words[start..end];total+=1;
+  if !has_local_llm {
+   progress("正在进行标点与意群单句拆分…".to_string());
+   out.extend(punctuation(slice));
+   start=end;
+   continue;
+  }
+  progress(format!("正在进行 LLM 单句拆分：第 {total} 组…"));
   let generated=(||->Result<Vec<Segment>,String>{
    if !cli.is_file()||!model.is_file(){return Err("LLM 组件缺失".into());}
    let candidates=punctuation(slice);
@@ -206,7 +214,14 @@ pub fn segment_words<F:Fn(String)>(words:Vec<Segment>,resources:&Path,work:&Path
  let mut out=refine_segments(out,&words);
  // Add a small listening margin, bounded by neighboring sentences to avoid overlap.
  for i in 0..out.len(){let prev=if i>0{out[i-1].end}else{0.0};out[i].start=(out[i].start-0.08).max(prev);let next=out.get(i+1).map_or(out[i].end+0.12,|s|s.start);out[i].end=(out[i].end+0.12).min(next).max(out[i].start+0.01);}
- Ok(Segmentation{segments:out,words,source:if accepted==total{format!("Whisper 词级对齐 · Qwen LLM 单句拆分（{total} 组已校验）")}else{format!("Whisper 词级对齐 · Qwen LLM {accepted}/{total} 组通过；{} 组按标点回退",total-accepted)}})
+ let source = if !has_local_llm {
+  "Whisper 词级对齐 · 标点与意群自动分句".to_string()
+ } else if accepted == total {
+  format!("Whisper 词级对齐 · Qwen LLM 单句拆分（{total} 组已校验）")
+ } else {
+  format!("Whisper 词级对齐 · Qwen LLM {accepted}/{total} 组通过；{} 组按标点回退",total-accepted)
+ };
+ Ok(Segmentation{segments:out,words,source})
 }
 #[cfg(test)]mod tests{use super::*;fn sample()->Vec<Segment>{["Dr.","Brown","is","here.","He","can","help."].iter().enumerate().map(|(i,t)|Segment{start:i as f64,end:i as f64+0.5,text:t.to_string()}).collect()}
  #[test]fn abbreviation_and_sentence_boundary(){let s=punctuation(&sample());assert_eq!(s.len(),2);assert_eq!(s[0].text,"Dr. Brown is here.");assert_eq!(s[1].start,4.0);}

@@ -948,73 +948,51 @@ export function GlobalSettingsModal({
             ) : (
               <>
                 <div className="settings-row-between">
-                  <span className="settings-section-title">文本模型</span>
-                  <div className="seg-pill">
-                    <button
-                      type="button"
-                      className={config.textMode !== 'local' ? 'active' : ''}
-                      onClick={() => updateConfig({ textMode: 'api' })}
-                    >
-                      API
-                    </button>
-                    <button
-                      type="button"
-                      className={config.textMode === 'local' ? 'active' : ''}
-                      onClick={() => updateConfig({ textMode: 'local' })}
-                    >
-                      本地
-                    </button>
-                  </div>
+                  <span className="settings-section-title">文本模型（DeepSeek / OpenAI 兼容 API）</span>
                 </div>
 
-                {config.textMode === 'local' ? (
-                  <div className="provider-form">
-                    <small style={{ color: 'var(--muted)' }}>内置离线 Qwen</small>
-                  </div>
-                ) : (
-                  <div className="provider-form">
-                    <div className="settings-two-col">
-                      <div className="speak-field">
-                        <label>URL</label>
-                        <input
-                          type="text"
-                          value={config.textApiUrl || ''}
-                          placeholder="https://api.deepseek.com/v1"
-                          onChange={(e) => updateConfig({ textApiUrl: e.target.value })}
-                        />
-                      </div>
-                      <div className="speak-field">
-                        <label>Model</label>
-                        <input
-                          type="text"
-                          value={config.textModel || ''}
-                          placeholder="deepseek-chat"
-                          onChange={(e) => updateConfig({ textModel: e.target.value })}
-                        />
-                      </div>
+                <div className="provider-form">
+                  <div className="settings-two-col">
+                    <div className="speak-field">
+                      <label>URL</label>
+                      <input
+                        type="text"
+                        value={config.textApiUrl || ''}
+                        placeholder="https://api.deepseek.com/v1"
+                        onChange={(e) => updateConfig({ textApiUrl: e.target.value })}
+                      />
                     </div>
                     <div className="speak-field">
-                      <label>API Key</label>
-                      <div className="settings-key-row">
-                        <input
-                          type={showTextKey ? 'text' : 'password'}
-                          value={config.textApiKey || ''}
-                          placeholder="sk-..."
-                          onChange={(e) => updateConfig({ textApiKey: e.target.value })}
-                        />
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title={showTextKey ? '隐藏' : '显示'}
-                          aria-label="切换密钥"
-                          onClick={() => setShowTextKey((s) => !s)}
-                        >
-                          <IconEye size={15} />
-                        </button>
-                      </div>
+                      <label>Model</label>
+                      <input
+                        type="text"
+                        value={config.textModel || ''}
+                        placeholder="deepseek-chat"
+                        onChange={(e) => updateConfig({ textModel: e.target.value })}
+                      />
                     </div>
                   </div>
-                )}
+                  <div className="speak-field">
+                    <label>API Key</label>
+                    <div className="settings-key-row">
+                      <input
+                        type={showTextKey ? 'text' : 'password'}
+                        value={config.textApiKey || ''}
+                        placeholder="sk-..."
+                        onChange={(e) => updateConfig({ textApiKey: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title={showTextKey ? '隐藏' : '显示'}
+                        aria-label="切换密钥"
+                        onClick={() => setShowTextKey((s) => !s)}
+                      >
+                        <IconEye size={15} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="settings-row-between" style={{ marginTop: 2 }}>
                   <span className="settings-section-title">语音合成</span>

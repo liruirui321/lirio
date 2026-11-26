@@ -327,53 +327,8 @@ pub async fn speak_chat_remote(
 }
 
 #[tauri::command]
-pub async fn speak_chat_local(app: tauri::AppHandle, prompt: String) -> Result<String, String> {
-    let llm_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| e.to_string())?
-        .join("resources/llm");
-    #[cfg(target_os = "windows")]
-    const LLAMA_BIN: &str = "llama-completion.exe";
-    #[cfg(not(target_os = "windows"))]
-    const LLAMA_BIN: &str = "llama-completion";
-    let bin = llm_dir.join(LLAMA_BIN);
-    let model = llm_dir.join("qwen.gguf");
-    if !bin.is_file() || !model.is_file() {
-        return Err("本地离线语言模型缺失，请在设置中配置云端 API Key。".into());
-    }
-
-    tauri::async_runtime::spawn_blocking(move || {
-        let output = Command::new(&bin)
-            .env("DYLD_LIBRARY_PATH", &llm_dir)
-            .args(["-m"])
-            .arg(&model)
-            .args([
-                "-n", "220",
-                "--temp", "0.7",
-                "--no-display-prompt",
-                "-p", &prompt,
-            ])
-            .output()
-            .map_err(|e| format!("启动本地模型失败：{e}"))?;
-
-        if !output.status.success() {
-            return Err("本地模型推理失败，建议在设置中配置云端 API。".into());
-        }
-        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let cleaned = text
-            .split("<|im_end|>")
-            .next()
-            .unwrap_or(&text)
-            .trim()
-            .to_string();
-        if cleaned.is_empty() {
-            return Err("本地模型未生成有效回复。".into());
-        }
-        Ok(cleaned)
-    })
-    .await
-    .map_err(|e| format!("本地推理中断：{e}"))?
+pub async fn speak_chat_local(_app: tauri::AppHandle, _prompt: String) -> Result<String, String> {
+    Err("内置本地 Qwen 已移除以精简安装包体积，请使用 Lirio 官方 DeepSeek 按量余额或配置自定义 API Key。".into())
 }
 
 #[tauri::command]
