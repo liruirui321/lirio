@@ -205,6 +205,11 @@ export function MaterialLibrary({
       .finally(() => setLoading(false));
   };
   useEffect(refresh, [refreshKey]);
+  useEffect(() => {
+    const onUpdated = () => refresh();
+    window.addEventListener('lirio-library-updated', onUpdated);
+    return () => window.removeEventListener('lirio-library-updated', onUpdated);
+  }, []);
 
   const tagged = useMemo(() => items.map((item) => ({ item, ...classifyMaterial(item.name) })), [items]);
 

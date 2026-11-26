@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { addMistakeToWordBook, getWordAudio } from '../services/corpusService';
+import { addMistakeToWordBook, addSavedWordToCollection, getWordAudio } from '../services/corpusService';
+import { addSavedSentenceToLibrary } from '../services/savedSentencesService';
 import {
   loadSpeakState,
   synthesizeSpeech,
   translateSelection,
   type SelectionTranslation,
 } from '../services/speakService';
-import { IconCheck, IconPlus, IconStop, IconTranslate, IconVolume } from './Icons';
+import { IconBookmark, IconCheck, IconPlus, IconStop, IconTranslate, IconVolume } from './Icons';
 
 interface ActiveSelection {
   text: string;
@@ -27,6 +28,8 @@ export function SelectionTools() {
   const [translation, setTranslation] = useState<SelectionTranslation | null>(null);
   const [translateError, setTranslateError] = useState('');
   const [savedWord, setSavedWord] = useState(false);
+  const [savingCollection, setSavingCollection] = useState(false);
+  const [savedCollectionKind, setSavedCollectionKind] = useState<'word' | 'sentence' | null>(null);
 
   const [speaking, setSpeaking] = useState(false);
 
@@ -35,6 +38,7 @@ export function SelectionTools() {
   const blobUrlRef = useRef<string | null>(null);
   const transReqRef = useRef(0);
   const speakReqRef = useRef(0);
+  const saveReqRef = useRef(0);
 
   const stopAudio = () => {
     if (audioRef.current) {
@@ -53,6 +57,7 @@ export function SelectionTools() {
   const dismiss = (clearBrowserSelection: boolean) => {
     transReqRef.current++;
     speakReqRef.current++;
+    saveReqRef.current++;
     stopAudio();
     setSel(null);
     setPos(null);
@@ -61,6 +66,8 @@ export function SelectionTools() {
     setTranslation(null);
     setTranslateError('');
     setSavedWord(false);
+    setSavingCollection(false);
+    setSavedCollectionKind(null);
     if (clearBrowserSelection) {
       try {
         window.getSelection()?.removeAllRanges();
@@ -114,12 +121,15 @@ export function SelectionTools() {
 
         transReqRef.current++;
         speakReqRef.current++;
+        saveReqRef.current++;
         stopAudio();
         setTranslateOpen(false);
         setTranslating(false);
         setTranslation(null);
         setTranslateError('');
         setSavedWord(false);
+        setSavingCollection(false);
+        setSavedCollectionKind(null);
         setSel({
           text: raw,
           context,
@@ -247,6 +257,54 @@ export function SelectionTools() {
     }
   };
 
+  const handleSaveToCollection = async () => {
+    if (!sel || savingCollection || savedCollectionKind) return;
+    const clean =
+      sel.text.replace(/^[\s"'“”‘’.,!?;:()[\]]+|[\s"'“”‘’.,!?;:()[\]]+$/g, '').trim() || sel.text;
+    const words = clean.split(/\s+/).filter(Boolean);
+    const isSentence = words.length > 3 || /[.!?。！？]/.test(clean) || clean.length > 42;
+    const mySaveReq = ++saveReqRef.current;
+
+    if (!isSentence) {
+      addSavedWordToCollection(clean, translation?.meaning, translation?.phonetic);
+      setSavedCollectionKind('word');
+      if (!translation?.meaning) {
+        translateSelection(clean, sel.context)
+          .then((tr) => {
+            if (tr?.meaning) {
+              addSavedWordToCollection(clean, tr.meaning, tr.phonetic);
+            }
+          })
+          .catch(() => {});
+      }
+      return;
+    }
+
+    setSavingCollection(true);
+    try {
+      let transText = translation?.meaning || '';
+      if (!transText) {
+        try {
+          const tr = await translateSelection(clean, sel.context);
+          transText = tr?.meaning || '';
+        } catch {}
+      }
+      await addSavedSentenceToLibrary(sel.text, transText);
+      if (saveReqRef.current === mySaveReq) {
+        setSavedCollectionKind('sentence');
+      }
+    } catch (e) {
+      if (saveReqRef.current === mySaveReq) {
+        setTranslateOpen(true);
+        setTranslateError('收藏失败：' + String(e));
+      }
+    } finally {
+      if (saveReqRef.current === mySaveReq) {
+        setSavingCollection(false);
+      }
+    }
+  };
+
   if (!sel) return null;
 
   return (
@@ -277,6 +335,25 @@ export function SelectionTools() {
         >
           {speaking ? <IconStop size={14} /> : <IconVolume size={14} />}
           <span>{speaking ? '停止' : '朗读'}</span>
+        </button>
+        <span className="selection-divider" />
+        <button
+          type="button"
+          className={`selection-action-btn${savedCollectionKind ? ' active' : ''}`}
+          disabled={savingCollection}
+          title="单词加入「我的收藏」词本，句子加入精听「我收藏的句子」"
+          onClick={() => void handleSaveToCollection()}
+        >
+          {savedCollectionKind ? <IconCheck size={14} /> : <IconBookmark size={14} />}
+          <span>
+            {savingCollection
+              ? '收藏中…'
+              : savedCollectionKind === 'word'
+                ? '已存词本'
+                : savedCollectionKind === 'sentence'
+                  ? '已存精听'
+                  : '收藏'}
+          </span>
         </button>
       </div>
 

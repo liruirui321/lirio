@@ -232,12 +232,16 @@ pub async fn speak_transcribe(
         let out_base = cache.join(format!("speak-{id}"));
         fs::write(&wav_path, &wav_bytes).map_err(|e| format!("写入录音失败：{e}"))?;
 
+        let threads = std::thread::available_parallelism()
+            .map(|n| n.get().clamp(4, 8))
+            .unwrap_or(6)
+            .to_string();
         let status = Command::new(&cli)
             .args(["-m"])
             .arg(&model)
             .arg("-f")
             .arg(&wav_path)
-            .args(["-l", "auto", "-nt", "-otxt", "-of"])
+            .args(["-l", "auto", "-bs", "1", "-bo", "1", "-t", &threads, "-np", "-nt", "-otxt", "-of"])
             .arg(&out_base)
             .stdout(Stdio::null())
             .stderr(Stdio::null())

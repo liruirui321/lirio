@@ -423,7 +423,7 @@ const demoController = (() => {
       later(cursor + 120, () => {
         audioBtn?.classList.remove('is-playing');
         cardEl?.classList.add('is-correct');
-        tiles().forEach((t) => t.classList.add('complete'));
+        lettersEl.innerHTML = `<span class="demo-word-passed">${card.word.toLowerCase()}</span>`;
         if (streakEl) {
           streakEl.textContent = `连对 ${card.streak} 🔥`;
           streakEl.classList.add('bump');

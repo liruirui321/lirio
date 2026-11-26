@@ -12,6 +12,7 @@ import {
   IconMic,
   IconPause,
   IconPhone,
+  IconPlay,
   IconPlus,
   IconSend,
   IconSettings,
@@ -62,7 +63,7 @@ import {
 } from '../../services/speakService';
 
 type SpeakSubView = 'call' | 'review' | 'library' | 'history';
-type CallPhase = 'idle' | 'ai_speaking' | 'part2_prep' | 'listening' | 'transcribing' | 'thinking';
+type CallPhase = 'idle' | 'ai_speaking' | 'part2_prep' | 'listening' | 'transcribing' | 'thinking' | 'paused';
 
 export interface SpeakExternalContext {
   title: string;
@@ -104,6 +105,7 @@ export function SpeakCompanion({
 
   // Live voice call state
   const [callActive, setCallActive] = useState<boolean>(false);
+  const [callPaused, setCallPaused] = useState<boolean>(false);
   const [callPhase, setCallPhase] = useState<CallPhase>('idle');
   const [muted, setMuted] = useState<boolean>(false);
   const [micLevel, setMicLevel] = useState<number>(0);
@@ -194,6 +196,7 @@ export function SpeakCompanion({
   const questionRef = useRef<IeltsQuestionItem | undefined>(activeQuestion);
   const part2DoneRef = useRef<boolean>(part2MonologueDone);
   const mutedRef = useRef<boolean>(muted);
+  const callPausedRef = useRef<boolean>(callPaused);
   const recorderRef = useRef<VadVoiceRecorder | null>(null);
   const shadowRecorderRef = useRef<VadVoiceRecorder | null>(null);
   const mockQueueRef = useRef<IeltsQuestionItem[]>([]);
@@ -205,6 +208,9 @@ export function SpeakCompanion({
   const handleOrbTapRef = useRef<() => void>(() => {});
   const externalContextRef = useRef<SpeakExternalContext | null>(externalContext);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackCtxRef = useRef<AudioContext | null>(null);
+  const playbackGainRef = useRef<GainNode | null>(null);
+  const playbackSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const playSeqRef = useRef<number>(0);
   const playResolveRef = useRef<(() => void) | null>(null);
 
@@ -259,6 +265,14 @@ export function SpeakCompanion({
 
   const stopAudio = useCallback(() => {
     playSeqRef.current++;
+    if (playbackSourceRef.current) {
+      try {
+        playbackSourceRef.current.onended = null;
+        playbackSourceRef.current.stop();
+        playbackSourceRef.current.disconnect();
+      } catch {}
+      playbackSourceRef.current = null;
+    }
     if (audioRef.current) {
       audioRef.current.onended = null;
       audioRef.current.onerror = null;
@@ -289,11 +303,46 @@ export function SpeakCompanion({
   useEffect(() => {
     return () => {
       callActiveRef.current = false;
+      callPausedRef.current = false;
       stopAudio();
+      if (playbackCtxRef.current) {
+        try {
+          void playbackCtxRef.current.close();
+        } catch {}
+        playbackCtxRef.current = null;
+        playbackGainRef.current = null;
+      }
       recorderRef.current?.cancel();
       shadowRecorderRef.current?.cancel();
     };
   }, [stopAudio]);
+
+  const getPlaybackOutput = useCallback((): { ctx: AudioContext; gain: GainNode } | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      if (!playbackCtxRef.current || playbackCtxRef.current.state === 'closed') {
+        const ctx = new AudioContext();
+        const gain = ctx.createGain();
+        gain.gain.value = 1.55;
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -10;
+        comp.knee.value = 12;
+        comp.ratio.value = 6;
+        comp.attack.value = 0.003;
+        comp.release.value = 0.15;
+        gain.connect(comp);
+        comp.connect(ctx.destination);
+        playbackCtxRef.current = ctx;
+        playbackGainRef.current = gain;
+      }
+      if (playbackCtxRef.current.state === 'suspended') {
+        void playbackCtxRef.current.resume().catch(() => {});
+      }
+      return { ctx: playbackCtxRef.current, gain: playbackGainRef.current! };
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     if (subView !== 'review') {
@@ -310,8 +359,17 @@ export function SpeakCompanion({
         .split(/(?<=[.!?。！？])\s+/)
         .map((s) => s.trim())
         .filter(Boolean);
-      const chunks = sentences.length > 0 ? sentences : [text.trim()].filter(Boolean);
+      let chunks = sentences.length > 0 ? sentences : [text.trim()].filter(Boolean);
       if (!chunks.length) return true;
+      // Split a long leading sentence at the first clause boundary so TTS speaks sooner
+      if (chunks[0].length > 85) {
+        const match = chunks[0].slice(35).match(/^(.*?[—;，,])\s+(.+)$/);
+        if (match) {
+          const head = (chunks[0].slice(0, 35) + match[1]).trim();
+          const tail = match[2].trim();
+          if (head && tail) chunks = [head, tail, ...chunks.slice(1)];
+        }
+      }
 
       const accent = configRef.current.accent;
       const voiceOverride =
@@ -325,7 +383,7 @@ export function SpeakCompanion({
       let nextPromise: Promise<string> | null = synthesizeSpeech(chunks[0], accent, voiceOverride);
 
       for (let i = 0; i < chunks.length; i++) {
-        if (seq !== playSeqRef.current) return false;
+        if (seq !== playSeqRef.current || callPausedRef.current) return false;
         const currentPromise = nextPromise!;
         nextPromise =
           i + 1 < chunks.length ? synthesizeSpeech(chunks[i + 1], accent, voiceOverride) : null;
@@ -336,43 +394,94 @@ export function SpeakCompanion({
         } catch {
           continue;
         }
-        if (seq !== playSeqRef.current) {
+        if (seq !== playSeqRef.current || callPausedRef.current) {
           URL.revokeObjectURL(url);
           return false;
         }
 
-        await new Promise<void>((resolve) => {
-          const audio = new Audio(url);
-          audio.volume = 1;
-          audioRef.current = audio;
-          let settled = false;
-          const done = () => {
-            if (settled) return;
-            settled = true;
-            if (playResolveRef.current === done) playResolveRef.current = null;
-            if (audioRef.current === audio) {
-              audio.onended = null;
-              audio.onerror = null;
-              audioRef.current = null;
+        const out = getPlaybackOutput();
+        let playedViaWebAudio = false;
+        if (out) {
+          try {
+            const resp = await fetch(url);
+            const ab = await resp.arrayBuffer();
+            if (seq !== playSeqRef.current || callPausedRef.current) {
+              URL.revokeObjectURL(url);
+              return false;
             }
-            URL.revokeObjectURL(url);
-            resolve();
-          };
-          playResolveRef.current = done;
-          audio.onended = done;
-          audio.onerror = done;
-          audio.play().catch(done);
-        });
-        if (seq !== playSeqRef.current) return false;
+            const audioBuf = await out.ctx.decodeAudioData(ab);
+            if (seq !== playSeqRef.current || callPausedRef.current) {
+              URL.revokeObjectURL(url);
+              return false;
+            }
+            if (out.ctx.state === 'suspended') {
+              await out.ctx.resume().catch(() => {});
+            }
+            playedViaWebAudio = true;
+            await new Promise<void>((resolve) => {
+              const src = out.ctx.createBufferSource();
+              src.buffer = audioBuf;
+              src.connect(out.gain);
+              playbackSourceRef.current = src;
+              let settled = false;
+              const done = () => {
+                if (settled) return;
+                settled = true;
+                if (playResolveRef.current === done) playResolveRef.current = null;
+                if (playbackSourceRef.current === src) {
+                  src.onended = null;
+                  try {
+                    src.disconnect();
+                  } catch {}
+                  playbackSourceRef.current = null;
+                }
+                URL.revokeObjectURL(url);
+                resolve();
+              };
+              playResolveRef.current = done;
+              src.onended = done;
+              src.start(0);
+            });
+          } catch {
+            playedViaWebAudio = false;
+          }
+        }
+
+        if (!playedViaWebAudio) {
+          await new Promise<void>((resolve) => {
+            const audio = new Audio(url);
+            audio.volume = 1;
+            audioRef.current = audio;
+            let settled = false;
+            const done = () => {
+              if (settled) return;
+              settled = true;
+              if (playResolveRef.current === done) playResolveRef.current = null;
+              if (audioRef.current === audio) {
+                audio.onended = null;
+                audio.onerror = null;
+                audioRef.current = null;
+              }
+              URL.revokeObjectURL(url);
+              resolve();
+            };
+            playResolveRef.current = done;
+            audio.onended = done;
+            audio.onerror = done;
+            audio.play().catch(done);
+          });
+        }
+        if (seq !== playSeqRef.current || callPausedRef.current) return false;
       }
-      return seq === playSeqRef.current;
+      return seq === playSeqRef.current && !callPausedRef.current;
     },
-    [stopAudio],
+    [stopAudio, getPlaybackOutput],
   );
 
   const beginListeningTurn = useCallback(async () => {
-    if (!callActiveRef.current) return;
+    if (!callActiveRef.current || callPausedRef.current) return;
     await stopRecorder();
+    if (!callActiveRef.current || callPausedRef.current) return;
     setCallPhase('listening');
     setHeardVoice(false);
     setMicLevel(0);
@@ -382,7 +491,11 @@ export function SpeakCompanion({
       questionRef.current?.part === 'part2' &&
       !part2DoneRef.current;
 
-    const silenceMs = isPart2Monologue ? 4500 : configRef.current.silenceMs || 1800;
+    const silenceMs = isPart2Monologue
+      ? 4500
+      : speakModeRef.current === 'companion'
+        ? Math.min(configRef.current.silenceMs || 1200, 1200)
+        : configRef.current.silenceMs || 1600;
 
     const rec = new VadVoiceRecorder();
     rec.setMuted(mutedRef.current);
@@ -393,7 +506,7 @@ export function SpeakCompanion({
         onLevel: (lvl) => setMicLevel(lvl),
         onSpeechDetected: () => setHeardVoice(true),
         onSpeechEnd: async (wav) => {
-          if (!callActiveRef.current) return;
+          if (!callActiveRef.current || callPausedRef.current) return;
           recorderRef.current = null;
           setMicLevel(0);
           setHeardVoice(false);
@@ -404,10 +517,10 @@ export function SpeakCompanion({
           setCallPhase('transcribing');
           try {
             const text = await transcribeVoice(wav);
-            if (!callActiveRef.current) return;
+            if (!callActiveRef.current || callPausedRef.current) return;
             await processUserTurnInCall(text);
           } catch (e) {
-            if (!callActiveRef.current) return;
+            if (!callActiveRef.current || callPausedRef.current) return;
             setStatusMsg(String(e));
             beginListeningTurn();
           }
@@ -489,6 +602,7 @@ export function SpeakCompanion({
         const afterAi = [...turnsRef.current, aiTurn];
         turnsRef.current = afterAi;
         setTurns(afterAi);
+        if (callPausedRef.current) return;
 
         setCallPhase('ai_speaking');
         const finished = await playTtsAndWait(reply);
@@ -502,9 +616,9 @@ export function SpeakCompanion({
         }
       } catch (e) {
         setStatusMsg(String(e));
-        if (callActiveRef.current) {
+        if (callActiveRef.current && !callPausedRef.current) {
           beginListeningTurn();
-        } else {
+        } else if (!callActiveRef.current) {
           setCallPhase('idle');
         }
       }
@@ -612,6 +726,8 @@ export function SpeakCompanion({
       setTurns([openerTurn]);
       setActiveReview(null);
       setShadowResults({});
+      callPausedRef.current = false;
+      setCallPaused(false);
       callActiveRef.current = true;
       setCallActive(true);
       setSubView('call');
@@ -786,6 +902,24 @@ export function SpeakCompanion({
     beginListeningTurn();
   }, [callPhase, stopAudio, beginListeningTurn]);
 
+  const handleTogglePause = useCallback(async () => {
+    if (!callActiveRef.current) return;
+    if (callPausedRef.current) {
+      callPausedRef.current = false;
+      setCallPaused(false);
+      setStatusMsg('');
+      await beginListeningTurn();
+    } else {
+      callPausedRef.current = true;
+      setCallPaused(true);
+      setCallPhase('paused');
+      stopAudio();
+      await stopRecorder();
+      setHeardVoice(false);
+      setMicLevel(0);
+    }
+  }, [beginListeningTurn, stopAudio, stopRecorder]);
+
   const handleOrbTap = useCallback(async () => {
     if (!callActiveRef.current) {
       if (speakModeRef.current === 'examiner') {
@@ -804,6 +938,10 @@ export function SpeakCompanion({
       handleStartCall();
       return;
     }
+    if (callPausedRef.current) {
+      await handleTogglePause();
+      return;
+    }
     if (callPhase === 'part2_prep') {
       handleSkipPart2Prep();
       return;
@@ -819,20 +957,20 @@ export function SpeakCompanion({
       setCallPhase('transcribing');
       try {
         const wav = await rec.forceFinish();
-        if (!callActiveRef.current) return;
+        if (!callActiveRef.current || callPausedRef.current) return;
         if (wav.length < 400) {
           beginListeningTurn();
           return;
         }
         const text = await transcribeVoice(wav);
-        if (!callActiveRef.current) return;
+        if (!callActiveRef.current || callPausedRef.current) return;
         await processUserTurnInCall(text);
       } catch (e) {
         setStatusMsg(String(e));
-        if (callActiveRef.current) beginListeningTurn();
+        if (callActiveRef.current && !callPausedRef.current) beginListeningTurn();
       }
     }
-  }, [callPhase, examLaunchMode, drawnSet, activeDeck, activeQuestion, handleStartFullMock, handleStartCall, handleSkipPart2Prep, stopAudio, beginListeningTurn, processUserTurnInCall]);
+  }, [callPhase, examLaunchMode, drawnSet, activeDeck, activeQuestion, handleStartFullMock, handleStartCall, handleTogglePause, handleSkipPart2Prep, stopAudio, beginListeningTurn, processUserTurnInCall]);
 
   useEffect(() => {
     handleOrbTapRef.current = () => {
@@ -900,6 +1038,8 @@ export function SpeakCompanion({
       setActiveReview(null);
       setShadowResults({});
       setStatusMsg('');
+      callPausedRef.current = false;
+      setCallPaused(false);
       callActiveRef.current = true;
       setCallActive(true);
       setSubView('call');
@@ -923,6 +1063,8 @@ export function SpeakCompanion({
     mockQueueRef.current = [];
     setMockStep(0);
     mockStepRef.current = 0;
+    callPausedRef.current = false;
+    setCallPaused(false);
     callActiveRef.current = false;
     setCallActive(false);
     setCallPhase('idle');
@@ -1128,7 +1270,9 @@ export function SpeakCompanion({
             ? '正在识别…'
             : callPhase === 'thinking'
               ? '思考中…'
-              : speakMode === 'examiner'
+              : callPhase === 'paused'
+                ? '通话已暂停 · 点继续或光球恢复'
+                : speakMode === 'examiner'
                 ? '点击光球，开始雅思口语模考'
                 : incognito
                   ? `点击光球，与 ${activePersona.name} 无痕通话`
@@ -1382,15 +1526,26 @@ export function SpeakCompanion({
           {/* Minimal Floating Bottom Dock */}
           <div className="speak-bottom-dock">
             {callActive && (
-              <button
-                type="button"
-                className={`dock-circle${muted ? ' active' : ''}`}
-                title={muted ? '取消静音' : '静音'}
-                aria-label="静音"
-                onClick={() => setMuted((m) => !m)}
-              >
-                {muted ? <IconPause size={16} /> : <IconMic size={16} />}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={`dock-circle${muted ? ' active' : ''}`}
+                  title={muted ? '取消静音' : '静音'}
+                  aria-label="静音"
+                  onClick={() => setMuted((m) => !m)}
+                >
+                  <IconMic size={16} style={muted ? { opacity: 0.45 } : undefined} />
+                </button>
+                <button
+                  type="button"
+                  className={`dock-circle${callPaused ? ' active' : ''}`}
+                  title={callPaused ? '继续通话' : '暂停通话'}
+                  aria-label={callPaused ? '继续通话' : '暂停通话'}
+                  onClick={() => void handleTogglePause()}
+                >
+                  {callPaused ? <IconPlay size={16} /> : <IconPause size={16} />}
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -1555,15 +1710,26 @@ export function SpeakCompanion({
 
             <div className="speak-chat-dock">
               {callActive && (
-                <button
-                  type="button"
-                  className={`dock-circle sm${muted ? ' active' : ''}`}
-                  title={muted ? '取消静音' : '静音'}
-                  aria-label="静音"
-                  onClick={() => setMuted((m) => !m)}
-                >
-                  {muted ? <IconPause size={15} /> : <IconMic size={15} />}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className={`dock-circle sm${muted ? ' active' : ''}`}
+                    title={muted ? '取消静音' : '静音'}
+                    aria-label="静音"
+                    onClick={() => setMuted((m) => !m)}
+                  >
+                    <IconMic size={15} style={muted ? { opacity: 0.45 } : undefined} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`dock-circle sm${callPaused ? ' active' : ''}`}
+                    title={callPaused ? '继续通话' : '暂停通话'}
+                    aria-label={callPaused ? '继续通话' : '暂停通话'}
+                    onClick={() => void handleTogglePause()}
+                  >
+                    {callPaused ? <IconPlay size={15} /> : <IconPause size={15} />}
+                  </button>
+                </>
               )}
               <button
                 type="button"

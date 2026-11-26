@@ -542,7 +542,7 @@ export async function exportMistakesCsv(entries: MistakeEntry[], defaultName = '
   return true;
 }
 
-function encodeWavMono16(samples: Float32Array, sampleRate: number): Uint8Array {
+export function encodeWavMono16(samples: Float32Array, sampleRate: number): Uint8Array {
   const numSamples = samples.length;
   const buffer = new ArrayBuffer(44 + numSamples * 2);
   const view = new DataView(buffer);
@@ -651,4 +651,57 @@ export function addMistakeToWordBook(word: string, sourceTitle: string, meaning?
   };
   saveCorpusState(state);
   return !existing;
+}
+
+export const SAVED_WORDS_BOOK_ID = 'my_saved_words';
+
+export function addSavedWordToCollection(
+  word: string,
+  meaning?: string,
+  phonetic?: string,
+): { added: boolean; total: number } {
+  const clean = word.trim().replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9'-]+$/g, '');
+  if (!clean) return { added: false, total: 0 };
+  const state = loadCorpusState();
+  const existingBook = state.customBooks[SAVED_WORDS_BOOK_ID];
+  const prevWords = existingBook ? [...existingBook.words] : [];
+  const key = clean.toLowerCase();
+  const idx = prevWords.findIndex((w) => w.w.toLowerCase() === key);
+  const cleanMeaning = meaning ? meaning.trim() : '';
+  const cleanPhonetic = phonetic ? phonetic.replace(/^\/+|\/+$/g, '').trim() : '';
+  let added = false;
+
+  if (idx >= 0) {
+    const old = prevWords[idx];
+    prevWords[idx] = {
+      ...old,
+      t: old.t || cleanMeaning,
+      uk: old.uk || cleanPhonetic || undefined,
+      us: old.us || cleanPhonetic || undefined,
+    };
+  } else {
+    prevWords.unshift({
+      w: clean,
+      t: cleanMeaning,
+      uk: cleanPhonetic || undefined,
+      us: cleanPhonetic || undefined,
+    });
+    added = true;
+  }
+
+  state.customBooks[SAVED_WORDS_BOOK_ID] = {
+    meta: {
+      id: SAVED_WORDS_BOOK_ID,
+      title: '我的收藏',
+      subtitle: '对话与学习中收藏的生词',
+      count: prevWords.length,
+      builtIn: false,
+    },
+    words: prevWords,
+  };
+  saveCorpusState(state);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('lirio-corpus-updated'));
+  }
+  return { added, total: prevWords.length };
 }

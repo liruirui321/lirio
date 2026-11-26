@@ -20,24 +20,20 @@
       "arch": "64 位 (x64)",
       "minOs": "Windows 10 / 11",
       "format": ".exe",
-      "statusNote": "即将上线",
-      "comingSoon": true,
       "version": "0.5.2",
       "filename": "Lirio-0.5.2-windows-x64-setup.exe",
-      "downloadUrl": "",
+      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.2-windows-x64-setup.exe",
       "autoUpdate": true
     },
     "android": {
       "label": "Android",
-      "arch": "ARM64 / ARMv7",
+      "arch": "ARM64 (Android 9+)",
       "minOs": "Android 9+",
       "format": ".apk",
-      "statusNote": "即将上线",
-      "comingSoon": true,
       "version": "0.5.2",
       "filename": "Lirio-0.5.2-android.apk",
-      "downloadUrl": "",
-      "autoUpdate": false
+      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.2-android.apk",
+      "autoUpdate": true
     },
     "ios": {
       "label": "iPhone / iOS",

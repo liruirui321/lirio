@@ -199,6 +199,12 @@ export function CorpusDictation({
     [],
   );
 
+  useEffect(() => {
+    const onUpdated = () => setPersisted(loadCorpusState());
+    window.addEventListener('lirio-corpus-updated', onUpdated);
+    return () => window.removeEventListener('lirio-corpus-updated', onUpdated);
+  }, []);
+
   const mistakeCount = Object.keys(persisted.mistakes || {}).length;
   const historyCount = persisted.history?.length || 0;
   useEffect(() => {
@@ -1319,17 +1325,21 @@ export function CorpusDictation({
                           className="corpus-letter-stage"
                           onMouseDown={() => cardInputRef.current?.focus()}
                         >
-                          <div className={`corpus-letter-row ${sizeCls}`} aria-hidden="true">
-                            {segments.map((seg, si) =>
-                              seg.type === 'space' ? (
-                                renderSlot(seg.idx)
-                              ) : (
-                                <span key={`w-${si}`} className="corpus-letter-word">
-                                  {seg.indices.map(renderSlot)}
-                                </span>
-                              ),
-                            )}
-                          </div>
+                          {isPassed || (submitted && res?.correct) ? (
+                            <div className="corpus-word-passed">{item.w}</div>
+                          ) : (
+                            <div className={`corpus-letter-row ${sizeCls}`} aria-hidden="true">
+                              {segments.map((seg, si) =>
+                                seg.type === 'space' ? (
+                                  renderSlot(seg.idx)
+                                ) : (
+                                  <span key={`w-${si}`} className="corpus-letter-word">
+                                    {seg.indices.map(renderSlot)}
+                                  </span>
+                                ),
+                              )}
+                            </div>
+                          )}
                           <input
                             ref={cardInputRef}
                             className="corpus-letter-hidden-input"
