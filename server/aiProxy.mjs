@@ -417,6 +417,13 @@ function ensureEdgeWorker() {
   return edgeWorker;
 }
 
+export function warmupEdgeWorker() {
+  if (isMockMode()) return;
+  try {
+    ensureEdgeWorker();
+  } catch {}
+}
+
 async function synthLocalNeuralEdgeTts(text, accent, requestedVoice) {
   const voice = resolveNeuralEdgeVoice(accent, requestedVoice);
   const outPath = path.join(os.tmpdir(), `lirio-pro-tts-${randomUUID()}.mp3`);
@@ -556,6 +563,35 @@ export async function forwardTts({ text, accent = 'uk', voice }) {
   return res;
 }
 
+async function callAsrOnce(baseUrl, apiKey, buf, cleanMime, ext, model) {
+  const form = new FormData();
+  form.append('file', new Blob([buf], { type: cleanMime }), `speech.${ext}`);
+  form.append('model', model);
+  if (model === 'whisper-1') {
+    form.append('language', 'en');
+  }
+
+  const resp = await fetch(`${baseUrl}/audio/transcriptions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: form,
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data?.error?.message || `云端语音识别失败 (${resp.status})`);
+  }
+  const text = String(data?.text || '')
+    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '')
+    .trim();
+  if (!text) {
+    throw new Error('未识别到清晰语音，请再试一次。');
+  }
+  return text;
+}
+
 export async function forwardTranscribe({ wavBuf, wavBase64, mimeType, durationSec }) {
   const buf = Buffer.isBuffer(wavBuf) ? wavBuf : Buffer.from(String(wavBase64 || ''), 'base64');
   if (buf.length < 64) {
@@ -584,36 +620,24 @@ export async function forwardTranscribe({ wavBuf, wavBase64, mimeType, durationS
 
   const cleanMime = String(mimeType || 'audio/wav').split(';')[0].trim() || 'audio/wav';
   const ext = cleanMime.includes('webm') ? 'webm' : cleanMime.includes('ogg') ? 'ogg' : cleanMime.includes('mpeg') ? 'mp3' : 'wav';
-  const form = new FormData();
-  form.append('file', new Blob([buf], { type: cleanMime }), `speech.${ext}`);
-  form.append('model', asrModel);
-  if (asrModel === 'whisper-1') {
-    form.append('language', 'en');
-  }
 
-  const resp = await fetch(`${baseUrl}/audio/transcriptions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: form,
-  });
-
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    throw new Error(data?.error?.message || `云端语音识别失败 (${resp.status})`);
-  }
-  const text = String(data?.text || '')
-    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '')
-    .trim();
-  if (!text) {
-    throw new Error('未识别到清晰语音，请再试一次。');
+  let usedModel = asrModel;
+  let text;
+  try {
+    text = await callAsrOnce(baseUrl, apiKey, buf, cleanMime, ext, asrModel);
+  } catch (err) {
+    const canFallback =
+      baseUrl.includes('siliconflow') && asrModel !== 'FunAudioLLM/SenseVoiceSmall';
+    if (!canFallback) throw err;
+    console.warn('[ASR] primary model failed, falling back to SenseVoiceSmall:', err?.message || err);
+    usedModel = 'FunAudioLLM/SenseVoiceSmall';
+    text = await callAsrOnce(baseUrl, apiKey, buf, cleanMime, ext, usedModel);
   }
 
   return {
     provider: baseUrl.includes('siliconflow') ? 'siliconflow' : 'openai',
-    model: asrModel,
-    isFree: isSenseVoice,
+    model: usedModel,
+    isFree: usedModel.includes('SenseVoiceSmall'),
     durationSec: approxSec,
     text,
   };

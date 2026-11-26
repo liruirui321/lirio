@@ -62,7 +62,7 @@ import {
   getDeepSeekRatesPer1M,
   isDeepSeekPeakBeijing,
 } from './pricing.mjs';
-import { forwardChatCompletion, forwardTranscribe, forwardTts } from './aiProxy.mjs';
+import { forwardChatCompletion, forwardTranscribe, forwardTts, warmupEdgeWorker } from './aiProxy.mjs';
 
 function isValidAccountId(raw) {
   const s = String(raw || '').trim();
@@ -1971,6 +1971,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(`[lirio-pro-server] demo tester ready: ${demo.email} balance=${demo.balanceUnits}`);
   }
   server.listen(port, host, () => {
+    if (!process.env.LIRIO_MOCK_AI) {
+      warmupEdgeWorker();
+    }
     console.log(`[lirio-pro-server] (${check.mode}) listening on http://${host}:${port}`);
   });
 }
