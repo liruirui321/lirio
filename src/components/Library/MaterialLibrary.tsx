@@ -124,12 +124,23 @@ function classifyMaterial(name: string) {
   const book = name.match(/(?:剑桥(?:雅思)?|剑雅|Cambridge(?:\s+IELTS)?)\s*(\d+)|IELTS\s*(\d+)/i);
   const kind = /机经/.test(name) ? 'recalled' : book ? 'cambridge' : 'other';
   const month = name.match(/20\d{2}[-.]\d{1,2}/)?.[0].replace('.', '-') || '';
-  const group = kind === 'cambridge' ? `剑雅 ${book?.[1] || book?.[2]}` : kind === 'recalled' ? month : '';
+  const explicitTierMatch = name.match(/^\[(L[1-4])\]\s*(.+)$/i);
+  const explicitTier = explicitTierMatch?.[1]?.toUpperCase() as Exclude<TierId, 'all'> | undefined;
+  const bracketRest = explicitTierMatch?.[2]?.trim() || '';
+  const bracketCategory =
+    !book && kind !== 'recalled' && bracketRest.includes('·')
+      ? bracketRest.split('·')[0].trim()
+      : '';
+  const group =
+    kind === 'cambridge'
+      ? `剑雅 ${book?.[1] || book?.[2]}`
+      : kind === 'recalled'
+        ? month
+        : bracketCategory;
   const test = name.match(/Test\s*(\d+)/i)?.[1];
   const recalledSet = name.match(/·\s*(\d+)\s*·/)?.[1];
   const part = name.match(/Part\s*(\d+)/i)?.[1] || '';
 
-  const explicitTier = name.match(/^\[(L[1-4])\]/i)?.[1]?.toUpperCase() as Exclude<TierId, 'all'> | undefined;
   let tier: Exclude<TierId, 'all'> = explicitTier || 'L2';
   if (!explicitTier) {
     if (

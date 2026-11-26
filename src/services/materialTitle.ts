@@ -63,12 +63,23 @@ export function simplifyMaterialTitle(raw: string): SimplifiedTitle {
     };
   }
 
-  // 5. Podcast / Bracketed tier prefix: [L1] BBC 6 Minute English · Episode...
-  const podMatch = cleaned.match(/^\[(L\d)\]\s*(.+)$/);
+  // 5. Graded / Bracketed tier prefix: [L1] 日常对话 · 咖啡店点单 -> badge: 日常对话, shortTitle: 咖啡店点单
+  const podMatch = cleaned.match(/^\[(L[1-4])\]\s*(.+)$/i);
   if (podMatch) {
+    const rest = podMatch[2].trim();
+    const dotIdx = rest.indexOf('·');
+    if (dotIdx > 0) {
+      const cat = rest.slice(0, dotIdx).trim();
+      const body = rest.slice(dotIdx + 1).trim();
+      if (cat && body) {
+        return {
+          shortTitle: truncateTitle(body),
+          badge: cat,
+        };
+      }
+    }
     return {
-      shortTitle: truncateTitle(podMatch[2].trim()),
-      badge: podMatch[1],
+      shortTitle: truncateTitle(rest),
     };
   }
 
