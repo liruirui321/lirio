@@ -830,18 +830,18 @@ export function GlobalSettingsModal({
                     </div>
                     <label
                       className="settings-check-line"
-                      title="开启后使用云端语音，响应更快；关闭后使用本地语音，速度会慢一些"
+                      title="开启后使用云端语音与转写；关闭后使用本机语音与转写"
                     >
                       <input
                         type="checkbox"
                         checked={account.proCloudSpeech}
                         onChange={(e) => updateAccountState({ proCloudSpeech: e.target.checked })}
                       />
-                      云端语音（更快）
+                      云端语音
                     </label>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -4, lineHeight: 1.5 }}>
-                    云端模式响应更快；关闭后使用本地语音与转写（速度会慢一些）。
+                    开启后使用云端语音与转写；关闭后使用本机语音与转写。
                   </div>
 
                   <div className="import-modal-actions">
@@ -1261,7 +1261,7 @@ export function GlobalSettingsModal({
                 <div className="guide-block">
                   <strong>本地与云端语音</strong>
                   <p>
-                    日常学习功能均可本地运行；开启云端模式响应更快，关闭后使用本地语音与转写（速度会慢一些）。
+                    日常学习功能均可本地运行；也可按需开启云端语音与转写，设备缺少本地语音组件时可直接联网使用。
                   </p>
                 </div>
               </div>
