@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::Manager;
 
 fn validate_key(key: &str) -> Result<(), String> {
     if key.is_empty()
@@ -42,21 +41,13 @@ fn load_from_dir(dir: &Path, key: &str) -> Result<Option<String>, String> {
 
 #[tauri::command]
 pub fn app_state_load(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("lirio_state");
+    let dir = crate::commands::project::resolve_data_root(&app)?.join("lirio_state");
     load_from_dir(&dir, &key)
 }
 
 #[tauri::command]
 pub fn app_state_save(app: tauri::AppHandle, key: String, value: String) -> Result<(), String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("lirio_state");
+    let dir = crate::commands::project::resolve_data_root(&app)?.join("lirio_state");
     save_to_dir(&dir, &key, &value)
 }
 

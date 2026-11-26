@@ -21,6 +21,10 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::project::get_app_data_dir,
+            commands::project::get_storage_info,
+            commands::project::set_storage_dir,
+            commands::project::reset_storage_dir,
+            commands::project::open_storage_dir,
             commands::project::inspect_audio_file,
             commands::transcribe::transcribe_audio,
             commands::transcribe::cancel_transcription,

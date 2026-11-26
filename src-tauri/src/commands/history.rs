@@ -1,6 +1,5 @@
 use serde_json::{json,Value};
 use std::{fs,path::Path,collections::HashSet,hash::{Hash,Hasher},io::Write};
-use tauri::Manager;
 fn read(p:&Path)->Result<Value,String>{serde_json::from_slice(&fs::read(p).map_err(|e|e.to_string())?).map_err(|e|e.to_string())}
 fn fingerprint(r:&Value)->String {
  let mut h=std::collections::hash_map::DefaultHasher::new();
@@ -34,14 +33,14 @@ fn collect(doc:&Value,known:&mut HashSet<String>,dir:&Path,out:&mut Vec<Value>)-
 pub fn submission_record(app:tauri::AppHandle,record:Value)->Result<(),String>{
  for k in ["id","projectId","projectName","sentenceId","expected","answer","submittedAt"]{if !record[k].is_string(){return Err(format!("提交记录字段缺失：{k}"));}}
  if record["expected"].as_str().unwrap().trim().is_empty(){return Err("参考文本不能为空".into());}
- let dir=app.path().app_data_dir().map_err(|e|e.to_string())?.join("submissions");fs::create_dir_all(&dir).map_err(|e|e.to_string())?;store(&dir,&record)
+ let dir=crate::commands::project::resolve_data_root(&app)?.join("submissions");fs::create_dir_all(&dir).map_err(|e|e.to_string())?;store(&dir,&record)
 }
 #[tauri::command]
 pub async fn submission_list(app:tauri::AppHandle,project:Option<Value>)->Result<Value,String>{
  tauri::async_runtime::spawn_blocking(move||list(app,project)).await.map_err(|e|e.to_string())?
 }
 fn list(app:tauri::AppHandle,project:Option<Value>)->Result<Value,String>{
- let root=app.path().app_data_dir().map_err(|e|e.to_string())?;let dir=root.join("submissions");fs::create_dir_all(&dir).map_err(|e|e.to_string())?;
+ let root=crate::commands::project::resolve_data_root(&app)?;let dir=root.join("submissions");fs::create_dir_all(&dir).map_err(|e|e.to_string())?;
  let mut records=Vec::new();let mut warnings=Vec::new();
  for e in fs::read_dir(&dir).map_err(|e|e.to_string())?{let p=e.map_err(|e|e.to_string())?.path();if p.extension().and_then(|s|s.to_str())==Some("json"){match read(&p){Ok(r)=>records.push(r),Err(_)=>warnings.push("有一份提交记录损坏，未计入分析".to_string())}}}
  let mut known:HashSet<String>=records.iter().map(fingerprint).collect();

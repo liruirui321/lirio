@@ -41,11 +41,12 @@ fn urlencode(s: &str) -> String {
 }
 
 fn cache_dir(app: &tauri::AppHandle, accent: &str) -> Result<PathBuf, String> {
-    let ssd_root = PathBuf::from("/Volumes/PortableSSD/AbobooMac/corpus_audio");
-    let base = if Path::new("/Volumes/PortableSSD").is_dir() {
-        ssd_root
+    let base = if crate::commands::project::has_custom_data_root(app) {
+        crate::commands::project::resolve_data_root(app)?.join("corpus_audio")
+    } else if Path::new("/Volumes/PortableSSD").is_dir() {
+        PathBuf::from("/Volumes/PortableSSD/AbobooMac/corpus_audio")
     } else {
-        app.path().app_data_dir().map_err(|e| e.to_string())?.join("corpus_audio")
+        crate::commands::project::resolve_data_root(app)?.join("corpus_audio")
     };
     let dir = base.join(accent);
     std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建音频缓存目录：{e}"))?;

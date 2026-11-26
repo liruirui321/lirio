@@ -26,7 +26,18 @@ import {
   type StoreConfig,
   type StoreOrder,
 } from '../../services/accountService';
-import { exportAllStateJson, importAllStateJson } from '../../services/stateSync';
+import {
+  exportAllStateJson,
+  flushAllStateToDisk,
+  forceReloadStateFromDisk,
+  formatBytes,
+  getStorageInfo,
+  importAllStateJson,
+  openStorageDir,
+  resetStorageDir,
+  setStorageDir,
+  type StorageInfo,
+} from '../../services/stateSync';
 import {
   loadSpeakState,
   saveSpeakState,
@@ -118,6 +129,9 @@ export function GlobalSettingsModal({
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [busyData, setBusyData] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+  const [migrateOnSwitch, setMigrateOnSwitch] = useState(true);
+  const [storageBusy, setStorageBusy] = useState(false);
   const [typingSound, setTypingSound] = useState<boolean>(() => isTypingSoundEnabled());
   const [showGuide, setShowGuide] = useState<boolean>(false);
   const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
@@ -133,6 +147,7 @@ export function GlobalSettingsModal({
     setShowGuide(false);
     setUpdateState(getUpdateState());
     void initAppVersion();
+    getStorageInfo().then(setStorageInfo).catch(() => {});
     const acct = getAccountState();
     setAccount(acct);
     setStatusMsg('');
@@ -358,6 +373,81 @@ export function GlobalSettingsModal({
       setErrorMsg(String(e));
     } finally {
       setBusyData(false);
+    }
+  };
+
+  const handleChangeStorageDir = async () => {
+    setStorageBusy(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    try {
+      const picked = await open({
+        directory: true,
+        multiple: false,
+        title: '选择 Lirio 数据存储文件夹',
+      });
+      if (typeof picked !== 'string' || !picked.trim()) return;
+      if (migrateOnSwitch) {
+        await flushAllStateToDisk();
+      }
+      const info = await setStorageDir(picked, migrateOnSwitch);
+      setStorageInfo(info);
+      if (!migrateOnSwitch) {
+        await forceReloadStateFromDisk();
+      }
+      setStatusMsg(
+        migrateOnSwitch
+          ? `已切换数据目录（同步 ${info.migratedFiles} 个文件）`
+          : '已切换数据目录，后续数据将存入新路径',
+      );
+    } catch (e) {
+      setErrorMsg(String(e));
+    } finally {
+      setStorageBusy(false);
+    }
+  };
+
+  const handleResetStorageDir = async () => {
+    setStorageBusy(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    try {
+      if (migrateOnSwitch) {
+        await flushAllStateToDisk();
+      }
+      const info = await resetStorageDir(migrateOnSwitch);
+      setStorageInfo(info);
+      if (!migrateOnSwitch) {
+        await forceReloadStateFromDisk();
+      }
+      setStatusMsg(
+        migrateOnSwitch
+          ? `已恢复默认数据目录（同步 ${info.migratedFiles} 个文件）`
+          : '已恢复默认数据目录',
+      );
+    } catch (e) {
+      setErrorMsg(String(e));
+    } finally {
+      setStorageBusy(false);
+    }
+  };
+
+  const handleOpenStorageDir = async () => {
+    setErrorMsg('');
+    try {
+      await openStorageDir();
+    } catch (e) {
+      setErrorMsg(String(e));
+    }
+  };
+
+  const handleCopyStorageDir = async () => {
+    if (!storageInfo?.activeDir) return;
+    try {
+      await navigator.clipboard.writeText(storageInfo.activeDir);
+      setStatusMsg('已复制存储路径');
+    } catch (e) {
+      setErrorMsg(String(e));
     }
   };
 
@@ -1073,6 +1163,74 @@ export function GlobalSettingsModal({
                     关闭
                   </button>
                 </div>
+              </div>
+
+              <div className="storage-path-card">
+                <div className="storage-path-head">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="settings-section-title">数据存储位置</span>
+                    {storageInfo && (
+                      <span className={`tier-badge small${storageInfo.isCustom ? ' pro' : ''}`}>
+                        {storageInfo.isCustom ? '自定义目录' : '系统默认'}
+                      </span>
+                    )}
+                  </div>
+                  {storageInfo && (
+                    <small style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatBytes(storageInfo.totalBytes)} · {storageInfo.fileCount} 个文件
+                    </small>
+                  )}
+                </div>
+
+                <div className="storage-path-box" title={storageInfo?.activeDir || ''}>
+                  {storageInfo
+                    ? storageInfo.activeDir
+                    : '网页预览模式（数据暂存浏览器本地 Storage；请用导出备份迁移）'}
+                </div>
+
+                {storageInfo && (
+                  <>
+                    <div className="storage-path-actions">
+                      <button
+                        type="button"
+                        disabled={storageBusy}
+                        onClick={() => void handleChangeStorageDir()}
+                      >
+                        {storageBusy ? '处理中…' : '更改目录'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={storageBusy}
+                        onClick={() => void handleOpenStorageDir()}
+                      >
+                        打开文件夹
+                      </button>
+                      <button type="button" onClick={() => void handleCopyStorageDir()}>
+                        复制路径
+                      </button>
+                      {storageInfo.isCustom && (
+                        <button
+                          type="button"
+                          disabled={storageBusy}
+                          onClick={() => void handleResetStorageDir()}
+                        >
+                          恢复默认
+                        </button>
+                      )}
+                    </div>
+                    <label className="storage-migrate-check">
+                      <input
+                        type="checkbox"
+                        checked={migrateOnSwitch}
+                        onChange={(e) => setMigrateOnSwitch(e.target.checked)}
+                      />
+                      <span>切换时自动复制并迁移当前数据（取消勾选可直接加载目标文件夹已有备份）</span>
+                    </label>
+                  </>
+                )}
+                <small className="storage-path-hint">
+                  包含精听材料库（library）、听写提交记录（submissions）、错词与口语进度（lirio_state）及音频缓存；迁移电脑时直接复制此文件夹即可。
+                </small>
               </div>
 
               <div className="settings-row-between">

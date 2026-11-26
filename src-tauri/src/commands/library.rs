@@ -1,8 +1,7 @@
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf};
-use tauri::Manager;
 fn directory(app: &tauri::AppHandle) -> Result<PathBuf,String> {
-    let dir=app.path().app_data_dir().map_err(|e|e.to_string())?.join("library");
+    let dir=crate::commands::project::resolve_data_root(app)?.join("library");
     fs::create_dir_all(&dir).map_err(|e|e.to_string())?; Ok(dir)
 }
 fn valid(id:&str)->Result<(),String>{uuid::Uuid::parse_str(id).map(|_|()).map_err(|_|"材料编号无效".into())}

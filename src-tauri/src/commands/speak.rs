@@ -700,11 +700,12 @@ pub async fn podcast_download_latest(
     rss_url: String,
     slug: String,
 ) -> Result<PodcastDownloadResult, String> {
-    let ssd_podcasts = PathBuf::from("/Volumes/PortableSSD/AbobooMac/podcasts");
-    let target_dir = if std::path::Path::new("/Volumes/PortableSSD").is_dir() {
-        ssd_podcasts
+    let target_dir = if crate::commands::project::has_custom_data_root(&app) {
+        crate::commands::project::resolve_data_root(&app)?.join("podcasts")
+    } else if std::path::Path::new("/Volumes/PortableSSD").is_dir() {
+        PathBuf::from("/Volumes/PortableSSD/AbobooMac/podcasts")
     } else {
-        app.path().app_data_dir().map_err(|e| e.to_string())?.join("podcasts")
+        crate::commands::project::resolve_data_root(&app)?.join("podcasts")
     };
 
     tauri::async_runtime::spawn_blocking(move || {
