@@ -223,7 +223,7 @@ export function MaterialLibrary({
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState('');
   const [downloadingSlug, setDownloadingSlug] = useState('');
-  const [subTab, setSubTab] = useState<'local' | 'uploads' | 'podcasts'>('local');
+  const [subTab, setSubTab] = useState<'local' | 'uploads'>('local');
 
   const [tier, setTier] = useState<TierId>('all');
   const [kind, setKind] = useState('');
@@ -324,7 +324,10 @@ export function MaterialLibrary({
   }, [tagged]);
 
   const inTierAndKind = useMemo(
-    () => tagged.filter((m) => (tier === 'all' || m.tier === tier) && (!kind || m.kind === kind)),
+    () =>
+      kind === 'podcast'
+        ? []
+        : tagged.filter((m) => (tier === 'all' || m.tier === tier) && (!kind || m.kind === kind)),
     [tagged, tier, kind],
   );
 
@@ -343,12 +346,23 @@ export function MaterialLibrary({
     [inTierAndKind, group, search],
   );
 
+  const shownPodcasts = useMemo(() => {
+    if ((kind && kind !== 'podcast') || group) return [];
+    const q = search.trim().toLowerCase();
+    return AWESOME_PODCASTS.filter(
+      (p) =>
+        (tier === 'all' || p.tier === tier) &&
+        (!q || p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q)),
+    );
+  }, [tier, kind, group, search]);
+
   const kindOptions: SelectOption[] = useMemo(
     () => [
       { value: '', label: '全部来源' },
       { value: 'cambridge', label: '剑桥雅思' },
       { value: 'recalled', label: '机经真题' },
-      { value: 'other', label: '播客与其他' },
+      { value: 'podcast', label: '在线播客' },
+      { value: 'other', label: '阶梯精选' },
     ],
     [],
   );
@@ -437,31 +451,17 @@ export function MaterialLibrary({
               <IconFolderAudio size={14} />
               <span>{userItems.length}</span>
             </button>
-            <button
-              type="button"
-              className={subTab === 'podcasts' ? 'active' : ''}
-              title="拓展播客 (awesome-english)"
-              aria-label="拓展播客"
-              onClick={() => {
-                setConfirmDeleteId('');
-                setSubTab('podcasts');
-              }}
-            >
-              <IconHeadphones size={14} />
-            </button>
           </div>
-          {subTab !== 'podcasts' && (
-            <button
-              type="button"
-              className="icon-btn"
-              title="刷新材料库"
-              aria-label="刷新材料库"
-              disabled={loading || !!opening}
-              onClick={refresh}
-            >
-              <IconReplay size={15} />
-            </button>
-          )}
+          <button
+            type="button"
+            className="icon-btn"
+            title="刷新材料库"
+            aria-label="刷新材料库"
+            disabled={loading || !!opening}
+            onClick={refresh}
+          >
+            <IconReplay size={15} />
+          </button>
         </div>
       </header>
 
@@ -494,11 +494,12 @@ export function MaterialLibrary({
         </div>
       )}
 
-      {/* 4-Tier Ladder Cards (Only for Graded Library & Podcasts, hidden in My Uploads) */}
-      {subTab !== 'uploads' && (
+      {/* 4-Tier Ladder Cards (Graded Library only, hidden in My Uploads) */}
+      {subTab === 'local' && (
         <div className="tier-grid">
           {TIERS.map((t) => {
             const stat = tierStats[t.id];
+            const podCount = AWESOME_PODCASTS.filter((p) => p.tier === t.id).length;
             const active = tier === t.id;
             return (
               <button
@@ -517,9 +518,7 @@ export function MaterialLibrary({
                 <strong>{t.title}</strong>
                 <small>{t.subtitle}</small>
                 <div className="tier-meta">
-                  {subTab === 'local'
-                    ? `${stat.total} 份材料 · 已练 ${stat.started}`
-                    : `${AWESOME_PODCASTS.filter((p) => p.tier === t.id).length} 档精选播客`}
+                  {`${stat.total} 份材料 · ${podCount} 档播客${stat.started > 0 ? ` · 已练 ${stat.started}` : ''}`}
                 </div>
               </button>
             );
@@ -578,9 +577,7 @@ export function MaterialLibrary({
 
           {loading ? (
             <p className="corpus-empty">正在读取材料…</p>
-          ) : !gradedItems.length ? (
-            <p className="corpus-empty">阶梯库为空。可切换「拓展播客」一键拉取分级播客开始精听。</p>
-          ) : !shown.length ? (
+          ) : !shown.length && !shownPodcasts.length ? (
             <p className="corpus-empty">当前阶梯筛选下没有匹配的材料。</p>
           ) : (
             <div className="library-list">
@@ -615,6 +612,34 @@ export function MaterialLibrary({
                       {opening === m.id ? '…' : <IconPlay size={14} />}
                     </span>
                   </button>
+                );
+              })}
+
+              {shown.length > 0 && shownPodcasts.length > 0 && (
+                <div className="library-section-label">在线播客 · 点击拉取最新一集</div>
+              )}
+
+              {shownPodcasts.map((pod) => {
+                const busy = downloadingSlug === pod.slug;
+                return (
+                  <div key={pod.slug} className="material-row podcast-row">
+                    <span className="tier-badge small">{pod.tier}</span>
+                    <span className="material-badge">播客</span>
+                    <span className="material-name">
+                      <strong>{pod.name}</strong>
+                      <small>{pod.desc}</small>
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-btn primary"
+                      disabled={!!downloadingSlug}
+                      title="拉取最新一集 MP3 到阶梯库并直接打开精听"
+                      aria-label={`下载 ${pod.name} 最新一集`}
+                      onClick={() => handleDownloadPodcast(pod)}
+                    >
+                      {busy ? <IconHeadphones size={15} /> : <IconExport size={15} />}
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -723,34 +748,6 @@ export function MaterialLibrary({
             </div>
           )}
         </>
-      )}
-
-      {/* SUBTAB 3: awesome-english Graded Podcasts -> Direct Download to SSD */}
-      {subTab === 'podcasts' && (
-        <div className="library-list">
-          {AWESOME_PODCASTS.filter((p) => tier === 'all' || p.tier === tier).map((pod) => {
-            const busy = downloadingSlug === pod.slug;
-            return (
-              <div key={pod.slug} className="material-row podcast-row">
-                <span className="tier-badge small">{pod.tier}</span>
-                <span className="material-name">
-                  <strong>{pod.name}</strong>
-                  <small>{pod.desc}</small>
-                </span>
-                <button
-                  type="button"
-                  className="icon-btn primary"
-                  disabled={!!downloadingSlug}
-                  title="拉取最新一集 MP3 到数据目录并直接打开精听"
-                  aria-label={`下载 ${pod.name} 最新一集`}
-                  onClick={() => handleDownloadPodcast(pod)}
-                >
-                  {busy ? <IconHeadphones size={15} /> : <IconExport size={15} />}
-                </button>
-              </div>
-            );
-          })}
-        </div>
       )}
     </section>
   );
