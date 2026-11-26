@@ -1200,24 +1200,24 @@ textarea:focus { outline: none; }
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 7px;
+  gap: 8px 3px;
   pointer-events: none;
 }
 .corpus-letter-word {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 3px;
 }
-.corpus-letter-row.sm,
-.corpus-letter-row.sm .corpus-letter-word { gap: 5px; }
-.corpus-letter-row.xs,
-.corpus-letter-row.xs .corpus-letter-word { gap: 4px; }
+.corpus-letter-row.sm { gap: 7px 2.5px; }
+.corpus-letter-row.sm .corpus-letter-word { gap: 2.5px; }
+.corpus-letter-row.xs { gap: 6px 2px; }
+.corpus-letter-row.xs .corpus-letter-word { gap: 2px; }
 
 .corpus-letter-tile {
-  width: 36px;
-  height: 44px;
-  border-radius: 10px;
-  border: 1.5px solid var(--line-strong);
+  width: 30px;
+  height: 42px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
   background: var(--bg);
   display: inline-flex;
   align-items: center;
@@ -1231,15 +1231,15 @@ textarea:focus { outline: none; }
   transition: border-color .14s ease, background .14s ease, color .14s ease, box-shadow .14s ease, transform .14s ease;
 }
 .corpus-letter-row.sm .corpus-letter-tile {
-  width: 30px;
-  height: 38px;
-  border-radius: 9px;
+  width: 26px;
+  height: 36px;
+  border-radius: 6px;
   font-size: 17px;
 }
 .corpus-letter-row.xs .corpus-letter-tile {
-  width: 26px;
-  height: 34px;
-  border-radius: 8px;
+  width: 23px;
+  height: 32px;
+  border-radius: 5px;
   font-size: 15px;
 }
 .corpus-letter-tile.filled {
@@ -1250,7 +1250,7 @@ textarea:focus { outline: none; }
 .corpus-letter-tile.active {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 2px 0 var(--accent);
+  box-shadow: inset 0 0 0 0.5px var(--accent), 0 2px 0 var(--accent);
 }
 .corpus-letter-tile.complete {
   background: var(--accent-soft);
@@ -1274,8 +1274,8 @@ textarea:focus { outline: none; }
 }
 
 .corpus-letter-space {
-  width: 14px;
-  height: 44px;
+  width: 16px;
+  height: 42px;
   display: inline-flex;
   align-items: flex-end;
   justify-content: center;
@@ -1286,8 +1286,8 @@ textarea:focus { outline: none; }
   color: var(--amber);
   position: relative;
 }
-.corpus-letter-row.sm .corpus-letter-space { width: 12px; height: 38px; }
-.corpus-letter-row.xs .corpus-letter-space { width: 10px; height: 34px; }
+.corpus-letter-row.sm .corpus-letter-space { width: 13px; height: 36px; }
+.corpus-letter-row.xs .corpus-letter-space { width: 11px; height: 32px; }
 .corpus-letter-space::after {
   content: "";
   position: absolute;

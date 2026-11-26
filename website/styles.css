@@ -694,13 +694,13 @@ main {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
+  gap: 3px;
   margin: 18px 0 16px;
 }
 .demo-letter-tile {
-  width: 32px;
-  height: 40px;
-  border-radius: 9px;
+  width: 28px;
+  height: 38px;
+  border-radius: 7px;
   border: 1px solid var(--line);
   background: var(--surface);
   display: grid;
@@ -1940,7 +1940,7 @@ tr:last-child td { border-bottom: 0; }
   .platform-grid { grid-template-columns: 1fr; }
   .flow-step span { margin-left: 0; display: none; }
   .preview-body { padding: 16px; }
-  .demo-letter-tile { width: 26px; height: 34px; font-size: 15px; }
+  .demo-letter-tile { width: 23px; height: 32px; font-size: 15px; border-radius: 5px; }
 }
 
 /* Bento Micro-Visuals */
