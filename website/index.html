@@ -15,67 +15,107 @@
         <em id="navVersion" class="ver-pill">v0.5.2</em>
       </a>
       <nav class="nav-links">
-        <a href="#pain">为什么换它</a>
-        <a href="#features">三大杀手锏</a>
-        <a href="#pricing">算笔账</a>
+        <a href="#demo">功能演示</a>
         <a href="#buy">购买卡密</a>
         <a href="#download">客户端下载</a>
       </nav>
       <div class="nav-actions">
         <button type="button" id="themeBtn" class="theme-btn" aria-label="切换主题">深色</button>
-        <a class="btn-nav-buy" href="#buy">¥99 拿下永久版</a>
+        <a class="btn-nav-buy" href="#buy">¥99 永久版</a>
       </div>
     </div>
   </header>
 
   <main id="top">
-    <section class="hero">
+    <section id="demo" class="hero">
       <div class="hero-glow" aria-hidden="true"></div>
-      <span class="hero-eyebrow">告别 ¥398/年 订阅收割 · 一次买断终身用</span>
       <div class="hero-title-row">
         <img class="hero-mark" src="./assets/lirio-icon.png" alt="Lirio" />
-        <h1>听不懂、张不开嘴？<br /><span class="hero-accent">一次 ¥99，把英语彻底练透。</span></h1>
+        <h1>Lirio · <span class="hero-accent">口语对话、精听与词卡</span></h1>
       </div>
       <p class="hero-sub">
-        精听 · 词卡 · 2026 雅思考官。永久不续费，模考低至 4 分钱一场。
+        多性格双语语音陪练与雅思考官 · 本地离线精听断句 · 逐格单词听写 · ¥99 永久买断
       </p>
       <div class="hero-actions">
-        <a class="btn-primary btn-cta-lg" href="#buy">¥99 拿下永久版（送 200+ 场模考）</a>
-        <a id="primaryDownloadBtn" class="btn-ghost btn-cta-lg" href="#download">免费试 3 天</a>
-      </div>
-
-      <div class="hero-stats-grid">
-        <div class="hero-stat-card">
-          <strong>¥99</strong>
-          <span>买断永久用 · 拒绝按年割韭菜</span>
-        </div>
-        <div class="hero-stat-card">
-          <strong>4 分钱</strong>
-          <span>一场 1v1 雅思考官模考 + 复盘</span>
-        </div>
-        <div class="hero-stat-card">
-          <strong>¥0</strong>
-          <span>传音频秒切句 · 本地离线无限次</span>
-        </div>
+        <a id="primaryDownloadBtn" class="btn-primary btn-cta-lg" href="#download">免费下载试用</a>
+        <a class="btn-ghost btn-cta-lg" href="#buy">¥99 永久版</a>
       </div>
 
       <div class="preview-shell" aria-label="产品实机动态演示">
         <div class="preview-topbar">
           <div class="preview-dots"><span></span><span></span><span></span></div>
           <div class="preview-tabs" role="tablist">
-            <button type="button" class="preview-tab active" data-preview="dictation">盲听破局</button>
-            <button type="button" class="preview-tab" data-preview="vocab">单词成瘾</button>
-            <button type="button" class="preview-tab" data-preview="speak">2026 雅思考官</button>
+            <button type="button" class="preview-tab active" data-preview="speak">口语对话</button>
+            <button type="button" class="preview-tab" data-preview="dictation">精听断句</button>
+            <button type="button" class="preview-tab" data-preview="vocab">单词听写</button>
           </div>
-          <span id="previewLiveBadge" class="preview-badge">● 自动轮播演示中 · 离线 0 元引擎</span>
+          <span id="previewLiveBadge" class="preview-badge">● 实机功能演示中</span>
         </div>
         <div class="preview-progress-track" aria-hidden="true">
           <div id="previewProgressBar" class="preview-progress-bar"></div>
         </div>
 
         <div class="preview-body">
-          <!-- 1. Dictation Live Demo -->
-          <div class="preview-pane active" data-pane="dictation">
+          <!-- 1. Speaking Companion & IELTS Examiner Live Demo (Primary) -->
+          <div class="preview-pane active" data-pane="speak">
+            <div class="demo-speak-meta-bar">
+              <div class="demo-speak-personas">
+                <span class="demo-persona-chip active">Clara · 美式</span>
+                <span class="demo-persona-chip">Noah · 干练</span>
+                <span class="demo-persona-chip">Oliver · 英式</span>
+              </div>
+              <div class="demo-speak-caps">
+                <span class="demo-cap-chip">气泡 / 电话模式</span>
+                <span class="demo-cap-chip">空格插话</span>
+                <span class="demo-cap-chip">无痕</span>
+              </div>
+            </div>
+
+            <div class="demo-speak-stage">
+              <div id="demoSpeakAi" class="demo-bubble ai">
+                <div class="demo-bubble-head">
+                  <strong>Clara · 双语陪练</strong>
+                  <span class="demo-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                </div>
+                <p>Hey, good to hear from you again! How's that research project going?</p>
+              </div>
+
+              <div id="demoSpeakMic" class="demo-mic-bar">
+                <span class="demo-mic-orb"><i></i></span>
+                <span>正在聆听中英混说 · 空格可随时插话</span>
+              </div>
+
+              <div id="demoSpeakUser" class="demo-bubble user">
+                <strong>你</strong>
+                <p id="demoSpeakUserText"></p>
+              </div>
+
+              <div id="demoSpeakAi2" class="demo-bubble ai">
+                <div class="demo-bubble-head">
+                  <strong>Clara</strong>
+                </div>
+                <p>Totally get that. Stepping back for a day helps you spot the pattern—want to walk me through it?</p>
+              </div>
+
+              <div id="demoSpeakReview" class="demo-review-drawer">
+                <div class="demo-review-head">
+                  <div class="demo-band-row">
+                    <span class="demo-band-pill main">地道表达升级</span>
+                    <span class="demo-band-pill">雅思考官模式 · Overall 7.0</span>
+                  </div>
+                  <span class="demo-cost-pill">约 ¥0.04 / 场</span>
+                </div>
+                <div class="demo-upgrade-line">
+                  <del>“a bit stuck on”</del>
+                  <em>→</em>
+                  <strong>“hit a bit of a roadblock on”</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Dictation Live Demo -->
+          <div class="preview-pane" data-pane="dictation">
             <div class="demo-stage-head">
               <div class="demo-title-meta">
                 <span class="demo-tier-pill">L3</span>
@@ -101,7 +141,7 @@
             </div>
           </div>
 
-          <!-- 2. Vocab Live Typing & Rhythm Demo -->
+          <!-- 3. Vocab Live Typing & Rhythm Demo -->
           <div class="preview-pane" data-pane="vocab">
             <div class="demo-stage-head">
               <div class="demo-vocab-top">
@@ -139,171 +179,32 @@
               <span data-key="Y">Y</span>
             </div>
           </div>
-
-          <!-- 3. IELTS Examiner Voice Call & Review Demo -->
-          <div class="preview-pane" data-pane="speak">
-            <div class="demo-speak-stage">
-              <div id="demoSpeakAi" class="demo-bubble ai">
-                <div class="demo-bubble-head">
-                  <strong>Examiner · Part 2</strong>
-                  <span class="demo-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                </div>
-                <p>Tell me about a quiet place where you unwind.</p>
-              </div>
-
-              <div id="demoSpeakMic" class="demo-mic-bar">
-                <span class="demo-mic-orb"><i></i></span>
-                <span>正在聆听你的中英混说…</span>
-              </div>
-
-              <div id="demoSpeakUser" class="demo-bubble user">
-                <strong>你（中英混说实时识别）</strong>
-                <p id="demoSpeakUserText"></p>
-              </div>
-
-              <div id="demoSpeakReview" class="demo-review-drawer">
-                <div class="demo-review-head">
-                  <div class="demo-band-row">
-                    <span class="demo-band-pill main">Overall 7.0</span>
-                    <span class="demo-band-pill">LR 7.5</span>
-                    <span class="demo-band-pill">FC 7.0</span>
-                  </div>
-                  <span class="demo-cost-pill">本场仅 ¥0.04</span>
-                </div>
-                <div class="demo-upgrade-line">
-                  <del>“unwind after work”</del>
-                  <em>→</em>
-                  <strong>“recharge away from the hustle and bustle”</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="pain" class="section">
-      <div class="section-center-head">
-        <h2>学了十年还在原地？</h2>
-        <p class="section-sub">不是你不努力，是传统工具太贵、太重、太反人类。</p>
-      </div>
-      <div class="pain-grid">
-        <article class="pain-card" data-reveal>
-          <div class="pain-bad"><em>✕</em>订阅 App 动辄 ¥398/年，停充资料直接锁死</div>
-          <div class="pain-good"><em>✓</em><span>¥99 永久版 · 3 台设备终身用</span></div>
-        </article>
-        <article class="pain-card" data-reveal style="--reveal-delay:80ms">
-          <div class="pain-bad"><em>✕</em>传个音频要开会员，精听全耗在手动拖进度条</div>
-          <div class="pain-good"><em>✓</em><span>音频丢进去自动断句，想精校再一键补译文</span></div>
-        </article>
-        <article class="pain-card" data-reveal style="--reveal-delay:160ms">
-          <div class="pain-bad"><em>✕</em>外教 ¥200/小时，开口紧张不敢说错词</div>
-          <div class="pain-good"><em>✓</em><span>24h 私人考官 · 中英混说也能无缝接话</span></div>
-        </article>
-      </div>
-    </section>
-
-    <section id="features" class="section">
-      <div class="section-center-head">
-        <h2>少废话，看它怎么让你上瘾。</h2>
-      </div>
-      <div class="bento-grid">
-        <article class="bento-card bento-span-7 bento-featured" data-reveal>
-          <span class="tag">精听开挂</span>
-          <h3>任何音频丢进去，3 秒变精听课</h3>
-          <p>离线自动切句 ¥0，难句可按需一键 AI 精校 + 中文译文，错词点一下进词本。</p>
-          <div class="mini-slice-viz" aria-hidden="true">
-            <div class="mini-slice-scan"></div>
-            <div class="mini-slice-seg" style="--seg-delay:0s"><span>0:00</span><i></i></div>
-            <div class="mini-slice-seg" style="--seg-delay:0.45s"><span>0:04</span><i></i></div>
-            <div class="mini-slice-seg" style="--seg-delay:0.9s"><span>0:09</span><i></i></div>
-            <div class="mini-slice-seg" style="--seg-delay:1.35s"><span>0:14</span><i></i></div>
-          </div>
-          <div class="bento-chips">
-            <span>0 元自动断句</span>
-            <span>0.75× 慢听</span>
-            <span>AI 精校 + 译文</span>
-          </div>
-        </article>
-        <article class="bento-card bento-span-5" data-reveal style="--reveal-delay:80ms">
-          <span class="tag">单词成瘾</span>
-          <h3>敲单词像打节奏音游</h3>
-          <p>清脆机械键音 + 雅思 807 高频词，顽固错词自动拉出来反复专杀。</p>
-          <div class="mini-keys-viz" aria-hidden="true">
-            <span style="--k:0">S</span>
-            <span style="--k:1">P</span>
-            <span style="--k:2">E</span>
-            <span style="--k:3">L</span>
-            <span style="--k:4">L</span>
-          </div>
-        </article>
-        <article class="bento-card bento-span-5" data-reveal>
-          <span class="tag">开口提分</span>
-          <h3>2026 真题考官，4 分钱陪练</h3>
-          <p>Part 1 → 2 → 3 全真追问，讲完秒出四维评分与 8 分地道改写。</p>
-          <div class="mini-voice-viz" aria-hidden="true">
-            <div class="mini-eq-bars">
-              <i style="--b:0"></i><i style="--b:1"></i><i style="--b:2"></i><i style="--b:3"></i><i style="--b:4"></i><i style="--b:5"></i><i style="--b:6"></i><i style="--b:7"></i>
-            </div>
-            <span class="mini-band-tag">Band 8.0 示范实时生成</span>
-          </div>
-        </article>
-        <article class="bento-card bento-span-7" data-reveal style="--reveal-delay:80ms">
-          <span class="tag">不绑架用户</span>
-          <h3>数据存你硬盘，需求直达作者</h3>
-          <p>音频与进度完全存在你自选的本地文件夹；永久版支持 App 内直接提功能需求。</p>
-        </article>
-      </div>
-    </section>
-
-    <section id="pricing" class="section">
-      <div class="section-center-head">
-        <h2>算一笔最实在的账</h2>
-        <p class="section-sub">90% 精听拼写本来就在你电脑上免费跑，何必每年给订阅制交智商税？</p>
-      </div>
-
-      <div class="vs-grid">
-        <div class="vs-card old" data-reveal>
-          <span class="vs-label">传统外教 / AI 订阅年卡</span>
-          <div class="vs-price">¥398–1,980<span>/年</span></div>
-          <ul>
-            <li>每年循环扣费，停充血亏</li>
-            <li>不续费连自己的听写记录都锁</li>
-            <li>一节外教课就够买 2 套 Lirio</li>
-          </ul>
-        </div>
-        <div class="vs-card win" data-reveal style="--reveal-delay:90ms">
-          <span class="vs-label">Lirio Pro · 永久版</span>
-          <div class="vs-price">¥99<span>一次性买断</span></div>
-          <ul>
-            <li>永久有效 · 绑定账号同时登录 3 台设备</li>
-            <li>送 ¥10 余额 ≈ 200+ 场雅思考官模考</li>
-            <li>本地精听、词卡、音频切分永远 ¥0</li>
-          </ul>
         </div>
       </div>
 
-      <div class="cost-strip">
-        <div class="cost-tile" data-reveal><span>传音频自动断句</span><strong class="free">¥0 无限次</strong></div>
-        <div class="cost-tile" data-reveal style="--reveal-delay:60ms"><span>AI 字幕精校 + 译文</span><strong>约 5 厘 / 篇</strong></div>
-        <div class="cost-tile" data-reveal style="--reveal-delay:120ms"><span>双语口语陪练</span><strong>约 3 分 / 次</strong></div>
-        <div class="cost-tile" data-reveal style="--reveal-delay:180ms"><span>雅思全真模考 + 复盘</span><strong>约 4 分 / 场</strong></div>
+      <div class="feature-strip" aria-label="三大核心模块">
+        <button type="button" class="feature-pill-card active" data-jump-preview="speak">
+          <strong>多性格对话 &amp; 雅思考官</strong>
+          <span>Clara / Noah / Oliver · 随时空格插话、无痕聊与历史续聊</span>
+        </button>
+        <button type="button" class="feature-pill-card" data-jump-preview="dictation">
+          <strong>本地离线精听断句</strong>
+          <span>传音频免费自动切句 · 可选 AI 字幕精校 + 译文</span>
+        </button>
+        <button type="button" class="feature-pill-card" data-jump-preview="vocab">
+          <strong>逐格单词听写</strong>
+          <span>一字母一方框 · 清脆键音 + 错词自动沉淀反复专杀</span>
+        </button>
       </div>
     </section>
 
     <section id="buy" class="section">
       <div class="section-head">
         <div>
-          <h2>选一档，30 秒激活。</h2>
-          <p class="section-sub">先下载免费体验 3 天，觉得真爽再上车。</p>
+          <h2>购买卡密</h2>
+          <p class="section-sub">免费试 3 天；¥99 永久版绑定账号支持 3 台设备，赠 ¥10 对话余额。</p>
         </div>
-        <span id="storeModePill" class="ver-pill">一人一码 · 即买即兑</span>
-      </div>
-
-      <div class="flow-strip">
-        <div class="flow-step"><em>01</em><strong>下好 App</strong><span>免费先试 3 天</span></div>
-        <div class="flow-step"><em>02</em><strong>微信/支付宝拿码</strong><span>30 秒自动出码</span></div>
-        <div class="flow-step"><em>03</em><strong>粘贴兑换起飞</strong><span>立刻解锁永久版</span></div>
+        <span id="storeModePill" class="ver-pill">一账号一码 · 即买即兑</span>
       </div>
 
       <div id="packGrid" class="pack-grid"></div>
@@ -311,13 +212,13 @@
       <div class="lookup-card">
         <div class="lookup-head">
           <div>
-            <strong>买完忘了码？输入账号秒找回</strong>
-            <p>填下单时的账号或邮箱就能查到历史订单与兑换码。</p>
+            <strong>找回卡密</strong>
+            <p>输入下单时的账号即可查看历史订单与兑换码。</p>
           </div>
           <span id="supportContactText" class="lookup-support">售后联系：support@lirio.app</span>
         </div>
         <form id="lookupForm" class="lookup-form">
-          <input id="lookupEmail" type="text" placeholder="输入下单账号或邮箱（4–32 位）" required />
+          <input id="lookupEmail" type="text" placeholder="输入下单账号（4–32 位）" required />
           <input id="lookupOrderNo" type="text" placeholder="订单号（选填，如 LR-261126-XXXXXX）" />
           <button type="submit" class="btn-primary">找回卡密</button>
         </form>
@@ -328,36 +229,12 @@
     <section id="download" class="section">
       <div class="section-head">
         <div>
-          <h2>全平台客户端下载</h2>
-          <p class="section-sub">1 个账号跨设备通用，点开即练。</p>
+          <h2>客户端下载</h2>
+          <p class="section-sub">支持 Mac / Windows / Android，iPhone 端敬请期待。</p>
         </div>
         <span id="releaseDateBadge" class="ver-pill">2026-11-26</span>
       </div>
       <div id="platformGrid" class="platform-grid"></div>
-    </section>
-
-    <section id="faq" class="section">
-      <div class="section-center-head">
-        <h2>大家最关心的 4 件事</h2>
-      </div>
-      <div class="faq-list">
-        <details class="faq-item" open>
-          <summary>¥99 真的是永久版吗？以后还要续费吗？</summary>
-          <p>真永久，永不按月收租。绑定你的个人账号后可同时用 3 台设备，所有本地精听、单词听写、音频自动切分与自定义文件夹存储终身免费用。</p>
-        </details>
-        <details class="faq-item">
-          <summary>送的 ¥10 对话余额用完怎么办？</summary>
-          <p>用完随时买 ¥10 或 ¥30 加油包充值，用多少扣多少、余额永不过期；也可以在设置里直接填你自己的 API Key。</p>
-        </details>
-        <details class="faq-item">
-          <summary>我的音频和学习记录存在哪？换电脑会丢吗？</summary>
-          <p>全部保存在你亲手指定的本地文件夹里，路径一目了然，备份、迁硬盘一键拖走即可，软件绝不绑架你的数据。</p>
-        </details>
-        <details class="faq-item">
-          <summary>iPhone 现在能用吗？</summary>
-          <p>目前暂不支持 iPhone / iOS，iPhone 端敬请期待。现已完整支持 Mac、Windows 与 Android 客户端。</p>
-        </details>
-      </div>
     </section>
 
     <section id="versions" class="section">
@@ -365,15 +242,6 @@
         <summary>查看版本更新记录</summary>
         <div id="historyList" class="history-list"></div>
       </details>
-    </section>
-
-    <section class="closing-cta" data-reveal>
-      <h2>别等下次考试前一周才后悔。</h2>
-      <p>今天花一杯星巴克的钱，买断未来几年的精听与口语自由。</p>
-      <div class="hero-actions">
-        <a class="btn-primary btn-cta-lg" href="#buy">¥99 拿下永久版</a>
-        <a class="btn-ghost btn-cta-lg" href="#download">免费下载试用</a>
-      </div>
     </section>
   </main>
 

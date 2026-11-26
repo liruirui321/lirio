@@ -102,16 +102,18 @@ themeBtn.addEventListener('click', () => {
 });
 
 // Interactive Live Product Usage Demos & Scroll Reveal
-const DEMO_ORDER = ['dictation', 'vocab', 'speak'];
+const DEMO_ORDER = ['speak', 'dictation', 'vocab'];
 const DEMO_WAVE_HEIGHTS = [24, 48, 72, 38, 86, 62, 34, 78, 92, 54, 40, 68, 84, 30, 58, 90, 74, 42, 64, 88, 52, 36, 70, 82, 46, 60, 32, 22];
 
 const demoController = (() => {
   const tabBtns = Array.from(document.querySelectorAll('.preview-tab'));
   const panes = Array.from(document.querySelectorAll('.preview-pane'));
+  const jumpCards = Array.from(document.querySelectorAll('[data-jump-preview]'));
+  const previewShell = document.querySelector('.preview-shell');
   const progressBar = document.getElementById('previewProgressBar');
   const liveBadge = document.getElementById('previewLiveBadge');
 
-  let currentKey = 'dictation';
+  let currentKey = 'speak';
   let autoRotate = true;
   let timers = [];
   let rafId = null;
@@ -345,9 +347,10 @@ const demoController = (() => {
   }
 
   function runSpeakDemo(onDone) {
-    const DURATION = 8600;
+    const DURATION = 9600;
     setProgressDuration(DURATION);
     const aiEl = document.getElementById('demoSpeakAi');
+    const ai2El = document.getElementById('demoSpeakAi2');
     const micEl = document.getElementById('demoSpeakMic');
     const userEl = document.getElementById('demoSpeakUser');
     const userTextEl = document.getElementById('demoSpeakUserText');
@@ -355,24 +358,25 @@ const demoController = (() => {
     if (!aiEl || !userEl || !userTextEl || !reviewEl) return later(DURATION, onDone);
 
     aiEl.classList.remove('visible');
+    ai2El?.classList.remove('visible');
     userEl.classList.remove('visible');
     reviewEl.classList.remove('visible');
     micEl?.classList.remove('is-live');
     userTextEl.textContent = '';
 
     later(120, () => aiEl.classList.add('visible'));
-    later(1200, () => {
+    later(1100, () => {
       micEl?.classList.add('is-live');
       userEl.classList.add('visible');
     });
 
     const chunks = [
-      '我常去河边那个 ',
-      'old botanical garden, ',
-      'because it helps me ',
-      'unwind after work.',
+      '还行，就是最近数据有点 ',
+      'messy, ',
+      'I feel a bit stuck on ',
+      'the analysis part.',
     ];
-    let t = 1550;
+    let t = 1450;
     let acc = '';
     chunks.forEach((part) => {
       acc += part;
@@ -380,11 +384,15 @@ const demoController = (() => {
       later(t, () => {
         userTextEl.textContent = snap;
       });
-      t += 680;
+      t += 660;
     });
 
-    later(t + 350, () => {
+    later(4600, () => {
       micEl?.classList.remove('is-live');
+      ai2El?.classList.add('visible');
+    });
+
+    later(6200, () => {
       reviewEl.classList.add('visible');
     });
 
@@ -393,14 +401,15 @@ const demoController = (() => {
 
   function startTab(key) {
     clearAllTimers();
-    currentKey = DEMO_ORDER.includes(key) ? key : 'dictation';
+    currentKey = DEMO_ORDER.includes(key) ? key : 'speak';
     tabBtns.forEach((b) => b.classList.toggle('active', b.getAttribute('data-preview') === currentKey));
     panes.forEach((p) => p.classList.toggle('active', p.getAttribute('data-pane') === currentKey));
+    jumpCards.forEach((c) => c.classList.toggle('active', c.getAttribute('data-jump-preview') === currentKey));
 
     if (liveBadge) {
       liveBadge.textContent = autoRotate
-        ? '● 自动轮播演示中 · 离线 0 元引擎'
-        : '● 已锁定当前演示 · 点标签可切换';
+        ? '● 实机功能演示中'
+        : '● 已切换至当前功能演示';
     }
 
     const onDone = () => {
@@ -423,6 +432,14 @@ const demoController = (() => {
     });
   });
 
+  jumpCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      autoRotate = false;
+      startTab(card.getAttribute('data-jump-preview'));
+      previewShell?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       clearAllTimers();
@@ -432,7 +449,7 @@ const demoController = (() => {
   });
 
   if (tabBtns.length && panes.length) {
-    startTab('dictation');
+    startTab('speak');
   }
 })();
 
@@ -708,7 +725,7 @@ document.getElementById('lookupForm').addEventListener('submit', async (e) => {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || '查询失败');
     if (!data.orders?.length) {
-      box.innerHTML = '<div class="lookup-row">未找到该邮箱下的订单记录，请确认下单邮箱是否填写一致。</div>';
+      box.innerHTML = '<div class="lookup-row">未找到该账号下的订单记录，请确认下单账号是否填写一致。</div>';
       return;
     }
     box.innerHTML = data.orders
