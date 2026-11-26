@@ -125,6 +125,7 @@ const demoController = (() => {
       cancelAnimationFrame(rafId);
       rafId = null;
     }
+    stopVoicePulse();
   }
 
   function later(ms, fn) {
@@ -276,34 +277,128 @@ const demoController = (() => {
     later(DURATION, onDone);
   }
 
+  const SPEAK_PERSONAS = {
+    clara: {
+      name: 'Clara',
+      initial: 'C',
+      topic: '日常研究 · 随口聊',
+      opener: "Hey, good to hear from you again! How's that research project going?",
+      userChunks: [
+        '还行，就是最近数据有点 ',
+        'messy, ',
+        'I feel a bit stuck on ',
+        'the analysis part.',
+      ],
+      reply:
+        'Totally get that. Stepping back for a day helps you spot the pattern—want to walk me through it?',
+      upgradeFrom: '“a bit stuck on”',
+      upgradeTo: '“hit a bit of a roadblock on”',
+    },
+    noah: {
+      name: 'Noah',
+      initial: 'N',
+      topic: '职场复盘 · 简洁直接',
+      opener: 'Morning! Quick check-in—what is the one bottleneck blocking your sprint right now?',
+      userChunks: [
+        '主要是接口这边有点 ',
+        'delayed, ',
+        'we feel a bit stuck on ',
+        'the integration tests.',
+      ],
+      reply:
+        'Got it. Isolate the flaky endpoint first and ship the core flow—want to prioritize the checklist?',
+      upgradeFrom: '“a bit stuck on”',
+      upgradeTo: '“bottlenecked at”',
+    },
+    oliver: {
+      name: 'Oliver',
+      initial: 'O',
+      topic: 'IELTS Part 3 · 英式考官',
+      opener:
+        'Right, let us explore this further—why do you think young people delay major career decisions today?',
+      userChunks: [
+        '因为选择太多了，',
+        'many graduates feel ',
+        'a bit stuck on ',
+        'their first step.',
+      ],
+      reply:
+        'A thoughtful point. Would you say university courses prepare students well enough for that transition?',
+      upgradeFrom: '“a bit stuck on”',
+      upgradeTo: '“hesitant when taking”',
+    },
+  };
+  let activePersonaKey = 'clara';
+  let speakOrbVoiceRaf = null;
+
+  function stopVoicePulse() {
+    if (speakOrbVoiceRaf) {
+      cancelAnimationFrame(speakOrbVoiceRaf);
+      speakOrbVoiceRaf = null;
+    }
+    document.getElementById('demoPhoneOrbWrap')?.style.removeProperty('--voice-scale');
+    document.getElementById('demoChatOrbWrap')?.style.removeProperty('--voice-scale');
+  }
+
+  function startVoicePulse(wrapEl) {
+    stopVoicePulse();
+    if (!wrapEl) return;
+    const t0 = performance.now();
+    function tick(now) {
+      if (!wrapEl.classList.contains('is-listening')) {
+        wrapEl.style.removeProperty('--voice-scale');
+        speakOrbVoiceRaf = null;
+        return;
+      }
+      const s = (now - t0) / 1000;
+      const lvl = 1 + 0.09 * Math.abs(Math.sin(s * 6.4)) + 0.05 * Math.sin(s * 13.2 + 0.8);
+      wrapEl.style.setProperty('--voice-scale', lvl.toFixed(3));
+      speakOrbVoiceRaf = requestAnimationFrame(tick);
+    }
+    speakOrbVoiceRaf = requestAnimationFrame(tick);
+  }
+
+  function setOrbState(wrapEl, state) {
+    if (!wrapEl) return;
+    wrapEl.classList.remove('is-speaking', 'is-listening', 'is-thinking');
+    if (state) wrapEl.classList.add(`is-${state}`);
+    if (state === 'listening') startVoicePulse(wrapEl);
+    else stopVoicePulse();
+  }
+
   function runVocabDemo(onDone) {
     const DURATION = 8200;
     setProgressDuration(DURATION);
+    const cardEl = document.getElementById('demoCorpusCard');
     const audioBtn = document.getElementById('demoVocabAudio');
+    const barEl = document.getElementById('demoVocabBar');
+    const counterEl = document.getElementById('demoVocabCounter');
+    const dotsEl = document.getElementById('demoVocabDots');
     const wordEl = document.getElementById('demoVocabWord');
     const metaEl = document.getElementById('demoVocabMeta');
     const streakEl = document.getElementById('demoVocabStreak');
     const lettersEl = document.getElementById('demoVocabLetters');
-    const keycapMap = new Map(
-      Array.from(document.querySelectorAll('#demoKeycaps span')).map((el) => [
-        el.getAttribute('data-key'),
-        el,
-      ]),
-    );
     if (!lettersEl) return later(DURATION, onDone);
 
     const deck = [
-      { word: 'SUSTAINABLE', meaning: 'adj. 可持续的', meta: '/səˈsteɪnəbl/ · 雅思 807 高频词', streak: 13 },
-      { word: 'BIODIVERSITY', meaning: 'n. 生物多样性', meta: '/ˌbaɪəʊdaɪˈvɜːsəti/ · 错词专练', streak: 14 },
+      { word: 'SUSTAINABLE', meaning: 'adj. 可持续的', meta: '/səˈsteɪnəbl/ · 雅思 807 高频词', streak: 13, pct: '33%', counter: '1 / 3', dotIdx: 0 },
+      { word: 'RESILIENT', meaning: 'adj. 有韧性的', meta: '/rɪˈzɪliənt/ · 错词本专杀', streak: 14, pct: '66%', counter: '2 / 3', dotIdx: 1 },
     ];
     if (streakEl) streakEl.textContent = '连对 12 🔥';
+    cardEl?.classList.remove('is-correct');
 
     let offset = 0;
     deck.forEach((card) => {
       later(offset, () => {
+        cardEl?.classList.remove('is-correct');
+        if (barEl) barEl.style.width = card.pct;
+        if (counterEl) counterEl.textContent = card.counter;
+        if (dotsEl) {
+          Array.from(dotsEl.children).forEach((d, i) => d.classList.toggle('active', i === card.dotIdx));
+        }
         if (wordEl) wordEl.textContent = card.meaning;
         if (metaEl) metaEl.textContent = card.meta;
-        audioBtn?.classList.add('is-speaking');
+        audioBtn?.classList.add('is-playing');
         lettersEl.innerHTML = Array.from(card.word)
           .map((_, idx) => `<span class="demo-letter-tile${idx === 0 ? ' active' : ''}"></span>`)
           .join('');
@@ -321,17 +416,13 @@ const demoController = (() => {
             tile.textContent = ch.toLowerCase();
           }
           if (list[idx + 1]) list[idx + 1].classList.add('active');
-          const keyEl = keycapMap.get(ch);
-          if (keyEl) {
-            keyEl.classList.add('hit');
-            later(120, () => keyEl.classList.remove('hit'));
-          }
         });
         cursor += 155;
       });
 
       later(cursor + 120, () => {
-        audioBtn?.classList.remove('is-speaking');
+        audioBtn?.classList.remove('is-playing');
+        cardEl?.classList.add('is-correct');
         tiles().forEach((t) => t.classList.add('complete'));
         if (streakEl) {
           streakEl.textContent = `连对 ${card.streak} 🔥`;
@@ -346,58 +437,196 @@ const demoController = (() => {
     later(DURATION, onDone);
   }
 
+  function applySpeakPersona(key) {
+    activePersonaKey = SPEAK_PERSONAS[key] ? key : 'clara';
+    const p = SPEAK_PERSONAS[activePersonaKey];
+    document.querySelectorAll('.lirio-persona-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-persona') === activePersonaKey);
+    });
+    document.querySelectorAll('.lirio-mode-pill').forEach((btn) => {
+      const m = btn.getAttribute('data-speak-mode');
+      btn.classList.toggle('active', activePersonaKey === 'oliver' ? m === 'examiner' : m === 'chat');
+    });
+    const topicEl = document.getElementById('demoSpeakTopic');
+    const promptEl = document.getElementById('demoPhonePrompt');
+    const a1 = document.getElementById('demoAiAvatar1');
+    const aT = document.getElementById('demoAiAvatarT');
+    const a2 = document.getElementById('demoAiAvatar2');
+    const n1 = document.getElementById('demoAiName1');
+    const n2 = document.getElementById('demoAiName2');
+    const t1 = document.getElementById('demoAiText1');
+    const t2 = document.getElementById('demoAiText2');
+    const reviewEl = document.getElementById('demoSpeakReview');
+    if (topicEl) topicEl.textContent = p.topic;
+    if (promptEl) promptEl.textContent = `“${p.opener}”`;
+    if (a1) a1.textContent = p.initial;
+    if (aT) aT.textContent = p.initial;
+    if (a2) a2.textContent = p.initial;
+    if (n1) n1.textContent = p.name;
+    if (n2) n2.textContent = p.name;
+    if (t1) t1.textContent = p.opener;
+    if (t2) t2.textContent = p.reply;
+    if (reviewEl) {
+      const delEl = reviewEl.querySelector('.lirio-upgrade-line del');
+      const strongEl = reviewEl.querySelector('.lirio-upgrade-line strong');
+      if (delEl) delEl.textContent = p.upgradeFrom;
+      if (strongEl) strongEl.textContent = p.upgradeTo;
+    }
+    return p;
+  }
+
   function runSpeakDemo(onDone) {
-    const DURATION = 9600;
+    const DURATION = 11400;
     setProgressDuration(DURATION);
+    const p = applySpeakPersona(activePersonaKey);
+
+    const phoneStage = document.getElementById('demoSpeakPhone');
+    const chatStage = document.getElementById('demoSpeakChat');
+    const phoneOrbWrap = document.getElementById('demoPhoneOrbWrap');
+    const chatOrbWrap = document.getElementById('demoChatOrbWrap');
+    const phoneStatus = document.getElementById('demoPhoneStatus');
+    const chatStatus = document.getElementById('demoChatStatus');
+    const toChatBtn = document.getElementById('demoToChatBtn');
+    const spaceCap = document.getElementById('demoSpaceKeyCap');
+
     const aiEl = document.getElementById('demoSpeakAi');
+    const thinkingEl = document.getElementById('demoSpeakThinking');
     const ai2El = document.getElementById('demoSpeakAi2');
-    const micEl = document.getElementById('demoSpeakMic');
     const userEl = document.getElementById('demoSpeakUser');
     const userTextEl = document.getElementById('demoSpeakUserText');
     const reviewEl = document.getElementById('demoSpeakReview');
-    if (!aiEl || !userEl || !userTextEl || !reviewEl) return later(DURATION, onDone);
+    if (!phoneStage || !chatStage || !aiEl || !userEl || !userTextEl || !reviewEl) {
+      return later(DURATION, onDone);
+    }
 
+    // Reset to Phone Voice Stage
+    phoneStage.hidden = false;
+    chatStage.hidden = true;
+    toChatBtn?.classList.remove('is-pressed');
+    spaceCap?.classList.remove('is-pressed');
     aiEl.classList.remove('visible');
     ai2El?.classList.remove('visible');
     userEl.classList.remove('visible');
     reviewEl.classList.remove('visible');
-    micEl?.classList.remove('is-live');
+    if (thinkingEl) thinkingEl.hidden = true;
     userTextEl.textContent = '';
 
-    later(120, () => aiEl.classList.add('visible'));
-    later(1100, () => {
-      micEl?.classList.add('is-live');
-      userEl.classList.add('visible');
+    setOrbState(phoneOrbWrap, 'speaking');
+    setOrbState(chatOrbWrap, 'speaking');
+    if (phoneStatus) phoneStatus.textContent = `${p.name} 正在说…`;
+    if (chatStatus) chatStatus.textContent = `${p.name} 正在说 · 空格随时插话`;
+
+    // 1. Tap the Chat dock button -> morph to Chat Bubble Stage
+    later(2500, () => {
+      toChatBtn?.classList.add('is-pressed');
+    });
+    later(2950, () => {
+      toChatBtn?.classList.remove('is-pressed');
+      phoneStage.hidden = true;
+      chatStage.hidden = false;
+      aiEl.classList.add('visible');
     });
 
-    const chunks = [
-      '还行，就是最近数据有点 ',
-      'messy, ',
-      'I feel a bit stuck on ',
-      'the analysis part.',
-    ];
-    let t = 1450;
+    // 2. Barge-in interruption via Space key / orb tap
+    later(4150, () => {
+      spaceCap?.classList.add('is-pressed');
+      setOrbState(chatOrbWrap, 'listening');
+      if (chatStatus) chatStatus.textContent = '已打断 · 正在聆听中英混说…';
+      userEl.classList.add('visible');
+    });
+    later(4480, () => {
+      spaceCap?.classList.remove('is-pressed');
+    });
+
+    // 3. Stream bilingual response while orb breathes with voice energy
+    let t = 4550;
     let acc = '';
-    chunks.forEach((part) => {
+    p.userChunks.forEach((part) => {
       acc += part;
       const snap = acc;
       later(t, () => {
         userTextEl.textContent = snap;
       });
-      t += 660;
+      t += 620;
     });
 
-    later(4600, () => {
-      micEl?.classList.remove('is-live');
+    // 4. Orb enters thinking state + thinking dots bubble
+    later(7300, () => {
+      setOrbState(chatOrbWrap, 'thinking');
+      if (chatStatus) chatStatus.textContent = '思考中…';
+      if (thinkingEl) thinkingEl.hidden = false;
+    });
+
+    // 5. Reply bubble appears + orb returns to speaking
+    later(8400, () => {
+      if (thinkingEl) thinkingEl.hidden = true;
+      setOrbState(chatOrbWrap, 'speaking');
+      if (chatStatus) chatStatus.textContent = `${p.name} 回复中…`;
       ai2El?.classList.add('visible');
     });
 
-    later(6200, () => {
+    // 6. Native expression upgrade card slides in
+    later(9600, () => {
       reviewEl.classList.add('visible');
     });
 
     later(DURATION, onDone);
   }
+
+  // Interactive Phone ↔ Chat toggle, Orb barge-in, and Persona switching
+  document.getElementById('demoToChatBtn')?.addEventListener('click', () => {
+    autoRotate = false;
+    clearAllTimers();
+    const phoneStage = document.getElementById('demoSpeakPhone');
+    const chatStage = document.getElementById('demoSpeakChat');
+    if (phoneStage) phoneStage.hidden = true;
+    if (chatStage) chatStage.hidden = false;
+    document.getElementById('demoSpeakAi')?.classList.add('visible');
+    setOrbState(document.getElementById('demoChatOrbWrap'), 'speaking');
+  });
+
+  document.getElementById('demoToPhoneBtn')?.addEventListener('click', () => {
+    autoRotate = false;
+    clearAllTimers();
+    const phoneStage = document.getElementById('demoSpeakPhone');
+    const chatStage = document.getElementById('demoSpeakChat');
+    if (chatStage) chatStage.hidden = true;
+    if (phoneStage) phoneStage.hidden = false;
+    setOrbState(document.getElementById('demoPhoneOrbWrap'), 'speaking');
+  });
+
+  [document.getElementById('demoPhoneOrb'), document.getElementById('demoChatOrb')].forEach((btn) => {
+    btn?.addEventListener('click', () => {
+      autoRotate = false;
+      const wrap = btn.closest('.lirio-orb-wrap');
+      const next = wrap?.classList.contains('is-listening') ? 'speaking' : 'listening';
+      setOrbState(wrap, next);
+      const p = SPEAK_PERSONAS[activePersonaKey];
+      const statusEl = wrap?.id === 'demoPhoneOrbWrap'
+        ? document.getElementById('demoPhoneStatus')
+        : document.getElementById('demoChatStatus');
+      if (statusEl) {
+        statusEl.textContent = next === 'listening' ? '已插话 · 正在听你说…' : `${p.name} 正在说…`;
+      }
+    });
+  });
+
+  document.querySelectorAll('.lirio-persona-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      autoRotate = false;
+      activePersonaKey = btn.getAttribute('data-persona') || 'clara';
+      startTab('speak');
+    });
+  });
+
+  document.querySelectorAll('.lirio-mode-pill').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      autoRotate = false;
+      const mode = btn.getAttribute('data-speak-mode');
+      activePersonaKey = mode === 'examiner' ? 'oliver' : 'clara';
+      startTab('speak');
+    });
+  });
 
   function startTab(key) {
     clearAllTimers();

@@ -58,57 +58,129 @@
         <div class="preview-body">
           <!-- 1. Speaking Companion & IELTS Examiner Live Demo (Primary) -->
           <div class="preview-pane active" data-pane="speak">
-            <div class="demo-speak-meta-bar">
-              <div class="demo-speak-personas">
-                <span class="demo-persona-chip active">Clara · 美式</span>
-                <span class="demo-persona-chip">Noah · 干练</span>
-                <span class="demo-persona-chip">Oliver · 英式</span>
+            <div class="lirio-speak-topbar">
+              <div class="lirio-topbar-left">
+                <div class="lirio-mode-seg" role="group" aria-label="对话模式">
+                  <button type="button" class="lirio-mode-pill active" data-speak-mode="chat">双语闲聊</button>
+                  <button type="button" class="lirio-mode-pill" data-speak-mode="examiner">雅思考官</button>
+                </div>
+                <div class="lirio-persona-group" role="group" aria-label="陪练性格">
+                  <button type="button" class="lirio-persona-btn active" data-persona="clara">Clara</button>
+                  <button type="button" class="lirio-persona-btn" data-persona="noah">Noah</button>
+                  <button type="button" class="lirio-persona-btn" data-persona="oliver">Oliver</button>
+                </div>
+                <span id="demoSpeakTopic" class="lirio-topic-chip">日常研究 · 随口聊</span>
               </div>
-              <div class="demo-speak-caps">
-                <span class="demo-cap-chip">气泡 / 电话模式</span>
-                <span class="demo-cap-chip">空格插话</span>
-                <span class="demo-cap-chip">无痕</span>
+              <div class="lirio-topbar-icons" aria-label="对话工具栏">
+                <span class="lirio-icon-btn" title="无痕对话（不记入历史）">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </span>
+                <span class="lirio-icon-btn" title="继续上次对话">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/></svg>
+                </span>
+                <span class="lirio-icon-btn" title="表达收藏">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                </span>
+                <span class="lirio-icon-btn" title="语音设置">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                </span>
               </div>
             </div>
 
-            <div class="demo-speak-stage">
-              <div id="demoSpeakAi" class="demo-bubble ai">
-                <div class="demo-bubble-head">
-                  <strong>Clara · 双语陪练</strong>
-                  <span class="demo-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <!-- Phone Voice Stage -->
+            <div id="demoSpeakPhone" class="lirio-phone-stage">
+              <div class="lirio-orb-stage">
+                <div class="lirio-orb-wrap is-speaking" id="demoPhoneOrbWrap">
+                  <span class="lirio-orb-halo" aria-hidden="true"></span>
+                  <span class="lirio-orb-ripple" aria-hidden="true"></span>
+                  <button type="button" id="demoPhoneOrb" class="lirio-orb" aria-label="点击呼吸球插话">
+                    <span class="lirio-orb-core"></span>
+                  </button>
                 </div>
-                <p>Hey, good to hear from you again! How's that research project going?</p>
+                <div id="demoPhoneStatus" class="lirio-orb-status">Clara 正在说…</div>
+                <p id="demoPhonePrompt" class="lirio-phone-caption">“Hey, good to hear from you again! How's that research project going?”</p>
               </div>
 
-              <div id="demoSpeakMic" class="demo-mic-bar">
-                <span class="demo-mic-orb"><i></i></span>
-                <span>正在聆听中英混说 · 空格可随时插话</span>
+              <div class="lirio-dock" aria-label="通话控制栏">
+                <button type="button" id="demoToChatBtn" class="lirio-dock-circle" title="切到文字气泡对话" aria-label="切到文字气泡对话">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </button>
+                <button type="button" id="demoPhoneMicBtn" class="lirio-dock-circle is-primary" title="按住或点击插话" aria-label="麦克风">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </button>
+                <span class="lirio-dock-circle" title="无痕聊" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </span>
+                <span class="lirio-dock-circle is-end" title="结束通话" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/></svg>
+                </span>
               </div>
+            </div>
 
-              <div id="demoSpeakUser" class="demo-bubble user">
-                <strong>你</strong>
-                <p id="demoSpeakUserText"></p>
-              </div>
-
-              <div id="demoSpeakAi2" class="demo-bubble ai">
-                <div class="demo-bubble-head">
-                  <strong>Clara</strong>
-                </div>
-                <p>Totally get that. Stepping back for a day helps you spot the pattern—want to walk me through it?</p>
-              </div>
-
-              <div id="demoSpeakReview" class="demo-review-drawer">
-                <div class="demo-review-head">
-                  <div class="demo-band-row">
-                    <span class="demo-band-pill main">地道表达升级</span>
-                    <span class="demo-band-pill">雅思考官模式 · Overall 7.0</span>
+            <!-- Chat Bubble Stage -->
+            <div id="demoSpeakChat" class="lirio-chat-stage" hidden>
+              <div id="demoChatThread" class="lirio-chat-thread">
+                <div id="demoSpeakAi" class="lirio-chat-row ai">
+                  <span id="demoAiAvatar1" class="lirio-chat-avatar">C</span>
+                  <div class="lirio-chat-bubble ai">
+                    <span id="demoAiName1" class="lirio-chat-meta">Clara</span>
+                    <p id="demoAiText1">Hey, good to hear from you again! How's that research project going?</p>
                   </div>
-                  <span class="demo-cost-pill">约 ¥0.04 / 场</span>
                 </div>
-                <div class="demo-upgrade-line">
-                  <del>“a bit stuck on”</del>
-                  <em>→</em>
-                  <strong>“hit a bit of a roadblock on”</strong>
+
+                <div id="demoSpeakUser" class="lirio-chat-row user">
+                  <div class="lirio-chat-bubble user">
+                    <span class="lirio-chat-meta">我 · 空格插话</span>
+                    <p id="demoSpeakUserText"></p>
+                  </div>
+                </div>
+
+                <div id="demoSpeakThinking" class="lirio-chat-row ai is-thinking" hidden>
+                  <span id="demoAiAvatarT" class="lirio-chat-avatar">C</span>
+                  <div class="lirio-chat-bubble ai thinking">
+                    <span class="lirio-thinking-dots"><i></i><i></i><i></i></span>
+                    <span>思考中…</span>
+                  </div>
+                </div>
+
+                <div id="demoSpeakAi2" class="lirio-chat-row ai">
+                  <span id="demoAiAvatar2" class="lirio-chat-avatar">C</span>
+                  <div class="lirio-chat-bubble ai">
+                    <span id="demoAiName2" class="lirio-chat-meta">Clara</span>
+                    <p id="demoAiText2">Totally get that. Stepping back for a day helps you spot the pattern—want to walk me through it?</p>
+                  </div>
+                </div>
+
+                <div id="demoSpeakReview" class="lirio-takeaway-card">
+                  <div class="lirio-takeaway-head">
+                    <span class="lirio-band-pill main">地道表达升级</span>
+                    <span class="lirio-band-pill">雅思考官模式 · Overall 7.0</span>
+                    <span class="lirio-cost-pill">约 ¥0.04 / 场</span>
+                  </div>
+                  <div class="lirio-upgrade-line">
+                    <del>“a bit stuck on”</del>
+                    <em>→</em>
+                    <strong>“hit a bit of a roadblock on”</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lirio-chat-controls">
+                <div class="lirio-chat-orb-left">
+                  <div class="lirio-orb-wrap compact is-speaking" id="demoChatOrbWrap">
+                    <span class="lirio-orb-halo" aria-hidden="true"></span>
+                    <span class="lirio-orb-ripple" aria-hidden="true"></span>
+                    <button type="button" id="demoChatOrb" class="lirio-orb" aria-label="点击呼吸球插话">
+                      <span class="lirio-orb-core"></span>
+                    </button>
+                  </div>
+                  <span id="demoChatStatus" class="lirio-chat-status">Clara 正在说 · 空格随时插话</span>
+                </div>
+                <div class="lirio-chat-actions-right">
+                  <kbd id="demoSpaceKeyCap" class="lirio-space-cap">Space 插话</kbd>
+                  <button type="button" id="demoToPhoneBtn" class="lirio-dock-circle small" title="切回电话语音模式" aria-label="切回电话语音模式">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -143,40 +215,40 @@
 
           <!-- 3. Vocab Live Typing & Rhythm Demo -->
           <div class="preview-pane" data-pane="vocab">
-            <div class="demo-stage-head">
-              <div class="demo-vocab-top">
-                <button type="button" id="demoVocabAudio" class="demo-speaker-btn" aria-label="发音">
-                  <span class="demo-speaker-ring"></span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-                </button>
-                <div>
-                  <div id="demoVocabWord" class="demo-vocab-meaning">adj. 可持续的</div>
-                  <div id="demoVocabMeta" class="demo-vocab-phonetic">/səˈsteɪnəbl/ · 雅思 807 高频词</div>
+            <div id="demoCorpusCard" class="lirio-corpus-card">
+              <div class="lirio-corpus-progress-row">
+                <div class="lirio-corpus-track">
+                  <div id="demoVocabBar" class="lirio-corpus-bar" style="width: 33%"></div>
                 </div>
-              </div>
-              <div class="demo-stage-actions">
-                <span class="demo-sound-tag">清脆机械键音</span>
+                <span id="demoVocabCounter" class="lirio-corpus-counter">1 / 3</span>
                 <span id="demoVocabStreak" class="demo-streak-pill">连对 12 🔥</span>
               </div>
-            </div>
 
-            <div id="demoVocabLetters" class="demo-letter-row"></div>
+              <div class="lirio-corpus-audio-row">
+                <button type="button" id="demoVocabAudio" class="lirio-corpus-play" aria-label="发音">
+                  <span class="lirio-corpus-ripple"></span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                </button>
+                <div class="lirio-corpus-meta">
+                  <div id="demoVocabWord" class="lirio-corpus-meaning">adj. 可持续的</div>
+                  <div id="demoVocabMeta" class="lirio-corpus-phonetic">/səˈsteɪnəbl/ · 雅思 807 高频词</div>
+                </div>
+              </div>
 
-            <div id="demoKeycaps" class="demo-keycaps" aria-hidden="true">
-              <span data-key="S">S</span>
-              <span data-key="U">U</span>
-              <span data-key="T">T</span>
-              <span data-key="A">A</span>
-              <span data-key="I">I</span>
-              <span data-key="N">N</span>
-              <span data-key="B">B</span>
-              <span data-key="L">L</span>
-              <span data-key="E">E</span>
-              <span data-key="O">O</span>
-              <span data-key="D">D</span>
-              <span data-key="V">V</span>
-              <span data-key="R">R</span>
-              <span data-key="Y">Y</span>
+              <div id="demoVocabLetters" class="demo-letter-row"></div>
+
+              <div class="lirio-corpus-nav">
+                <span class="lirio-corpus-nav-btn">跳过</span>
+                <span class="lirio-corpus-nav-btn">重播发音</span>
+                <span class="lirio-corpus-nav-btn">首字母提示</span>
+                <span class="lirio-corpus-nav-btn">加入错词本</span>
+              </div>
+
+              <div id="demoVocabDots" class="lirio-corpus-dots" aria-hidden="true">
+                <span class="active"></span>
+                <span></span>
+                <span></span>
+              </div>
             </div>
           </div>
         </div>
