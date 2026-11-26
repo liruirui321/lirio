@@ -1107,25 +1107,20 @@ function buildExaminerSystemPrompt(
   ].join('\n');
 }
 
-async function callActiveLlm(
+async function callCustomLlm(
   config: SpeakConfig,
   messages: { role: string; content: string }[],
   temperature = 0.7,
-  feature = 'AI 对话',
 ): Promise<string> {
-  const acct = getAccountState();
-  if (acct.aiMode === 'pro_balance') {
-    return proxyChat({ messages, temperature, feature });
-  }
   const baseUrl = (config.textApiUrl || '').trim();
   const apiKey = (config.textApiKey || '').trim();
   const model = (config.textModel || '').trim() || 'deepseek-chat';
   if (!baseUrl) {
-    throw new Error('请先在「用户设置 → AI 与账号」填写文本模型的 API URL。');
+    throw new Error('请先在「设置 → AI → 自配置」填写文本模型的 URL。');
   }
   const isLocalEndpoint = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(baseUrl);
   if (!isLocalEndpoint && !apiKey) {
-    throw new Error('请先在「用户设置 → AI 与账号」填写文本模型的 API Key，或切换为「使用 Lirio 官方 API」。');
+    throw new Error('请先在「设置 → AI → 自配置」填写 API Key，或启用「官方 API」。');
   }
   return invoke<string>('speak_chat_remote', {
     baseUrl,
@@ -1136,15 +1131,27 @@ async function callActiveLlm(
   });
 }
 
+async function callActiveLlm(
+  config: SpeakConfig,
+  messages: { role: string; content: string }[],
+  temperature = 0.7,
+  feature = 'AI 对话',
+): Promise<string> {
+  const acct = getAccountState();
+  if (acct.aiMode === 'pro_balance') {
+    return proxyChat({ messages, temperature, feature });
+  }
+  return callCustomLlm(config, messages, temperature);
+}
+
 export async function testProviderConnection(config: SpeakConfig): Promise<string> {
-  return callActiveLlm(
+  return callCustomLlm(
     config,
     [
       { role: 'system', content: 'Reply with OK in one word.' },
       { role: 'user', content: 'ping' },
     ],
     0.1,
-    '连接测试',
   );
 }
 

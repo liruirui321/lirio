@@ -2851,6 +2851,26 @@ textarea:focus { outline: none; }
   grid-template-columns: 1fr 1fr;
   width: 100%;
 }
+.ai-active-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.ai-channel-switch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--muted);
+}
 .settings-rate-tip {
   font-size: 11px;
   color: var(--subtle);

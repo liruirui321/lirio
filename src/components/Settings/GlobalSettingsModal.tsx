@@ -166,6 +166,7 @@ export function GlobalSettingsModal({
   const [tab, setTab] = useState<GlobalSettingsTab>(initialTab);
   const [persisted, setPersisted] = useState<SpeakPersistedState>(() => loadSpeakState());
   const [account, setAccount] = useState<AccountState>(() => getAccountState());
+  const [aiViewMode, setAiViewMode] = useState<'pro_balance' | 'byok'>(() => getAccountState().aiMode);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -220,6 +221,7 @@ export function GlobalSettingsModal({
     getStorageInfo().then(setStorageInfo).catch(() => {});
     const acct = getAccountState();
     setAccount(acct);
+    setAiViewMode(acct.aiMode);
     setStatusMsg('');
     setErrorMsg('');
     setTestResult(null);
@@ -299,11 +301,17 @@ export function GlobalSettingsModal({
     setPersisted(next);
   };
 
-  const handleSelectMode = (mode: 'pro_balance' | 'byok') => {
+  const handleViewAiMode = (mode: 'pro_balance' | 'byok') => {
     setStatusMsg('');
     setErrorMsg('');
     setTestResult(null);
+    setAiViewMode(mode);
+  };
+
+  const handleActivateAiMode = (mode: 'pro_balance' | 'byok') => {
+    setErrorMsg('');
     updateAccountState({ aiMode: mode });
+    setStatusMsg(mode === 'pro_balance' ? '已启用官方 API' : '已启用自配置 API');
   };
 
   const handleAuthSubmit = async () => {
@@ -717,21 +725,51 @@ export function GlobalSettingsModal({
             <div className="seg-pill settings-mode-bar" role="tablist">
               <button
                 type="button"
-                className={account.aiMode === 'pro_balance' ? 'active' : ''}
-                onClick={() => handleSelectMode('pro_balance')}
+                className={aiViewMode === 'pro_balance' ? 'active' : ''}
+                onClick={() => handleViewAiMode('pro_balance')}
               >
-                官方 API
+                <span>官方 API</span>
+                {account.aiMode === 'pro_balance' && (
+                  <span className="ai-active-dot" title="当前生效通道" aria-label="当前生效" />
+                )}
               </button>
               <button
                 type="button"
-                className={account.aiMode === 'byok' ? 'active' : ''}
-                onClick={() => handleSelectMode('byok')}
+                className={aiViewMode === 'byok' ? 'active' : ''}
+                onClick={() => handleViewAiMode('byok')}
               >
-                自配置
+                <span>自配置</span>
+                {account.aiMode === 'byok' && (
+                  <span className="ai-active-dot" title="当前生效通道" aria-label="当前生效" />
+                )}
               </button>
             </div>
 
-            {account.aiMode === 'pro_balance' ? (
+            {aiViewMode !== account.aiMode && (
+              <div className="ai-channel-switch-bar">
+                <span>当前生效：{account.aiMode === 'pro_balance' ? '官方 API' : '自配置'}</span>
+                {aiViewMode === 'pro_balance' ? (
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    disabled={!account.user}
+                    onClick={() => handleActivateAiMode('pro_balance')}
+                  >
+                    {account.user ? '启用官方 API' : '登录后可启用'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() => handleActivateAiMode('byok')}
+                  >
+                    启用自配置
+                  </button>
+                )}
+              </div>
+            )}
+
+            {aiViewMode === 'pro_balance' ? (
               !account.user ? (
                 <div className="account-auth-card">
                   <div className="account-auth-head">
