@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import './theme.css';
+import './styles/mobile.css';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
@@ -56,6 +57,12 @@ import { SubmissionAnalysis } from './components/Analysis/SubmissionAnalysis';
 import { CorpusDictation, type CorpusLaunchRequest } from './components/Corpus/CorpusDictation';
 import { CustomSelect } from './components/Corpus/CustomSelect';
 import { SpeakCompanion } from './components/Speak/SpeakCompanion';
+import {
+  syncNativeSystemBars,
+  useIsMobileLayout,
+  useKeyboardVisible,
+} from './services/platform';
+import { MobileBottomNav, MobileTopBar } from './components/Mobile/MobileNav';
 import { GlobalSettingsModal, type GlobalSettingsTab } from './components/Settings/GlobalSettingsModal';
 import { Transport } from './components/Player/Transport';
 import { GlobalTooltip } from './components/GlobalTooltip';
@@ -108,6 +115,9 @@ export default function App() {
   const [micStatus, setMicStatus] = useState<MicPermissionStatus>('prompt');
   const [micBusy, setMicBusy] = useState(false);
   const [micError, setMicError] = useState('');
+  const [speakCallActive, setSpeakCallActive] = useState(false);
+  const isMobile = useIsMobileLayout();
+  const kbOpen = useKeyboardVisible();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
       const saved = localStorage.getItem('aboboo-theme');
@@ -117,6 +127,7 @@ export default function App() {
   });
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    syncNativeSystemBars(theme);
     try { localStorage.setItem('aboboo-theme', theme); } catch {}
   }, [theme]);
 
@@ -445,6 +456,43 @@ export default function App() {
 
   const isRec = usePlayerStore((s) => s.isRecording);
 
+  // Android hardware back handler: dismiss modals -> back to library -> back to home -> exit toast
+  useEffect(() => {
+    window.__lirioHandleAndroidBack = () => {
+      if (micModalOpen) {
+        setMicModalOpen(false);
+        return true;
+      }
+      if (showImportModal) {
+        if (!importBusy) setShowImportModal(false);
+        return true;
+      }
+      if (settingsOpen) {
+        setSettingsOpen(false);
+        return true;
+      }
+      if (asrBusy || !!loading || isRec || speakCallActive) {
+        return true;
+      }
+      if (hub === 'listening' && listeningMode !== 'library') {
+        stopListeningAudio();
+        setListeningMode('library');
+        return true;
+      }
+      if (hub !== 'home') {
+        stopListeningAudio();
+        setHub('home');
+        return true;
+      }
+      return false;
+    };
+    return () => {
+      if (window.__lirioHandleAndroidBack) {
+        delete window.__lirioHandleAndroidBack;
+      }
+    };
+  }, [micModalOpen, showImportModal, importBusy, settingsOpen, asrBusy, loading, isRec, speakCallActive, hub, listeningMode]);
+
   // Global keyboard shortcuts: Cmd/Ctrl + 1 / 2 / 3 to switch modules
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -559,7 +607,36 @@ export default function App() {
     <div className="app-shell">
       <GlobalTooltip />
       <SelectionTools />
-      {/* Breathable Borderless Top Navigation */}
+      {isMobile ? (
+        <MobileTopBar
+          hub={hub}
+          listeningMode={listeningMode}
+          projectName={project ? simplifyMaterialTitle(project.name).shortTitle : undefined}
+          favoritesCount={project?.favorites?.length || 0}
+          hasProject={Boolean(project)}
+          busy={asrBusy || !!loading || isRec}
+          userName={accountState.user?.name || null}
+          theme={theme}
+          onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+          onOpenSettings={(tab) => {
+            setSettingsTab(tab);
+            setSettingsOpen(true);
+          }}
+          onBackListeningLibrary={() => {
+            stopListeningAudio();
+            setListeningMode('library');
+          }}
+          onSelectListeningMode={(mode) => {
+            stopListeningAudio();
+            setListeningMode(mode);
+          }}
+          onOpenImport={() => {
+            setImportError('');
+            setShowImportModal(true);
+          }}
+        />
+      ) : (
+      /* Breathable Borderless Top Navigation */
       <div className="app-toolbar">
         {hub === 'home' ? (
           <span className="app-brand">
@@ -735,6 +812,7 @@ export default function App() {
           {theme === 'light' ? <IconMoon size={17} /> : <IconSun size={17} />}
         </button>
       </div>
+      )}
 
       {loading && <div role="status" className="app-status">{loading}</div>}
       {error && <div role="alert" className="app-error" onClick={() => setError('')}>{error}（点击关闭）</div>}
@@ -865,6 +943,23 @@ export default function App() {
           onOpenGlobalSettings={() => {
             setSettingsTab('ai');
             setSettingsOpen(true);
+          }}
+          onCallActiveChange={setSpeakCallActive}
+        />
+      )}
+
+      {isMobile && (
+        <MobileBottomNav
+          hub={hub}
+          disabled={asrBusy || !!loading || isRec}
+          hidden={kbOpen || speakCallActive || settingsOpen || showImportModal || micModalOpen}
+          onSelectHub={(next) => {
+            stopListeningAudio();
+            if (next === 'listening') {
+              void handleEnterListening(true);
+            } else {
+              setHub(next);
+            }
           }}
         />
       )}

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile } from '@tauri-apps/plugin-fs';
 import { open as openExternalUrl } from '@tauri-apps/plugin-shell';
+import { isMobileDevice } from '../../services/platform';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import type { Accent } from '../../services/corpusService';
 import {
@@ -1083,50 +1084,58 @@ export function GlobalSettingsModal({
                   )}
                 </div>
 
-                <div className="storage-path-box" title={storageInfo?.activeDir || ''}>
-                  {storageInfo
-                    ? storageInfo.activeDir
-                    : '浏览器暂存'}
-                </div>
-
-                {storageInfo && (
+                {isMobileDevice() ? (
+                  <small style={{ color: 'var(--muted)', lineHeight: 1.55 }}>
+                    应用本地沙盒存储 · 登录账号后自动云端双同步，重装可一键恢复。
+                  </small>
+                ) : (
                   <>
-                    <div className="storage-path-actions">
-                      <button
-                        type="button"
-                        disabled={storageBusy}
-                        onClick={() => void handleChangeStorageDir()}
-                      >
-                        {storageBusy ? '处理中…' : '更改目录'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={storageBusy}
-                        onClick={() => void handleOpenStorageDir()}
-                      >
-                        打开文件夹
-                      </button>
-                      <button type="button" onClick={() => void handleCopyStorageDir()}>
-                        复制路径
-                      </button>
-                      {storageInfo.isCustom && (
-                        <button
-                          type="button"
-                          disabled={storageBusy}
-                          onClick={() => void handleResetStorageDir()}
-                        >
-                          恢复默认
-                        </button>
-                      )}
+                    <div className="storage-path-box" title={storageInfo?.activeDir || ''}>
+                      {storageInfo
+                        ? storageInfo.activeDir
+                        : '浏览器暂存'}
                     </div>
-                    <label className="storage-migrate-check">
-                      <input
-                        type="checkbox"
-                        checked={migrateOnSwitch}
-                        onChange={(e) => setMigrateOnSwitch(e.target.checked)}
-                      />
-                      <span>切换时同步迁移当前数据</span>
-                    </label>
+
+                    {storageInfo && (
+                      <>
+                        <div className="storage-path-actions">
+                          <button
+                            type="button"
+                            disabled={storageBusy}
+                            onClick={() => void handleChangeStorageDir()}
+                          >
+                            {storageBusy ? '处理中…' : '更改目录'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={storageBusy}
+                            onClick={() => void handleOpenStorageDir()}
+                          >
+                            打开文件夹
+                          </button>
+                          <button type="button" onClick={() => void handleCopyStorageDir()}>
+                            复制路径
+                          </button>
+                          {storageInfo.isCustom && (
+                            <button
+                              type="button"
+                              disabled={storageBusy}
+                              onClick={() => void handleResetStorageDir()}
+                            >
+                              恢复默认
+                            </button>
+                          )}
+                        </div>
+                        <label className="storage-migrate-check">
+                          <input
+                            type="checkbox"
+                            checked={migrateOnSwitch}
+                            onChange={(e) => setMigrateOnSwitch(e.target.checked)}
+                          />
+                          <span>切换时同步迁移当前数据</span>
+                        </label>
+                      </>
+                    )}
                   </>
                 )}
               </div>

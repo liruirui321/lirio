@@ -1,7 +1,7 @@
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use serde::Serialize;
-use tauri::Manager;
 
 #[derive(Serialize)]
 pub struct CorpusAudioResult {
@@ -59,21 +59,19 @@ fn fetch_youdao(word: &str, youdao_type: &str, dest: &Path) -> Result<Vec<u8>, S
         urlencode(word),
         youdao_type
     );
-    let tmp = dest.with_extension("tmp");
-    let status = Command::new("curl")
-        .args(["-fsSL", "--max-time", "8", "-o"])
-        .arg(&tmp)
-        .arg(&url)
-        .status()
-        .map_err(|e| format!("curl 启动失败：{e}"))?;
+    let agent = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_secs(8))
+        .build();
+    let resp = agent
+        .get(&url)
+        .call()
+        .map_err(|e| format!("词典发音请求失败：{e}"))?;
 
-    if !status.success() {
-        let _ = std::fs::remove_file(&tmp);
-        return Err("词典发音请求失败".into());
-    }
-
-    let bytes = std::fs::read(&tmp).map_err(|e| e.to_string())?;
-    let _ = std::fs::remove_file(&tmp);
+    let mut bytes = Vec::new();
+    resp.into_reader()
+        .take(10 * 1024 * 1024)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("读取词典发音失败：{e}"))?;
 
     // Basic sanity check: valid audio should be > 400 bytes and not HTML.
     if bytes.len() < 400 || bytes.starts_with(b"<") || bytes.starts_with(b"{") {

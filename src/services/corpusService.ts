@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
+import { proxyTts } from './accountService';
 import { saveStateBackup } from './stateSync';
 
 export type Accent = 'uk' | 'us' | 'au' | 'in';
@@ -485,16 +486,27 @@ export async function getWordAudio(word: string, accent: Accent): Promise<{ url:
   if (existing) return existing;
 
   const promise = (async () => {
-    const res = await invoke<CorpusAudioResult>('corpus_fetch_audio', {
-      word: word.trim(),
-      accent,
-    });
-    const bytes = new Uint8Array(res.bytes);
-    const blob = new Blob([bytes], { type: res.mime || 'audio/mpeg' });
-    const url = URL.createObjectURL(blob);
-    const entry = { url, bytes, mime: res.mime || 'audio/mpeg' };
-    audioUrlCache.set(key, entry);
-    return entry;
+    try {
+      const res = await invoke<CorpusAudioResult>('corpus_fetch_audio', {
+        word: word.trim(),
+        accent,
+      });
+      const bytes = new Uint8Array(res.bytes);
+      const blob = new Blob([bytes], { type: res.mime || 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      const entry = { url, bytes, mime: res.mime || 'audio/mpeg' };
+      audioUrlCache.set(key, entry);
+      return entry;
+    } catch (nativeErr) {
+      const url = await proxyTts(word.trim(), accent, undefined, '词卡发音').catch(() => {
+        throw nativeErr;
+      });
+      const buf = await fetch(url).then((r) => r.arrayBuffer());
+      const bytes = new Uint8Array(buf);
+      const entry = { url, bytes, mime: 'audio/mpeg' };
+      audioUrlCache.set(key, entry);
+      return entry;
+    }
   })().finally(() => {
     inflightAudio.delete(key);
   });

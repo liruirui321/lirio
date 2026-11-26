@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { isAndroidNative, openNativeAppSettings, requestNativeMicPermission } from './platform';
 
 export type MicPermissionStatus = 'granted' | 'prompt' | 'denied' | 'unsupported';
 
@@ -90,6 +91,9 @@ export async function requestMicPermission(): Promise<{
       name === 'SecurityError' ||
       /denied|not allowed|permission/i.test(msg)
     ) {
+      if (isAndroidNative()) {
+        requestNativeMicPermission();
+      }
       return {
         ok: false,
         status: 'denied',
@@ -105,5 +109,6 @@ export async function requestMicPermission(): Promise<{
 }
 
 export async function openSystemMicSettings(): Promise<void> {
+  if (openNativeAppSettings()) return;
   await invoke('open_mic_settings');
 }

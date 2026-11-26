@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { isMobileDevice } from '../services/platform';
 
 interface TooltipState {
   text: string;
@@ -40,6 +41,7 @@ export function GlobalTooltip() {
   }, [tip]);
 
   useEffect(() => {
+    if (isMobileDevice()) return;
     const clearTimer = () => {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
@@ -142,7 +144,7 @@ export function GlobalTooltip() {
     };
   }, []);
 
-  if (!tip) return null;
+  if (isMobileDevice() || !tip) return null;
 
   return (
     <div

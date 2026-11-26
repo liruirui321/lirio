@@ -22,6 +22,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+ureq = { version = "2", default-features = false, features = ["tls", "json"] }
 uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

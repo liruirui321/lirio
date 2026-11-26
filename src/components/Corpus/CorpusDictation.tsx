@@ -13,6 +13,7 @@ import {
   IconVolume,
 } from '../Icons';
 import { CustomSelect, type SelectOption } from './CustomSelect';
+import { isMobileDevice } from '../../services/platform';
 import { handleDictationKeySound } from '../../services/typingSound';
 import {
   type Accent,
@@ -1197,11 +1198,13 @@ export function CorpusDictation({
                       {showHint && !submitted && !isPassed && !isRevealed && item.t
                         ? item.t
                         : !submitted && st.status === 'idle'
-                          ? 'Enter 验证 · Esc 显示答案 · Tab 重播'
+                          ? isMobileDevice()
+                            ? '轻触格位输入单词 · 喇叭可重播'
+                            : 'Enter 验证 · Esc 显示答案 · Tab 重播'
                           : isWrong
-                            ? `拼写有误（${item.w.length} 字符），修改后按 Enter 重试`
+                            ? `拼写有误（${item.w.length} 字符），修改后${isMobileDevice() ? '点验证重试' : '按 Enter 重试'}`
                             : isRevealed
-                              ? '按 Enter 进入下一词'
+                              ? isMobileDevice() ? '点击下方继续下一词' : '按 Enter 进入下一词'
                               : isPassed && isMistakeDrill && !st.hadMistake
                                 ? '已移出错词本'
                                 : ''}
@@ -1469,30 +1472,44 @@ export function CorpusDictation({
                       </button>
                       {!submitted && !isPassed && !isRevealed && (
                         <button
-                          className="icon-btn"
+                          className={isMobileDevice() ? 'corpus-mobile-pill' : 'icon-btn'}
                           onClick={handleRevealAnswer}
                           title="显示答案 (Esc)"
                           aria-label="显示答案"
                         >
                           <IconEye size={16} />
+                          {isMobileDevice() && <span>看答案</span>}
                         </button>
                       )}
                       {!submitted ? (
                         <button
-                          className="icon-btn primary"
+                          className={isMobileDevice() ? 'corpus-mobile-pill primary' : 'icon-btn primary'}
                           onClick={handleCardCheckOrNext}
                           title={canAdvance ? '下一词 (Enter)' : '验证拼写 (Enter)'}
                           aria-label={canAdvance ? '下一词' : '验证拼写'}
                         >
                           {canAdvance ? <IconNext size={16} /> : <IconCheck size={16} />}
+                          {isMobileDevice() && <span>{canAdvance ? '下一词' : '验证'}</span>}
                         </button>
                       ) : activeIdx + 1 < drillWords.length ? (
-                        <button className="icon-btn primary" onClick={() => focusAndPlay(activeIdx + 1)} title="下一词" aria-label="下一词">
+                        <button
+                          className={isMobileDevice() ? 'corpus-mobile-pill primary' : 'icon-btn primary'}
+                          onClick={() => focusAndPlay(activeIdx + 1)}
+                          title="下一词"
+                          aria-label="下一词"
+                        >
                           <IconNext size={16} />
+                          {isMobileDevice() && <span>下一词</span>}
                         </button>
                       ) : (
-                        <button className="icon-btn primary" onClick={handleRestartSection} title="再刷一遍" aria-label="再刷一遍">
+                        <button
+                          className={isMobileDevice() ? 'corpus-mobile-pill primary' : 'icon-btn primary'}
+                          onClick={handleRestartSection}
+                          title="再刷一遍"
+                          aria-label="再刷一遍"
+                        >
                           <IconReplay size={16} />
+                          {isMobileDevice() && <span>再刷一遍</span>}
                         </button>
                       )}
                     </div>

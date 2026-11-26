@@ -1,4 +1,5 @@
 import type { Accent } from './corpusService';
+import { isMobileDevice } from './platform';
 import { saveStateBackup } from './stateSync';
 
 export type AiMode = 'byok' | 'pro_balance';
@@ -254,6 +255,13 @@ export function getAccountState(): AccountState {
       };
     }
   } catch {}
+  if (isMobileDevice()) {
+    return {
+      ...DEFAULT_STATE,
+      aiMode: 'pro_balance',
+      proCloudSpeech: true,
+    };
+  }
   return { ...DEFAULT_STATE };
 }
 

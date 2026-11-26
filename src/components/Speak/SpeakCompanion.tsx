@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { setNativeKeepScreenOn } from '../../services/platform';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import {
   IconBookmark,
@@ -75,10 +76,12 @@ export function SpeakCompanion({
   externalContext = null,
   onClearExternalContext,
   onOpenGlobalSettings,
+  onCallActiveChange,
 }: {
   externalContext?: SpeakExternalContext | null;
   onClearExternalContext?: () => void;
   onOpenGlobalSettings?: () => void;
+  onCallActiveChange?: (active: boolean) => void;
 }) {
   const [persisted, setPersisted] = useState<SpeakPersistedState>(() => loadSpeakState());
   const config = persisted.config;
@@ -106,6 +109,14 @@ export function SpeakCompanion({
 
   // Live voice call state
   const [callActive, setCallActive] = useState<boolean>(false);
+
+  useEffect(() => {
+    onCallActiveChange?.(callActive);
+    setNativeKeepScreenOn(callActive);
+    return () => {
+      setNativeKeepScreenOn(false);
+    };
+  }, [callActive, onCallActiveChange]);
   const [callPaused, setCallPaused] = useState<boolean>(false);
   const [callPhase, setCallPhase] = useState<CallPhase>('idle');
   const [muted, setMuted] = useState<boolean>(false);

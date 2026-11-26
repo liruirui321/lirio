@@ -1,0 +1,488 @@
+/* ==========================================================================
+   Lirio Dedicated Mobile & Android Adaptive Shell
+   Scoped cleanly to html[data-mobile="true"] and @media (max-width: 768px)
+   Desktop remains 100% unchanged.
+   ========================================================================== */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Native Android MainActivity applies systemBars() + displayCutout() + ime()
+   padding directly on android.R.id.content, so CSS must NOT add a second offset. */
+html[data-android-insets="native"] {
+  --safe-top: 0px;
+  --safe-bottom: 0px;
+}
+
+/* ---------- Mobile Navigation Bar Components ---------- */
+.mobile-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: calc(50px + var(--safe-top));
+  padding: var(--safe-top) 12px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  z-index: 40;
+}
+
+.mobile-topbar-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.mobile-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-strong);
+  user-select: none;
+}
+
+.mobile-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  padding: 4px 8px 4px 2px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text-strong) !important;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.mobile-topbar-title {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.mobile-acct-pill {
+  max-width: 108px;
+  padding: 5px 10px !important;
+  font-size: 12px !important;
+}
+
+.mobile-acct-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding: 4px 6px calc(4px + var(--safe-bottom));
+  flex-shrink: 0;
+  z-index: 45;
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.04);
+}
+
+.mobile-nav-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: 4px 2px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.mobile-nav-label {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.mobile-nav-tab.active {
+  color: var(--accent-bright) !important;
+}
+
+.mobile-nav-tab.active .mobile-nav-icon {
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+}
+
+/* ---------- Mobile Layout Overrides ---------- */
+html[data-mobile="true"] .app-shell {
+  height: 100%;
+  height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html[data-mobile="true"] .icon-btn {
+  width: 38px;
+  height: 38px;
+}
+
+/* Fallback desktop toolbar safety if mobile breakpoint hit before React hook */
+@media (max-width: 768px) {
+  .app-toolbar {
+    padding: max(8px, var(--safe-top)) 12px 8px;
+    min-height: calc(48px + var(--safe-top));
+  }
+}
+
+/* Home Launcher */
+html[data-mobile="true"] .home-launcher {
+  justify-content: flex-start;
+  padding: 18px 16px 24px;
+}
+
+html[data-mobile="true"] .home-header {
+  margin-bottom: 18px;
+}
+
+html[data-mobile="true"] .home-brand-mark {
+  margin-bottom: 8px;
+}
+
+html[data-mobile="true"] .brand-icon-lg {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+}
+
+html[data-mobile="true"] .home-header h1 {
+  font-size: 26px;
+  margin-bottom: 4px;
+}
+
+html[data-mobile="true"] .home-header p {
+  font-size: 12.5px;
+  letter-spacing: 2px;
+}
+
+html[data-mobile="true"] .home-grid {
+  grid-template-columns: 1fr;
+  max-width: 100%;
+  gap: 12px;
+}
+
+html[data-mobile="true"] .home-card {
+  min-height: 0;
+  padding: 16px 18px;
+  border-radius: 18px;
+  gap: 8px;
+}
+
+html[data-mobile="true"] .home-card:hover {
+  transform: none;
+}
+
+html[data-mobile="true"] .home-card:active {
+  transform: scale(0.985);
+}
+
+html[data-mobile="true"] .home-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+html[data-mobile="true"] .home-card strong {
+  font-size: 16px;
+}
+
+html[data-mobile="true"] .home-card-progress {
+  padding-top: 10px;
+}
+
+/* Listening: Material Library */
+html[data-mobile="true"] .library-page,
+html[data-mobile="true"] .corpus-workspace,
+html[data-mobile="true"] .dict-workspace,
+html[data-mobile="true"] .speak-workspace {
+  min-height: 0;
+  flex: 1;
+}
+
+html[data-mobile="true"] .library-head {
+  padding: 10px 14px 8px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+html[data-mobile="true"] .corpus-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+
+html[data-mobile="true"] .corpus-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-mobile="true"] .library-resume-bar {
+  margin: 0 12px 10px;
+  padding: 12px 14px;
+  gap: 10px;
+}
+
+html[data-mobile="true"] .tier-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+html[data-mobile="true"] .library-filter {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+html[data-mobile="true"] .library-list .material-row {
+  padding: 12px 14px;
+  gap: 10px;
+}
+
+/* Listening: Single-Sentence Dictation */
+html[data-mobile="true"] .dict-topbar {
+  padding: 8px 12px;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html[data-mobile="true"] .dict-topbar::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-mobile="true"] .dict-title-group {
+  display: none;
+}
+
+html[data-mobile="true"] .dict-stage {
+  padding: 10px 12px 18px;
+  align-items: stretch;
+}
+
+html[data-mobile="true"] .dict-stage .corpus-card {
+  padding: 20px 16px 18px;
+  border-radius: 18px;
+  gap: 14px;
+}
+
+html[data-mobile="true"] .dict-textarea {
+  font-size: 16px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+html[data-mobile="true"] .dict-drawer,
+html[data-mobile="true"] .corpus-popover {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  top: auto;
+  bottom: calc(66px + var(--safe-bottom));
+  width: auto;
+  max-width: none;
+  max-height: 68dvh;
+  overflow-y: auto;
+  z-index: 95;
+}
+
+/* Words Module: Responsive Letter Tiles (no overflow on long IELTS words!) */
+html[data-mobile="true"] .corpus-topbar {
+  padding: 8px 12px;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html[data-mobile="true"] .corpus-topbar::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-mobile="true"] .corpus-selectors {
+  flex-wrap: nowrap;
+}
+
+html[data-mobile="true"] .corpus-stage {
+  padding: 12px;
+  align-items: flex-start;
+}
+
+html[data-mobile="true"] .corpus-card {
+  padding: 22px 14px 20px;
+  border-radius: 18px;
+  gap: 16px;
+}
+
+html[data-mobile="true"] .corpus-letter-row {
+  gap: 6px 2.5px;
+  max-width: 100%;
+}
+
+html[data-mobile="true"] .corpus-letter-tile {
+  width: clamp(22px, 7.1vw, 30px);
+  height: clamp(32px, 9.5vw, 42px);
+  font-size: clamp(14px, 4.3vw, 19px);
+  border-radius: 6px;
+}
+
+html[data-mobile="true"] .corpus-letter-row.sm .corpus-letter-tile {
+  width: clamp(19px, 5.8vw, 26px);
+  height: clamp(28px, 8.2vw, 36px);
+  font-size: clamp(13px, 3.8vw, 17px);
+}
+
+html[data-mobile="true"] .corpus-letter-row.xs .corpus-letter-tile {
+  width: clamp(16px, 4.7vw, 23px);
+  height: clamp(26px, 7.2vw, 32px);
+  font-size: clamp(12px, 3.3vw, 15px);
+}
+
+html[data-mobile="true"] .corpus-card-input {
+  font-size: 22px;
+}
+
+.corpus-mobile-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+}
+
+html[data-mobile="true"] .corpus-summary {
+  margin: 0 12px;
+  padding: 14px 16px;
+}
+
+/* Speak Companion & IELTS Examiner */
+html[data-mobile="true"] .speak-topbar {
+  padding: 8px 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+html[data-mobile="true"] .speak-top-actions > button[aria-label="设置"] {
+  display: none;
+}
+
+html[data-mobile="true"] .speak-call-stage {
+  padding: 6px 12px calc(12px + var(--safe-bottom));
+}
+
+html[data-mobile="true"] .exam-stage-steps {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  justify-content: flex-start;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+html[data-mobile="true"] .exam-stage-steps::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-mobile="true"] .exam-stage-step,
+html[data-mobile="true"] .mock-next-pill {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+html[data-mobile="true"] .speak-history-list {
+  grid-template-columns: 1fr;
+}
+
+html[data-mobile="true"] .speak-chat-dock textarea,
+html[data-mobile="true"] .speak-chat-dock input,
+html[data-mobile="true"] .provider-form input,
+html[data-mobile="true"] .memory-add-bar input {
+  font-size: 16px;
+}
+
+html[data-mobile="true"] .speak-bubble-wrap {
+  max-width: 92%;
+}
+
+html[data-mobile="true"] .speak-bubble.user,
+html[data-mobile="true"] .qa-transcript-list.chat-style .speak-bubble.user,
+html[data-mobile="true"] .qa-transcript-list.chat-style .speak-bubble.ai {
+  max-width: 88%;
+}
+
+/* Modals become Bottom Sheets on Mobile */
+html[data-mobile="true"] .import-modal-backdrop {
+  align-items: flex-end;
+  padding: 0;
+}
+
+html[data-mobile="true"] .import-modal,
+html[data-mobile="true"] .global-settings-modal,
+html[data-mobile="true"] .mic-permission-modal {
+  width: 100%;
+  max-width: 100%;
+  max-height: 92dvh;
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px calc(18px + var(--safe-bottom));
+  overflow-y: auto;
+}
+
+html[data-mobile="true"] .import-modal-grid,
+html[data-mobile="true"] .settings-two-col,
+html[data-mobile="true"] .analysis-kpi-row {
+  grid-template-columns: 1fr;
+}
+
+/* Floating Toasts stay safely above MobileBottomNav */
+html[data-mobile="true"] .update-toast,
+html[data-mobile="true"] .mistake-reminder-toast {
+  left: 12px;
+  right: 12px;
+  bottom: calc(68px + var(--safe-bottom));
+  justify-content: space-between;
+}
+
+html[data-mobile="true"] .mistake-reminder-toast.stacked {
+  bottom: calc(122px + var(--safe-bottom));
+}
+
+html[data-mobile="true"][data-kb-open="true"] .update-toast,
+html[data-mobile="true"][data-kb-open="true"] .mistake-reminder-toast {
+  display: none;
+}

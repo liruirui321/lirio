@@ -1,10 +1,17 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 use tauri::Manager;
+
+fn build_http_agent(timeout_secs: u64) -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(timeout_secs))
+        .build()
+}
 
 use super::corpus::CorpusAudioResult;
 
@@ -169,28 +176,29 @@ pub async fn speak_transcribe(
                 .trim_end_matches('/')
         );
         return tauri::async_runtime::spawn_blocking(move || {
-            fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
-            let id = uuid::Uuid::new_v4().to_string();
-            let wav_path = cache.join(format!("speak-oa-{id}.wav"));
-            fs::write(&wav_path, &wav_bytes).map_err(|e| format!("写入录音失败：{e}"))?;
+            let boundary = format!("----LirioBoundary{}", uuid::Uuid::new_v4().simple());
+            let mut body = Vec::with_capacity(wav_bytes.len() + 512);
+            let _ = write!(
+                body,
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nen\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\nContent-Type: audio/wav\r\n\r\n"
+            );
+            body.extend_from_slice(&wav_bytes);
+            let _ = write!(body, "\r\n--{boundary}--\r\n");
 
-            let output = Command::new("curl")
-                .args(["-sS", "--max-time", "45", "-X", "POST"])
-                .arg("-H")
-                .arg(format!("Authorization: Bearer {key}"))
-                .arg("-F")
-                .arg(format!("file=@{}", wav_path.to_string_lossy()))
-                .args(["-F", "model=whisper-1", "-F", "language=en"])
-                .arg(&endpoint)
-                .output();
-            let _ = fs::remove_file(&wav_path);
-
-            let out = output.map_err(|e| format!("调用云端语音识别失败：{e}"))?;
-            if !out.status.success() {
-                let err = String::from_utf8_lossy(&out.stderr);
-                return Err(format!("云端语音识别请求失败：{err}"));
-            }
-            let raw = String::from_utf8_lossy(&out.stdout).to_string();
+            let raw = match build_http_agent(45)
+                .post(&endpoint)
+                .set("Authorization", &format!("Bearer {key}"))
+                .set("Content-Type", &format!("multipart/form-data; boundary={boundary}"))
+                .send_bytes(&body)
+            {
+                Ok(resp) => resp
+                    .into_string()
+                    .map_err(|e| format!("读取语音识别响应失败：{e}"))?,
+                Err(ureq::Error::Status(_, resp)) => {
+                    resp.into_string().unwrap_or_else(|_| "API 返回错误状态".into())
+                }
+                Err(e) => return Err(format!("调用云端语音识别失败：{e}")),
+            };
             let val: serde_json::Value =
                 serde_json::from_str(&raw).map_err(|e| format!("云端语音识别解析失败：{e}"))?;
             if let Some(err) = val.get("error") {
@@ -287,31 +295,23 @@ pub async fn speak_chat_remote(
         "model": model,
         "messages": messages,
         "temperature": temperature.unwrap_or(0.7),
-    })
-    .to_string();
+    });
 
     tauri::async_runtime::spawn_blocking(move || {
-        let mut cmd = Command::new("curl");
-        cmd.args([
-            "-sS",
-            "--max-time",
-            "45",
-            "-X",
-            "POST",
-            "-H",
-            "Content-Type: application/json",
-        ]);
+        let agent = build_http_agent(45);
+        let mut req = agent.post(&url).set("Content-Type", "application/json");
         if !api_key.trim().is_empty() {
-            cmd.arg("-H").arg(format!("Authorization: Bearer {}", api_key.trim()));
+            req = req.set("Authorization", &format!("Bearer {}", api_key.trim()));
         }
-        cmd.arg("-d").arg(&body).arg(&url);
-
-        let output = cmd.output().map_err(|e| format!("网络请求启动失败：{e}"))?;
-        if !output.status.success() {
-            let err = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("请求失败：{err}"));
-        }
-        let raw = String::from_utf8_lossy(&output.stdout).to_string();
+        let raw = match req.send_json(body) {
+            Ok(resp) => resp
+                .into_string()
+                .map_err(|e| format!("响应读取失败：{e}"))?,
+            Err(ureq::Error::Status(_, resp)) => {
+                resp.into_string().unwrap_or_else(|_| "API 返回错误状态".into())
+            }
+            Err(e) => return Err(format!("网络请求失败：{e}")),
+        };
         let val: serde_json::Value =
             serde_json::from_str(&raw).map_err(|e| format!("响应解析失败：{e}"))?;
         if let Some(err) = val.get("error") {
@@ -384,44 +384,51 @@ pub async fn speak_tts(
                 .filter(|s| !s.is_empty())
                 .unwrap_or(if accent == "uk" { "fable" } else { "alloy" })
                 .to_string();
-            let mp3_path: PathBuf = cache.join(format!("speak-oa-tts-{id}.mp3"));
             let body = serde_json::json!({
                 "model": &chosen_model,
                 "input": &trimmed,
                 "voice": &chosen_voice,
                 "response_format": "mp3",
-            })
-            .to_string();
-            let status = Command::new("curl")
-                .args(["-sS", "--max-time", "30", "-X", "POST", "-H", "Content-Type: application/json"])
-                .arg("-H")
-                .arg(format!("Authorization: Bearer {key}"))
-                .arg("-d")
-                .arg(&body)
-                .arg("-o")
-                .arg(&mp3_path)
-                .arg(&endpoint)
-                .status()
-                .map_err(|e| format!("调用 OpenAI TTS 失败：{e}"))?;
-            if status.success() && mp3_path.is_file() {
-                let bytes = fs::read(&mp3_path).unwrap_or_default();
-                let _ = fs::remove_file(&mp3_path);
-                if bytes.starts_with(b"{") {
-                    if let Ok(err_val) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+            });
+            let bytes: Vec<u8> = match build_http_agent(30)
+                .post(&endpoint)
+                .set("Authorization", &format!("Bearer {key}"))
+                .set("Content-Type", "application/json")
+                .send_json(body)
+            {
+                Ok(resp) => {
+                    let mut buf = Vec::new();
+                    resp.into_reader()
+                        .take(16 * 1024 * 1024)
+                        .read_to_end(&mut buf)
+                        .map_err(|e| format!("读取语音数据失败：{e}"))?;
+                    buf
+                }
+                Err(ureq::Error::Status(_, resp)) => {
+                    let err_text = resp.into_string().unwrap_or_default();
+                    if let Ok(err_val) = serde_json::from_str::<serde_json::Value>(&err_text) {
                         if let Some(msg) = err_val["error"]["message"].as_str() {
                             return Err(format!("OpenAI TTS 错误：{msg}"));
                         }
                     }
+                    return Err(format!("OpenAI TTS 请求失败：{err_text}"));
                 }
-                if bytes.len() > 300 {
-                    return Ok(CorpusAudioResult {
-                        bytes,
-                        mime: "audio/mpeg".into(),
-                        source: format!("openai-{chosen_voice}"),
-                    });
+                Err(e) => return Err(format!("调用 OpenAI TTS 失败：{e}")),
+            };
+            if bytes.starts_with(b"{") {
+                if let Ok(err_val) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                    if let Some(msg) = err_val["error"]["message"].as_str() {
+                        return Err(format!("OpenAI TTS 错误：{msg}"));
+                    }
                 }
             }
-            let _ = fs::remove_file(&mp3_path);
+            if bytes.len() > 300 {
+                return Ok(CorpusAudioResult {
+                    bytes,
+                    mime: "audio/mpeg".into(),
+                    source: format!("openai-{chosen_voice}"),
+                });
+            }
             return Err("OpenAI TTS 合成失败，请检查 Key 或网络。".into());
         }
 
@@ -675,14 +682,12 @@ pub async fn podcast_download_latest(
     tauri::async_runtime::spawn_blocking(move || {
         fs::create_dir_all(&target_dir).map_err(|e| format!("无法创建播客目录：{e}"))?;
 
-        let rss_out = Command::new("curl")
-            .args(["-fsSL", "--max-time", "20", &rss_url])
-            .output()
-            .map_err(|e| format!("获取播客订阅失败：{e}"))?;
-        if !rss_out.status.success() {
-            return Err("无法访问该播客 RSS，请检查网络连接。".into());
-        }
-        let xml = String::from_utf8_lossy(&rss_out.stdout).to_string();
+        let xml = build_http_agent(20)
+            .get(&rss_url)
+            .call()
+            .map_err(|_| "无法访问该播客 RSS，请检查网络连接。".to_string())?
+            .into_string()
+            .map_err(|e| format!("读取播客订阅内容失败：{e}"))?;
         let item_start = xml.find("<item").ok_or("订阅源中未找到音频节目")?;
         let item_xml = &xml[item_start..];
         let item_end = item_xml.find("</item>").unwrap_or(item_xml.len());
@@ -697,13 +702,16 @@ pub async fn podcast_download_latest(
             .collect();
         let dest = target_dir.join(format!("{safe_slug}-latest.mp3"));
 
-        let dl = Command::new("curl")
-            .args(["-fsSL", "--max-time", "90", "-o"])
-            .arg(&dest)
-            .arg(&audio_url)
-            .status()
+        let resp = build_http_agent(90)
+            .get(&audio_url)
+            .call()
             .map_err(|e| format!("下载播客音频失败：{e}"))?;
-        if !dl.success() || !dest.is_file() {
+        let mut out_file = fs::File::create(&dest).map_err(|e| format!("创建播客文件失败：{e}"))?;
+        if let Err(e) = std::io::copy(&mut resp.into_reader().take(200 * 1024 * 1024), &mut out_file) {
+            let _ = fs::remove_file(&dest);
+            return Err(format!("写入播客音频失败：{e}"));
+        }
+        if !dest.is_file() {
             return Err("播客音频下载失败，请稍后重试。".into());
         }
 
