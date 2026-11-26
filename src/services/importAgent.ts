@@ -5,8 +5,15 @@ import { mkdir, readFile, writeFile } from '@tauri-apps/plugin-fs';
 import { audioEngine } from './audioEngine';
 import { sentences } from './dictation';
 import { projectService } from './projectService';
+import { proofreadDictationSentences } from './speakService';
 
 export type ImportTierChoice = 'auto' | 'L1' | 'L2' | 'L3' | 'L4';
+
+export interface ImportAiPolishOption {
+  enabled: boolean;
+  fixText?: boolean;
+  addTranslation?: boolean;
+}
 
 export interface ImportProgress {
   fileIndex: number;
@@ -31,10 +38,12 @@ export async function importAudioFilesToLibrary(opts: {
   paths: string[];
   language: string;
   tier: ImportTierChoice;
+  aiPolish?: ImportAiPolishOption;
   onProgress: (p: ImportProgress) => void;
-}): Promise<{ importedIds: string[]; lastLibraryId: string | null }> {
-  const { paths, language, tier, onProgress } = opts;
+}): Promise<{ importedIds: string[]; lastLibraryId: string | null; warnings: string[] }> {
+  const { paths, language, tier, aiPolish, onProgress } = opts;
   const importedIds: string[] = [];
+  const warnings: string[] = [];
   let lastLibraryId: string | null = null;
 
   for (let i = 0; i < paths.length; i++) {
@@ -104,15 +113,50 @@ export async function importAudioFilesToLibrary(opts: {
         };
       });
 
+      let finalSentences = trimmedSentences;
+      let finalSource = result.source;
+      let aiPolished = false;
+
+      if (aiPolish?.enabled && trimmedSentences.length > 0) {
+        try {
+          const polishRes = await proofreadDictationSentences(
+            trimmedSentences.map((s) => ({ id: s.id, text: s.text, translation: s.translation })),
+            {
+              fixText: aiPolish.fixText ?? true,
+              addTranslation: aiPolish.addTranslation ?? true,
+              materialTitle: finalTitle,
+              onProgress: (done, total, bIdx, bTotal) => {
+                emitStage(`正在 AI 精校字幕（第 ${bIdx}/${bTotal} 批，${done}/${total} 句）…`);
+              },
+            },
+          );
+          finalSentences = trimmedSentences.map((s) => {
+            const patch = polishRes.updates.get(s.id);
+            if (!patch) return s;
+            return {
+              ...s,
+              text: patch.text !== undefined ? patch.text : s.text,
+              translation: patch.translation !== undefined ? patch.translation : s.translation,
+            };
+          });
+          aiPolished = true;
+          finalSource = `${result.source} · AI 精校`;
+        } catch (aiErr) {
+          const reason = aiErr instanceof Error ? aiErr.message : String(aiErr);
+          warnings.push(`「${rawName}」已完成本机离线识别入库，但 AI 精校跳过：${reason}`);
+        }
+      }
+
       project.dictation = {
-        sentences: trimmedSentences,
+        sentences: finalSentences,
         index: 0,
-        source: result.source,
+        source: finalSource,
+        aiPolished,
         words: result.words,
         segmentationVersion: 3,
       };
 
-      emitStage(`正在写入材料库（共 ${trimmedSentences.length} 句）…`);
+      emitStage(`正在写入材料库（共 ${finalSentences.length} 句）…`);
       const serialized = await projectService.serialize(project, new Map([[trackId, blob]]));
       const libraryId = await invoke<string>('library_add', { document: serialized });
       importedIds.push(libraryId);
@@ -123,5 +167,5 @@ export async function importAudioFilesToLibrary(opts: {
     }
   }
 
-  return { importedIds, lastLibraryId };
+  return { importedIds, lastLibraryId, warnings };
 }

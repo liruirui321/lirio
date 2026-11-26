@@ -88,6 +88,7 @@ export default function App() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importLanguage, setImportLanguage] = useState('en');
   const [importTier, setImportTier] = useState<ImportTierChoice>('auto');
+  const [importAiPolish, setImportAiPolish] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [importError, setImportError] = useState('');
@@ -327,6 +328,11 @@ export default function App() {
           paths,
           language: languageOverride,
           tier: tierOverride,
+          aiPolish: {
+            enabled: importAiPolish,
+            fixText: true,
+            addTranslation: true,
+          },
           onProgress: (p) => setImportProgress(p),
         });
         setLibraryRefreshKey((k) => k + 1);
@@ -335,6 +341,9 @@ export default function App() {
         if (res.lastLibraryId) {
           await openMaterial(res.lastLibraryId);
         }
+        if (res.warnings?.length) {
+          setError(res.warnings.join('；'));
+        }
       } catch (e) {
         setImportError('导入失败：' + String(e));
       } finally {
@@ -342,7 +351,7 @@ export default function App() {
         setAsrBusy(false);
       }
     },
-    [importLanguage, importTier],
+    [importLanguage, importTier, importAiPolish],
   );
 
   const handleBatchImportAudio = async () => {
@@ -802,6 +811,10 @@ export default function App() {
                 onBusy={setAsrBusy}
                 autoPlayOnOpen={autoPlayDictation}
                 onAutoPlayConsumed={() => setAutoPlayDictation(false)}
+                onOpenAiSettings={() => {
+                  setSettingsTab('ai');
+                  setSettingsOpen(true);
+                }}
                 onDiscussInSpeak={(topicTitle, excerpt) => {
                   stopListeningAudio();
                   setSpeakContext({ title: topicTitle, excerpt });
@@ -903,6 +916,21 @@ export default function App() {
                 />
               </label>
             </div>
+
+            <label className="import-ai-opt">
+              <input
+                type="checkbox"
+                checked={importAiPolish}
+                disabled={importBusy}
+                onChange={(e) => setImportAiPolish(e.target.checked)}
+              />
+              <div>
+                <strong>导入后顺便 AI 精校字幕 + 生成中文译文（可选 · 少量消耗 Token）</strong>
+                <small>
+                  不勾选则全程本机离线运行（0 Token 免费），进入精听页后也可随时对单句或全篇点击「AI 精校」。
+                </small>
+              </div>
+            </label>
 
             {importError && (
               <div className="app-error" style={{ borderRadius: 10 }} onClick={() => setImportError('')}>

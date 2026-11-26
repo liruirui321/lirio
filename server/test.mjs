@@ -610,7 +610,36 @@ try {
   assert.equal(foundUpdated.status, 'planned');
   assert.equal(foundUpdated.adminReply, '已收录，预计下个版本上线！');
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (16/16)');
+  // 17. Verify Dictation AI proofreading mock & debit ledger
+  const proofRes = await req(
+    'POST',
+    '/api/ai/chat',
+    {
+      feature: '字幕 AI 精校',
+      temperature: 0.15,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an English listening transcript proofreader (字幕精校). Return {"items":[{"i":1,"t":"...","zh":"..."}]}.',
+        },
+        {
+          role: 'user',
+          content: 'Lines:\n[{"i":1,"t":"dr brown went to the station"},{"i":2,"t":"it was raining heavily"}]',
+        },
+      ],
+    },
+    token,
+  );
+  assert.equal(proofRes.status, 200);
+  const proofParsed = JSON.parse(proofRes.json.content);
+  assert.equal(proofParsed.items.length, 2);
+  assert.equal(proofParsed.items[0].i, 1);
+  assert.ok(proofParsed.items[0].t.startsWith('Dr brown'));
+  assert.ok(proofParsed.items[0].zh.includes('（测试译文）'));
+  const proofLedgerRes = await req('GET', '/api/billing/ledger', null, token);
+  assert.ok(proofLedgerRes.json.ledger.some((e) => e.feature === '字幕 AI 精校'));
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (17/17)');
 } finally {
   server.close();
 }

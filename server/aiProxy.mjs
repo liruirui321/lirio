@@ -90,7 +90,28 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
     const promptTokens = estimateTokens(JSON.stringify(messages || []));
     const sysText = String(messages?.[0]?.content || '');
     let content = "That makes a lot of sense! Tell me a bit more about what stood out to you.";
-    if (/qaPolishes|takeaways|headline|phonetic/i.test(sysText)) {
+    if (/字幕精校|"items"/i.test(sysText)) {
+      const arrMatch = lastUser.match(/\[[\s\S]*\]/);
+      let parsedRows = [];
+      if (arrMatch) {
+        try {
+          const arr = JSON.parse(arrMatch[0]);
+          if (Array.isArray(arr)) parsedRows = arr;
+        } catch {}
+      }
+      const items = parsedRows.map((row, idx) => {
+        const rawText = String(row?.t || '').trim();
+        const normText = rawText
+          ? rawText.charAt(0).toUpperCase() + rawText.slice(1)
+          : `Sample sentence ${idx + 1}.`;
+        return {
+          i: Number(row?.i) || idx + 1,
+          t: normText,
+          zh: `（测试译文）${normText.slice(0, 28)}`,
+        };
+      });
+      content = JSON.stringify({ items });
+    } else if (/qaPolishes|takeaways|headline|phonetic/i.test(sysText)) {
       if (/phonetic/.test(sysText)) {
         content = JSON.stringify({ phonetic: '/səˈsteɪnəbl/', meaning: 'adj. 可持续的', note: '高频环保与经济话题词' });
       } else if (/headline/.test(sysText)) {

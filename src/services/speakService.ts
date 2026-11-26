@@ -1382,3 +1382,134 @@ export async function translateSelection(
     return res;
   }
 }
+
+export interface ProofreadSentenceInput {
+  id: string;
+  text: string;
+  translation?: string;
+}
+
+export interface ProofreadOptions {
+  fixText: boolean;
+  addTranslation: boolean;
+  materialTitle?: string;
+  onProgress?: (done: number, total: number, batchIdx: number, totalBatches: number) => void;
+  signal?: { cancelled: boolean };
+}
+
+export interface ProofreadResult {
+  updates: Map<string, { text?: string; translation?: string }>;
+  changedCount: number;
+  translatedCount: number;
+}
+
+export async function proofreadDictationSentences(
+  items: ProofreadSentenceInput[],
+  opts: ProofreadOptions,
+): Promise<ProofreadResult> {
+  if (!items.length || (!opts.fixText && !opts.addTranslation)) {
+    return { updates: new Map(), changedCount: 0, translatedCount: 0 };
+  }
+  const { config } = loadSpeakState();
+  const BATCH_SIZE = 18;
+  const totalBatches = Math.ceil(items.length / BATCH_SIZE);
+  const updates = new Map<string, { text?: string; translation?: string }>();
+  let changedCount = 0;
+  let translatedCount = 0;
+
+  const system = [
+    'You are an English listening transcript proofreader and bilingual translator (字幕精校).',
+    'Given a JSON array of numbered ASR transcript lines [{"i":1,"t":"..."}] (and optional material title), output ONLY valid JSON: {"items":[{"i":1,"t":"...","zh":"..."}]} with NO markdown fences or extra text.',
+    'Strict rules:',
+    '1. Keep exact 1-to-1 sentence correspondence using the same "i". Never merge, split, drop, or reorder sentences.',
+    opts.fixText
+      ? '2. For "t": fix obvious ASR speech-to-text errors, homophones, proper nouns, capitalization, and punctuation while staying strictly faithful to what was spoken (do NOT paraphrase).'
+      : '2. For "t": keep the input string verbatim unchanged.',
+    opts.addTranslation
+      ? '3. For "zh": provide natural, concise Simplified Chinese translation.'
+      : '3. For "zh": leave as empty string "".',
+  ].join('\n');
+
+  for (let b = 0; b < totalBatches; b++) {
+    if (opts.signal?.cancelled) {
+      throw new Error('AI 精校已取消');
+    }
+    const startIdx = b * BATCH_SIZE;
+    const chunk = items.slice(startIdx, startIdx + BATCH_SIZE);
+    opts.onProgress?.(startIdx, items.length, b + 1, totalBatches);
+
+    const payload = chunk.map((item, idx) => ({
+      i: idx + 1,
+      t: item.text,
+    }));
+    const userPrompt = opts.materialTitle
+      ? `Material: ${opts.materialTitle}\nLines:\n${JSON.stringify(payload)}`
+      : `Lines:\n${JSON.stringify(payload)}`;
+
+    const raw = await callActiveLlm(
+      config,
+      [
+        { role: 'system', content: system },
+        { role: 'user', content: userPrompt },
+      ],
+      0.15,
+      '字幕 AI 精校',
+    );
+
+    if (opts.signal?.cancelled) {
+      throw new Error('AI 精校已取消');
+    }
+
+    const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
+    const objMatch = stripped.match(/\{[\s\S]*\}/);
+    const arrMatch = stripped.match(/\[[\s\S]*\]/);
+    let rows: Array<{ i?: unknown; t?: unknown; zh?: unknown }> | null = null;
+    try {
+      if (objMatch) {
+        const parsed = JSON.parse(objMatch[0]);
+        if (Array.isArray(parsed?.items)) rows = parsed.items;
+      } else if (arrMatch) {
+        const parsed = JSON.parse(arrMatch[0]);
+        if (Array.isArray(parsed)) rows = parsed;
+      }
+    } catch {
+      rows = null;
+    }
+
+    if (!rows || !Array.isArray(rows)) {
+      throw new Error(`第 ${b + 1} 批 AI 精校返回格式异常，请重试`);
+    }
+
+    for (const row of rows) {
+      const idx = Number(row?.i) - 1;
+      if (!Number.isInteger(idx) || idx < 0 || idx >= chunk.length) continue;
+      const orig = chunk[idx];
+      const patch: { text?: string; translation?: string } = {};
+
+      if (opts.fixText && typeof row.t === 'string') {
+        const cleanT = row.t.trim();
+        const maxLen = Math.max(orig.text.length * 1.9 + 50, 80);
+        if (cleanT && cleanT.length <= maxLen) {
+          patch.text = cleanT;
+          if (cleanT !== orig.text.trim()) {
+            changedCount++;
+          }
+        }
+      }
+
+      if (opts.addTranslation && typeof row.zh === 'string') {
+        const cleanZh = row.zh.trim();
+        if (cleanZh) {
+          patch.translation = cleanZh;
+          translatedCount++;
+        }
+      }
+
+      if (patch.text !== undefined || patch.translation !== undefined) {
+        updates.set(orig.id, patch);
+      }
+    }
+  }
+
+  return { updates, changedCount, translatedCount };
+}

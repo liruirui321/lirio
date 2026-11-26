@@ -234,6 +234,7 @@ export function resegmentSentences(
         start,
         end: Math.max(start + 0.05, end),
         text: seg.text,
+        translation: old?.translation,
         answer: old?.answer || '',
         submittedAnswer: old?.submittedAnswer,
         submitted: old?.submitted || false,
@@ -247,11 +248,13 @@ export function resegmentSentences(
 
 export function mergeTwoSentences(a: Sentence, b: Sentence): Sentence {
   const answers = [a.answer.trim(), b.answer.trim()].filter(Boolean).join(' ');
+  const translations = [a.translation?.trim(), b.translation?.trim()].filter(Boolean).join(' ');
   return {
     id: crypto.randomUUID(),
     start: Math.min(a.start, b.start),
     end: Math.max(a.end, b.end),
     text: `${a.text.trim()} ${b.text.trim()}`.trim(),
+    translation: translations || undefined,
     answer: answers,
     submitted: false,
     revealed: false,
