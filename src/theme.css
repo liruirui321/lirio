@@ -3875,6 +3875,59 @@ textarea:focus { outline: none; }
   color: var(--text-strong);
   font-weight: 600;
 }
+.feedback-sub-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.feedback-sub-pills button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.feedback-sub-pills button.active {
+  border-color: var(--accent-border);
+  background: var(--surface-2);
+  color: var(--text-strong);
+  font-weight: 500;
+}
+.feedback-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+}
+.feedback-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.feedback-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 240px;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.feedback-file-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feedback-file-chip .icon-btn {
+  width: 20px !important;
+  height: 20px !important;
+}
 .provider-form textarea {
   width: 100%;
   resize: vertical;

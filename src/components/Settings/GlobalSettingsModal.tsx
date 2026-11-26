@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile } from '@tauri-apps/plugin-fs';
@@ -69,9 +69,58 @@ import {
   subscribeUpdateState,
   type UpdateState,
 } from '../../services/updaterService';
-import { IconClose, IconEye, IconReplay } from '../Icons';
+import { IconClose, IconEye, IconReplay, IconUpload } from '../Icons';
 
 export type GlobalSettingsTab = 'ai' | 'data' | 'feedback';
+
+const FEEDBACK_CAT_META: Record<
+  FeedbackCategory,
+  {
+    label: string;
+    titleLabel: string;
+    titlePlaceholder: string;
+    contentLabel: string;
+    contentPlaceholder: string;
+    modules?: string[];
+    showSourceUrl?: boolean;
+    uploadTitle?: string;
+  }
+> = {
+  feature: {
+    label: '功能优化',
+    titleLabel: '建议标题',
+    titlePlaceholder: '希望新增或优化什么功能？',
+    contentLabel: '详细说明',
+    contentPlaceholder: '简述使用场景与期待效果…',
+    modules: ['听力', '单词', '对话', '其他'],
+  },
+  vocab: {
+    label: '词本投稿',
+    titleLabel: '词本名称',
+    titlePlaceholder: '例如：雅思环保高频词表（200 词）',
+    contentLabel: '词表内容',
+    contentPlaceholder: '直接粘贴单词列表，或点击左下角上传图标导入 .txt / .csv / .md…',
+    uploadTitle: '上传词本 (.txt / .csv / .md，≤512KB)',
+  },
+  listening: {
+    label: '听力建议',
+    titleLabel: '材料 / 播客名称',
+    titlePlaceholder: '例如：BBC 6 Minute English',
+    contentLabel: '推荐说明',
+    contentPlaceholder: '简单说明推荐理由或适用难度…',
+    showSourceUrl: true,
+    uploadTitle: '上传字幕或文本材料 (.srt / .lrc / .txt)',
+  },
+  bug: {
+    label: '问题反馈',
+    titleLabel: '问题简述',
+    titlePlaceholder: '例如：单词听写无法播放发音',
+    contentLabel: '复现说明',
+    contentPlaceholder: '怎么触发的？出现了什么报错或异常表现…',
+    modules: ['听力', '单词', '对话', '账号/其他'],
+    uploadTitle: '上传日志或文本附件 (≤512KB)',
+  },
+};
 
 const ACCENT_OPTS: SelectOption[] = [
   { value: 'uk', label: '英音 UK' },
@@ -145,6 +194,8 @@ export function GlobalSettingsModal({
   const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
 
   const [fbCategory, setFbCategory] = useState<FeedbackCategory>('feature');
+  const [fbModule, setFbModule] = useState<string>('听力');
+  const [fbSourceUrl, setFbSourceUrl] = useState<string>('');
   const [fbTitle, setFbTitle] = useState('');
   const [fbContent, setFbContent] = useState('');
   const [fbAttachmentName, setFbAttachmentName] = useState('');
@@ -152,8 +203,7 @@ export function GlobalSettingsModal({
   const [fbAttachmentSize, setFbAttachmentSize] = useState(0);
   const [fbBusy, setFbBusy] = useState(false);
   const [fbList, setFbList] = useState<FeedbackItem[]>([]);
-  const [fbRepoUrl, setFbRepoUrl] = useState('');
-  const [fbResultLink, setFbResultLink] = useState('');
+  const fbFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (isOpen) setTab(initialTab);
@@ -229,7 +279,6 @@ export function GlobalSettingsModal({
     fetchMyFeedbacks()
       .then((res) => {
         setFbList(res.feedbacks || []);
-        setFbRepoUrl(res.repoUrl || '');
       })
       .catch(() => {});
   }, [isOpen, tab, account.token]);
@@ -494,12 +543,19 @@ export function GlobalSettingsModal({
     }
   };
 
+  const fbCatMeta = FEEDBACK_CAT_META[fbCategory];
+
   const handlePickFeedbackFile = async () => {
     setErrorMsg('');
+    const hasTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    if (!hasTauri) {
+      fbFileInputRef.current?.click();
+      return;
+    }
     try {
       const picked = await open({
         multiple: false,
-        title: '选择文本题本或材料（≤512KB）',
+        title: fbCatMeta.uploadTitle || '选择文本附件（≤512KB）',
         filters: [{ name: '文本文件', extensions: ['txt', 'csv', 'md', 'json', 'srt', 'lrc'] }],
       });
       if (typeof picked !== 'string' || !picked) return;
@@ -513,12 +569,14 @@ export function GlobalSettingsModal({
       setFbAttachmentName(fname);
       setFbAttachmentContent(content);
       setFbAttachmentSize(byteSize);
-    } catch (e) {
-      setErrorMsg(String(e));
+    } catch {
+      fbFileInputRef.current?.click();
     }
   };
 
-  const handleWebFeedbackFile = async (file: File | undefined) => {
+  const handleWebFeedbackFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     setErrorMsg('');
     if (!/\.(txt|csv|md|json|srt|lrc)$/i.test(file.name)) {
@@ -541,28 +599,34 @@ export function GlobalSettingsModal({
     setFbBusy(true);
     setErrorMsg('');
     setStatusMsg('');
-    setFbResultLink('');
     try {
+      const prefixes: string[] = [];
+      if (fbCatMeta.modules?.length && fbModule) {
+        prefixes.push(`[模块：${fbModule}]`);
+      }
+      if (fbCatMeta.showSourceUrl && fbSourceUrl.trim()) {
+        prefixes.push(`[来源链接：${fbSourceUrl.trim()}]`);
+      }
+      const finalContent = prefixes.length
+        ? `${prefixes.join('\n')}\n${fbContent.trim()}`
+        : fbContent.trim();
+
       const res = await submitFeedback({
         category: fbCategory,
         title: fbTitle,
-        content: fbContent,
-        attachmentName: fbAttachmentName || undefined,
-        attachmentContent: fbAttachmentContent || undefined,
+        content: finalContent,
+        attachmentName: fbCatMeta.uploadTitle && fbAttachmentName ? fbAttachmentName : undefined,
+        attachmentContent: fbCatMeta.uploadTitle && fbAttachmentName ? fbAttachmentContent : undefined,
         appVersion: updateState.currentVersion,
       });
       setFbList((prev) => [res.feedback, ...prev]);
       setFbTitle('');
       setFbContent('');
+      setFbSourceUrl('');
       setFbAttachmentName('');
       setFbAttachmentContent('');
       setFbAttachmentSize(0);
-      setFbResultLink(res.feedback.githubIssueUrl || res.githubNewIssueUrl || '');
-      setStatusMsg(
-        res.githubSynced
-          ? `已提交需求并自动同步至 GitHub Issue #${res.feedback.githubIssueNumber}`
-          : '已收到你的需求并记录到后台收件箱',
-      );
+      setStatusMsg('已收到反馈，感谢你的建议');
     } catch (err) {
       setErrorMsg(String(err));
     } finally {
@@ -623,7 +687,7 @@ export function GlobalSettingsModal({
                 className={tab === 'feedback' ? 'active' : ''}
                 onClick={() => setTab('feedback')}
               >
-                提需求
+                反馈
               </button>
             </div>
           </div>
@@ -1470,135 +1534,139 @@ export function GlobalSettingsModal({
 
         {tab === 'feedback' && (
           <div className="settings-tab-body">
-            <div className="feedback-policy-note">
-              <strong>欢迎向作者提需求（直连 GitHub 仓库 Issue 跟进）</strong>
-              <p>
-                · 本通道主要收集 <strong>功能建议、体验改进、Bug 反馈</strong> 与轻量纯文本单词词表投稿。<br />
-                · <strong>关于听力音频材料</strong>：建议优先用顶部「导入音频」在自己本机完成识别与 0 Token 自动切分；如果由软件端打包大量音频更新，会让安装包体积持续膨胀，还请谅解。如有优质公开播客链接或文本题本，欢迎留言或上传文本附件，我们会酌情纳入后续版本。
-              </p>
-            </div>
-
             {!account.token ? (
               <div className="account-auth-box">
                 <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--muted)' }}>
-                  请先在「AI」标签页登录你的 Lirio 账号后再提交需求或查看处理进度。
+                  请先在「AI」页登录账号后提交反馈
                 </p>
                 <button type="button" className="primary-btn" onClick={() => setTab('ai')}>
-                  前往登录账号
+                  前往登录
                 </button>
               </div>
             ) : (
               <>
                 <form className="provider-form" onSubmit={(e) => void handleSubmitFeedback(e)}>
-                  <div className="feedback-cat-pills">
-                    {(
-                      [
-                        ['feature', '功能优化'],
-                        ['vocab', '单词题本投稿'],
-                        ['listening', '播客/听力建议'],
-                        ['bug', '问题反馈'],
-                      ] as const
-                    ).map(([k, lbl]) => (
+                  <div className="feedback-cat-pills" role="tablist" aria-label="反馈类型">
+                    {(['feature', 'vocab', 'listening', 'bug'] as const).map((k) => (
                       <button
                         key={k}
                         type="button"
                         className={fbCategory === k ? 'active' : ''}
-                        onClick={() => setFbCategory(k)}
+                        onClick={() => {
+                          setFbCategory(k);
+                          const mods = FEEDBACK_CAT_META[k].modules;
+                          if (mods?.length && !mods.includes(fbModule)) {
+                            setFbModule(mods[0]);
+                          }
+                        }}
                       >
-                        {lbl}
+                        {FEEDBACK_CAT_META[k].label}
                       </button>
                     ))}
                   </div>
 
+                  {fbCatMeta.modules && (
+                    <div className="feedback-sub-pills" aria-label="涉及模块">
+                      {fbCatMeta.modules.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={fbModule === m ? 'active' : ''}
+                          onClick={() => setFbModule(m)}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {fbCatMeta.showSourceUrl && (
+                    <div className="speak-field">
+                      <label>公开链接（选填）</label>
+                      <input
+                        type="text"
+                        value={fbSourceUrl}
+                        placeholder="播客 RSS 或公开链接（本地音频可直接用顶部「导入音频」离线切分）"
+                        onChange={(e) => setFbSourceUrl(e.target.value)}
+                      />
+                    </div>
+                  )}
+
                   <div className="speak-field">
-                    <label>需求标题</label>
+                    <label>{fbCatMeta.titleLabel}</label>
                     <input
                       type="text"
                       value={fbTitle}
-                      placeholder="例如：希望听写模式增加错词导出 PDF / 投稿雅思环保核心词表"
+                      placeholder={fbCatMeta.titlePlaceholder}
                       required
                       onChange={(e) => setFbTitle(e.target.value)}
                     />
                   </div>
 
                   <div className="speak-field">
-                    <label>详细说明或材料内容</label>
+                    <label>{fbCatMeta.contentLabel}</label>
                     <textarea
                       rows={4}
                       value={fbContent}
-                      placeholder="描述你希望怎么优化、在哪个页面使用，或粘贴想投稿的词表 / 公开播客 RSS 链接…"
+                      placeholder={fbCatMeta.contentPlaceholder}
                       required
                       onChange={(e) => setFbContent(e.target.value)}
                     />
                   </div>
 
-                  <div className="feedback-attachment-row">
-                    <button type="button" onClick={() => void handlePickFeedbackFile()}>
-                      上传文本材料/词本 (.txt/.csv/.md)
-                    </button>
-                    <label className="ghost-pill-btn" style={{ cursor: 'pointer' }}>
-                      网页选文件
-                      <input
-                        type="file"
-                        accept=".txt,.csv,.md,.json,.srt,.lrc"
-                        style={{ display: 'none' }}
-                        onChange={(e) => void handleWebFeedbackFile(e.target.files?.[0])}
-                      />
-                    </label>
-                    {fbAttachmentName && (
-                      <span className="sub">
-                        已选：{fbAttachmentName} ({formatBytes(fbAttachmentSize)})
+                  <input
+                    ref={fbFileInputRef}
+                    type="file"
+                    accept=".txt,.csv,.md,.json,.srt,.lrc"
+                    style={{ display: 'none' }}
+                    onChange={(e) => void handleWebFeedbackFile(e)}
+                  />
+
+                  <div className="feedback-footer-bar">
+                    <div className="feedback-footer-left">
+                      {fbCatMeta.uploadTitle && (
                         <button
                           type="button"
-                          className="link-inline-btn"
-                          style={{ marginLeft: 6 }}
-                          onClick={() => {
-                            setFbAttachmentName('');
-                            setFbAttachmentContent('');
-                            setFbAttachmentSize(0);
-                          }}
+                          className="icon-btn"
+                          title={fbCatMeta.uploadTitle}
+                          aria-label={fbCatMeta.uploadTitle}
+                          onClick={() => void handlePickFeedbackFile()}
                         >
-                          移除
+                          <IconUpload size={15} />
                         </button>
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="import-modal-actions">
-                    {fbRepoUrl && (
-                      <button
-                        type="button"
-                        onClick={() => void openUrlSafe(fbRepoUrl)}
-                      >
-                        GitHub Issues ↗
-                      </button>
-                    )}
+                      )}
+                      {fbCatMeta.uploadTitle && fbAttachmentName && (
+                        <span className="feedback-file-chip" title={`${fbAttachmentName} (${formatBytes(fbAttachmentSize)})`}>
+                          <span>{fbAttachmentName}</span>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="移除附件"
+                            aria-label="移除附件"
+                            onClick={() => {
+                              setFbAttachmentName('');
+                              setFbAttachmentContent('');
+                              setFbAttachmentSize(0);
+                            }}
+                          >
+                            <IconClose size={12} />
+                          </button>
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="submit"
-                      className="primary"
+                      className="primary-btn"
                       disabled={fbBusy || fbTitle.trim().length < 2 || fbContent.trim().length < 4}
                     >
-                      {fbBusy ? '正在提交…' : '提交需求'}
+                      {fbBusy ? '提交中…' : '提交'}
                     </button>
                   </div>
                 </form>
 
-                {fbResultLink && (
-                  <div className="feedback-sync-bar">
-                    <span>可直接在 GitHub 查看或补充该需求详情：</span>
-                    <button
-                      type="button"
-                      className="link-inline-btn"
-                      onClick={() => void openUrlSafe(fbResultLink)}
-                    >
-                      打开 GitHub Issue ↗
-                    </button>
-                  </div>
-                )}
-
                 {fbList.length > 0 && (
                   <div className="feedback-history-list">
-                    <span className="settings-section-title">我提交过的需求（{fbList.length}）</span>
+                    <span className="settings-section-title">反馈记录（{fbList.length}）</span>
                     {fbList.map((item) => {
                       const statusText =
                         item.status === 'done'
@@ -1608,6 +1676,7 @@ export function GlobalSettingsModal({
                             : item.status === 'declined'
                               ? '暂不考虑'
                               : '待评估';
+                      const catLabel = FEEDBACK_CAT_META[item.category]?.label || item.category;
                       return (
                         <div key={item.id} className="feedback-history-item">
                           <div className="feedback-history-top">
@@ -1615,9 +1684,8 @@ export function GlobalSettingsModal({
                             <span className={`feedback-status-tag ${item.status}`}>{statusText}</span>
                           </div>
                           <small className="sub">
-                            {new Date(item.createdAt).toLocaleString('zh-CN')}
+                            {catLabel} · {new Date(item.createdAt).toLocaleString('zh-CN')}
                             {item.attachmentName ? ` · 附件：${item.attachmentName}` : ''}
-                            {item.githubIssueNumber ? ` · Issue #${item.githubIssueNumber}` : ''}
                           </small>
                           {item.adminReply && (
                             <div className="feedback-admin-reply">作者回复：{item.adminReply}</div>
