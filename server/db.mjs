@@ -98,6 +98,31 @@ export function openDatabase(dbPath = process.env.LIRIO_DB_PATH || path.join(__d
     );
 
     CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id, last_seen_at DESC);
+
+    CREATE TABLE IF NOT EXISTS feedbacks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      user_email TEXT NOT NULL,
+      user_name TEXT NOT NULL DEFAULT '',
+      user_tier TEXT NOT NULL DEFAULT 'pro_trial',
+      category TEXT NOT NULL DEFAULT 'feature',
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      attachment_name TEXT NOT NULL DEFAULT '',
+      attachment_content TEXT NOT NULL DEFAULT '',
+      attachment_size INTEGER NOT NULL DEFAULT 0,
+      app_version TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open',
+      github_issue_number INTEGER,
+      github_issue_url TEXT NOT NULL DEFAULT '',
+      admin_reply TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_feedbacks_created ON feedbacks(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_feedbacks_user ON feedbacks(user_id, created_at DESC);
   `);
 
   return db;
@@ -831,4 +856,120 @@ export function removeUserDevice(db, userId, deviceId) {
     .prepare('DELETE FROM user_devices WHERE user_id = ? AND device_id = ?')
     .run(userId, cleanDid);
   return Boolean(res && res.changes > 0);
+}
+
+export function serializeFeedback(row, { includeAttachment = false } = {}) {
+  if (!row) return null;
+  const base = {
+    id: row.id,
+    userId: row.user_id,
+    userEmail: row.user_email,
+    userName: row.user_name || '',
+    userTier: row.user_tier || 'pro_trial',
+    category: row.category || 'feature',
+    title: row.title,
+    content: row.content,
+    attachmentName: row.attachment_name || '',
+    attachmentSize: Number(row.attachment_size || 0),
+    appVersion: row.app_version || '',
+    status: row.status || 'open',
+    githubIssueNumber: row.github_issue_number ? Number(row.github_issue_number) : null,
+    githubIssueUrl: row.github_issue_url || '',
+    adminReply: row.admin_reply || '',
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+  if (includeAttachment) {
+    return { ...base, attachmentContent: row.attachment_content || '' };
+  }
+  return base;
+}
+
+export function createFeedback(
+  db,
+  {
+    userId,
+    userEmail,
+    userName = '',
+    userTier = 'pro_trial',
+    category = 'feature',
+    title,
+    content,
+    attachmentName = '',
+    attachmentContent = '',
+    appVersion = '',
+    githubIssueNumber = null,
+    githubIssueUrl = '',
+  },
+) {
+  const id = randomUUID();
+  const now = Date.now();
+  const attBytes = attachmentContent ? Buffer.byteLength(String(attachmentContent), 'utf8') : 0;
+  db.prepare(
+    `INSERT INTO feedbacks (
+      id, user_id, user_email, user_name, user_tier, category, title, content,
+      attachment_name, attachment_content, attachment_size, app_version,
+      status, github_issue_number, github_issue_url, admin_reply, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, '', ?, ?)`,
+  ).run(
+    id,
+    userId,
+    String(userEmail || '').trim().toLowerCase(),
+    String(userName || ''),
+    String(userTier || 'pro_trial'),
+    String(category || 'feature'),
+    String(title || '').trim(),
+    String(content || '').trim(),
+    String(attachmentName || ''),
+    String(attachmentContent || ''),
+    attBytes,
+    String(appVersion || ''),
+    githubIssueNumber ? Number(githubIssueNumber) : null,
+    String(githubIssueUrl || ''),
+    now,
+    now,
+  );
+  return getFeedbackById(db, id, { includeAttachment: false });
+}
+
+export function getFeedbackById(db, id, { includeAttachment = true } = {}) {
+  const row = db.prepare('SELECT * FROM feedbacks WHERE id = ?').get(String(id || ''));
+  return serializeFeedback(row, { includeAttachment });
+}
+
+export function listUserFeedbacks(db, userId, limit = 30) {
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 30));
+  const rows = db
+    .prepare('SELECT * FROM feedbacks WHERE user_id = ? ORDER BY created_at DESC LIMIT ?')
+    .all(userId, safeLimit);
+  return rows.map((r) => serializeFeedback(r, { includeAttachment: false }));
+}
+
+export function listAllFeedbacks(db, limit = 100) {
+  const safeLimit = Math.max(1, Math.min(300, Number(limit) || 100));
+  const rows = db
+    .prepare('SELECT * FROM feedbacks ORDER BY created_at DESC LIMIT ?')
+    .all(safeLimit);
+  return rows.map((r) => serializeFeedback(r, { includeAttachment: false }));
+}
+
+export function updateFeedback(db, { id, status, adminReply, githubIssueNumber, githubIssueUrl }) {
+  const row = db.prepare('SELECT * FROM feedbacks WHERE id = ?').get(String(id || ''));
+  if (!row) return null;
+  const now = Date.now();
+  const nextStatus = status !== undefined ? String(status) : row.status;
+  const nextReply = adminReply !== undefined ? String(adminReply) : row.admin_reply;
+  const nextNum =
+    githubIssueNumber !== undefined
+      ? githubIssueNumber
+        ? Number(githubIssueNumber)
+        : null
+      : row.github_issue_number;
+  const nextUrl = githubIssueUrl !== undefined ? String(githubIssueUrl) : row.github_issue_url;
+  db.prepare(
+    `UPDATE feedbacks
+     SET status = ?, admin_reply = ?, github_issue_number = ?, github_issue_url = ?, updated_at = ?
+     WHERE id = ?`,
+  ).run(nextStatus, nextReply, nextNum, nextUrl, now, row.id);
+  return getFeedbackById(db, row.id, { includeAttachment: false });
 }

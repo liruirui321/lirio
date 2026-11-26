@@ -3,10 +3,10 @@ const FALLBACK_STORE = {
     {
       id: 'pro_99',
       payYuan: 99,
-      label: '¥99 终身通行证（赠 ¥10 对话加油包）',
-      shortTitle: 'Lirio 终身通行证',
-      badge: '一次开通 · 永久有效',
-      subtitle: '绑定个人账号（支持 3 台设备）+ 本地免费语音与切分 + 赠 ¥10 对话额度',
+      label: '¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）',
+      shortTitle: 'Lirio Pro · 永久版',
+      badge: '永久有效 · 支持提需求',
+      subtitle: '绑定个人账号（3 台设备）+ 本地免费语音切分 + 赠 ¥10 对话额度 + 专属提需求通道',
       amountUnits: 100000,
       upgradeToPro: true,
     },
@@ -79,9 +79,9 @@ function getShopUrlForPlan(planId) {
 function getPackBullets(preset) {
   if (preset.id === 'pro_99') {
     return [
-      '绑定个人账号激活终身通行证（支持 3 台常用设备）',
-      '附赠 ¥10.00 AI 对话加油包初始额度',
-      '本地 Whisper + 音频切分永久 0 Token',
+      '绑定个人账号激活 Lirio Pro · 永久版（3 台常用设备）',
+      '应用内直接提交功能优化建议与文本词表需求',
+      '附赠 ¥10.00 加油包 · 本地 Whisper 切分永久 0 Token',
     ];
   }
   const creditYuan = ((Number(preset.amountUnits) || 0) / 10000).toFixed(0);

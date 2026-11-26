@@ -545,7 +545,72 @@ try {
   assert.ok(activateRes.json.entitlement.offlineValidUntil > Date.now() + 10 * 86400 * 1000);
   assert.ok(activateRes.json.entitlement.signedProof);
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (15/15)');
+  // 16. Verify Feedback & feature request submission, disallowed extension 400, text attachment upload, mock GitHub Issue sync, admin download & reply
+  const badFbRes = await req(
+    'POST',
+    '/api/feedback',
+    {
+      category: 'listening',
+      title: 'Upload audio file check',
+      content: 'Should reject mp3 attachment upload',
+      attachmentName: 'lesson.mp3',
+      attachmentContent: 'binary',
+    },
+    token,
+  );
+  assert.equal(badFbRes.status, 400);
+
+  process.env.LIRIO_MOCK_GITHUB = '1';
+  let fbId = '';
+  try {
+    const fbRes = await req(
+      'POST',
+      '/api/feedback',
+      {
+        category: 'vocab',
+        title: '新增生态专题词本',
+        content: '希望能加入这些高频环保生态词汇供听写练习',
+        attachmentName: 'ielts-custom.txt',
+        attachmentContent: 'ecosystem\nbiodiversity\nsustainable\n',
+        appVersion: '0.5.2',
+      },
+      token,
+    );
+    assert.equal(fbRes.status, 201);
+    assert.equal(fbRes.json.githubSynced, true);
+    assert.equal(fbRes.json.feedback.githubIssueNumber, 101);
+    assert.equal(fbRes.json.feedback.attachmentName, 'ielts-custom.txt');
+    fbId = fbRes.json.feedback.id;
+  } finally {
+    delete process.env.LIRIO_MOCK_GITHUB;
+  }
+
+  const mineRes = await req('GET', '/api/feedback/mine', null, token);
+  assert.equal(mineRes.status, 200);
+  assert.ok(mineRes.json.feedbacks.some((f) => f.id === fbId));
+
+  const adminFbList = await req('GET', '/api/admin/feedbacks');
+  assert.equal(adminFbList.status, 200);
+  assert.ok(adminFbList.json.feedbacks.some((f) => f.id === fbId));
+
+  const attRes = await fetch(`${base}/api/admin/feedbacks/${fbId}/attachment`);
+  assert.equal(attRes.status, 200);
+  assert.equal(await attRes.text(), 'ecosystem\nbiodiversity\nsustainable\n');
+
+  const statusRes = await req('POST', `/api/admin/feedbacks/${fbId}/status`, {
+    status: 'planned',
+    adminReply: '已收录，预计下个版本上线！',
+  });
+  assert.equal(statusRes.status, 200);
+  assert.equal(statusRes.json.feedback.status, 'planned');
+  assert.equal(statusRes.json.feedback.adminReply, '已收录，预计下个版本上线！');
+
+  const mineUpdated = await req('GET', '/api/feedback/mine', null, token);
+  const foundUpdated = mineUpdated.json.feedbacks.find((f) => f.id === fbId);
+  assert.equal(foundUpdated.status, 'planned');
+  assert.equal(foundUpdated.adminReply, '已收录，预计下个版本上线！');
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (16/16)');
 } finally {
   server.close();
 }

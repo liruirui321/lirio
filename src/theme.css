@@ -3558,6 +3558,113 @@ textarea:focus { outline: none; }
 .primary-btn.full-width {
   width: 100%;
 }
+.feedback-policy-note {
+  border: 1px solid var(--line);
+  background: var(--accent-soft);
+  border-radius: 12px;
+  padding: 11px 13px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.feedback-policy-note strong {
+  color: var(--text-strong);
+}
+.feedback-policy-note p {
+  margin: 4px 0 0;
+}
+.feedback-cat-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.feedback-cat-pills button {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.feedback-cat-pills button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.provider-form textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 82px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text-strong);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.feedback-attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.feedback-sync-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.feedback-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.feedback-history-item {
+  border: 1px solid var(--line);
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.feedback-history-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.feedback-status-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.feedback-status-tag.planned {
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+}
+.feedback-status-tag.done {
+  background: var(--accent);
+  color: #fff;
+}
+.feedback-admin-reply {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--accent-bright);
+}
 
 /* ---------- Mobile & Tablet Responsive Layout ---------- */
 @media (max-width: 768px) {

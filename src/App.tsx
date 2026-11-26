@@ -682,13 +682,13 @@ export default function App() {
           <button
             type="button"
             className="trial-topbar-pill"
-            title="点击激活 Lirio 终身通行证"
+            title="点击激活 Lirio Pro · 永久版"
             onClick={() => {
               setSettingsTab('ai');
               setSettingsOpen(true);
             }}
           >
-            体验剩 {Math.max(1, Math.ceil((access.trialRemainingHours || 1) / 24))} 天 · 激活终身
+            体验剩 {Math.max(1, Math.ceil((access.trialRemainingHours || 1) / 24))} 天 · 升永久版
           </button>
         )}
 

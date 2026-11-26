@@ -112,6 +112,29 @@ export interface StoreOrder {
   paidAt: number | null;
 }
 
+export type FeedbackCategory = 'feature' | 'vocab' | 'listening' | 'bug';
+export type FeedbackStatus = 'open' | 'planned' | 'done' | 'declined';
+
+export interface FeedbackItem {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userTier: string;
+  category: FeedbackCategory;
+  title: string;
+  content: string;
+  attachmentName: string;
+  attachmentSize: number;
+  appVersion: string;
+  status: FeedbackStatus;
+  githubIssueNumber: number | null;
+  githubIssueUrl: string;
+  adminReply: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AccountState {
   serverUrl: string;
   token: string | null;
@@ -503,6 +526,24 @@ export async function simulatePayStoreOrder(
     method: 'POST',
     body: JSON.stringify({ simulate: true, email }),
   });
+}
+
+export async function submitFeedback(opts: {
+  category: FeedbackCategory;
+  title: string;
+  content: string;
+  attachmentName?: string;
+  attachmentContent?: string;
+  appVersion?: string;
+}): Promise<{ feedback: FeedbackItem; githubSynced: boolean; githubNewIssueUrl: string }> {
+  return apiFetch<{ feedback: FeedbackItem; githubSynced: boolean; githubNewIssueUrl: string }>(
+    '/api/feedback',
+    { method: 'POST', body: JSON.stringify(opts) },
+  );
+}
+
+export async function fetchMyFeedbacks(): Promise<{ feedbacks: FeedbackItem[]; repoUrl: string }> {
+  return apiFetch<{ feedbacks: FeedbackItem[]; repoUrl: string }>('/api/feedback/mine');
 }
 
 export async function redeemCode(code: string): Promise<{

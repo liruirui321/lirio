@@ -9,6 +9,7 @@ import {
   createStoreOrder,
   evaluateLocalAccess,
   fetchBillingLedger,
+  fetchMyFeedbacks,
   fetchStoreConfig,
   fetchStoreOrder,
   formatYuan,
@@ -22,9 +23,12 @@ import {
   registerAccount,
   removeBoundDevice,
   simulatePayStoreOrder,
+  submitFeedback,
   subscribeAccount,
   updateAccountState,
   type AccountState,
+  type FeedbackCategory,
+  type FeedbackItem,
   type LedgerEntry,
   type StoreConfig,
   type StoreOrder,
@@ -65,7 +69,7 @@ import {
 } from '../../services/updaterService';
 import { IconClose, IconEye, IconReplay } from '../Icons';
 
-export type GlobalSettingsTab = 'ai' | 'data';
+export type GlobalSettingsTab = 'ai' | 'data' | 'feedback';
 
 const ACCENT_OPTS: SelectOption[] = [
   { value: 'uk', label: '英音 UK' },
@@ -139,6 +143,17 @@ export function GlobalSettingsModal({
   const [showGuide, setShowGuide] = useState<boolean>(false);
   const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
 
+  const [fbCategory, setFbCategory] = useState<FeedbackCategory>('feature');
+  const [fbTitle, setFbTitle] = useState('');
+  const [fbContent, setFbContent] = useState('');
+  const [fbAttachmentName, setFbAttachmentName] = useState('');
+  const [fbAttachmentContent, setFbAttachmentContent] = useState('');
+  const [fbAttachmentSize, setFbAttachmentSize] = useState(0);
+  const [fbBusy, setFbBusy] = useState(false);
+  const [fbList, setFbList] = useState<FeedbackItem[]>([]);
+  const [fbRepoUrl, setFbRepoUrl] = useState('');
+  const [fbResultLink, setFbResultLink] = useState('');
+
   useEffect(() => {
     if (isOpen) setTab(initialTab);
   }, [isOpen, initialTab]);
@@ -207,6 +222,16 @@ export function GlobalSettingsModal({
     }, 2500);
     return () => window.clearInterval(timer);
   }, [isOpen, showBuyPanel, activeOrder, account.user?.email]);
+
+  useEffect(() => {
+    if (!isOpen || tab !== 'feedback' || !account.token) return;
+    fetchMyFeedbacks()
+      .then((res) => {
+        setFbList(res.feedbacks || []);
+        setFbRepoUrl(res.repoUrl || '');
+      })
+      .catch(() => {});
+  }, [isOpen, tab, account.token]);
 
   if (!isOpen) return null;
 
@@ -454,6 +479,82 @@ export function GlobalSettingsModal({
     }
   };
 
+  const handlePickFeedbackFile = async () => {
+    setErrorMsg('');
+    try {
+      const picked = await open({
+        multiple: false,
+        title: '选择文本题本或材料（≤512KB）',
+        filters: [{ name: '文本文件', extensions: ['txt', 'csv', 'md', 'json', 'srt', 'lrc'] }],
+      });
+      if (typeof picked !== 'string' || !picked) return;
+      const content = await readTextFile(picked);
+      const byteSize = new TextEncoder().encode(content).length;
+      if (byteSize > 512 * 1024) {
+        setErrorMsg('上传文本附件不能超过 512 KB；大型听力音频请直接在软件本地导入（0 Token 自动切分）。');
+        return;
+      }
+      const fname = picked.split(/[/\\]/).pop() || 'attachment.txt';
+      setFbAttachmentName(fname);
+      setFbAttachmentContent(content);
+      setFbAttachmentSize(byteSize);
+    } catch (e) {
+      setErrorMsg(String(e));
+    }
+  };
+
+  const handleWebFeedbackFile = async (file: File | undefined) => {
+    if (!file) return;
+    setErrorMsg('');
+    if (!/\.(txt|csv|md|json|srt|lrc)$/i.test(file.name)) {
+      setErrorMsg('仅支持文本格式附件（.txt / .csv / .md / .json / .srt / .lrc），听力音频请直接本地导入。');
+      return;
+    }
+    const content = await file.text();
+    const byteSize = new TextEncoder().encode(content).length;
+    if (byteSize > 512 * 1024) {
+      setErrorMsg('上传文本附件不能超过 512 KB。');
+      return;
+    }
+    setFbAttachmentName(file.name);
+    setFbAttachmentContent(content);
+    setFbAttachmentSize(byteSize);
+  };
+
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFbBusy(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    setFbResultLink('');
+    try {
+      const res = await submitFeedback({
+        category: fbCategory,
+        title: fbTitle,
+        content: fbContent,
+        attachmentName: fbAttachmentName || undefined,
+        attachmentContent: fbAttachmentContent || undefined,
+        appVersion: updateState.currentVersion,
+      });
+      setFbList((prev) => [res.feedback, ...prev]);
+      setFbTitle('');
+      setFbContent('');
+      setFbAttachmentName('');
+      setFbAttachmentContent('');
+      setFbAttachmentSize(0);
+      setFbResultLink(res.feedback.githubIssueUrl || res.githubNewIssueUrl || '');
+      setStatusMsg(
+        res.githubSynced
+          ? `已提交需求并自动同步至 GitHub Issue #${res.feedback.githubIssueNumber}`
+          : '已收到你的需求并记录到后台收件箱',
+      );
+    } catch (err) {
+      setErrorMsg(String(err));
+    } finally {
+      setFbBusy(false);
+    }
+  };
+
   const handleImportBackup = async () => {
     setBusyData(true);
     setErrorMsg('');
@@ -501,6 +602,13 @@ export function GlobalSettingsModal({
                 onClick={() => setTab('data')}
               >
                 通用
+              </button>
+              <button
+                type="button"
+                className={tab === 'feedback' ? 'active' : ''}
+                onClick={() => setTab('feedback')}
+              >
+                提需求
               </button>
             </div>
           </div>
@@ -635,7 +743,7 @@ export function GlobalSettingsModal({
                     className="link-inline-btn"
                     onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
                   >
-                    还没通行证？前往官网开通 ¥99 Lirio 终身通行证 ↗
+                    还没激活？前往官网开通 ¥99 Lirio Pro · 永久版 ↗
                   </button>
                 </div>
               ) : (
@@ -647,7 +755,7 @@ export function GlobalSettingsModal({
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <strong>{account.user.name}</strong>
                           <span className={`tier-badge small${account.user.tier === 'pro' ? ' pro' : ''}`}>
-                            {account.user.tier === 'pro' ? '终身通行证' : '3天体验'}
+                            {account.user.tier === 'pro' ? 'Pro · 永久版' : '3天体验'}
                           </span>
                         </div>
                         <small>{account.user.email}</small>
@@ -666,7 +774,7 @@ export function GlobalSettingsModal({
                         <div className="entitlement-strip">
                           <span>
                             {accessInfo.mode === 'lifetime' && accessInfo.offlineValidUntil
-                              ? `终身授权生效中 · 离线可用至 ${new Date(accessInfo.offlineValidUntil).toLocaleDateString('zh-CN')}`
+                              ? `Pro 永久版生效中 · 离线可用至 ${new Date(accessInfo.offlineValidUntil).toLocaleDateString('zh-CN')}`
                               : accessInfo.mode === 'trial'
                                 ? `免费体验剩余约 ${accessInfo.trialRemainingHours} 小时`
                                 : '授权待激活'}
@@ -762,7 +870,7 @@ export function GlobalSettingsModal({
                           兑换
                         </button>
                       </div>
-                      <div className="sub">支持 ¥99 终身通行证激活码与 AI 对话加油包，兑换后立即到账</div>
+                      <div className="sub">支持 ¥99 Lirio Pro · 永久版激活码与 AI 对话加油包，兑换后立即到账</div>
                     </div>
 
                     <div className="redeem-actions-row">
@@ -1352,6 +1460,170 @@ export function GlobalSettingsModal({
                 完成
               </button>
             </div>
+          </div>
+        )}
+
+        {tab === 'feedback' && (
+          <div className="settings-tab-body">
+            <div className="feedback-policy-note">
+              <strong>欢迎向作者提需求（直连 GitHub 仓库 Issue 跟进）</strong>
+              <p>
+                · 本通道主要收集 <strong>功能建议、体验改进、Bug 反馈</strong> 与轻量纯文本单词词表投稿。<br />
+                · <strong>关于听力音频材料</strong>：建议优先用顶部「导入音频」在自己本机完成识别与 0 Token 自动切分；如果由软件端打包大量音频更新，会让安装包体积持续膨胀，还请谅解。如有优质公开播客链接或文本题本，欢迎留言或上传文本附件，我们会酌情纳入后续版本。
+              </p>
+            </div>
+
+            {!account.token ? (
+              <div className="account-auth-box">
+                <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--muted)' }}>
+                  请先在「AI」标签页登录你的 Lirio 账号后再提交需求或查看处理进度。
+                </p>
+                <button type="button" className="primary-btn" onClick={() => setTab('ai')}>
+                  前往登录账号
+                </button>
+              </div>
+            ) : (
+              <>
+                <form className="provider-form" onSubmit={(e) => void handleSubmitFeedback(e)}>
+                  <div className="feedback-cat-pills">
+                    {(
+                      [
+                        ['feature', '功能优化'],
+                        ['vocab', '单词题本投稿'],
+                        ['listening', '播客/听力建议'],
+                        ['bug', '问题反馈'],
+                      ] as const
+                    ).map(([k, lbl]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        className={fbCategory === k ? 'active' : ''}
+                        onClick={() => setFbCategory(k)}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="speak-field">
+                    <label>需求标题</label>
+                    <input
+                      type="text"
+                      value={fbTitle}
+                      placeholder="例如：希望听写模式增加错词导出 PDF / 投稿雅思环保核心词表"
+                      required
+                      onChange={(e) => setFbTitle(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="speak-field">
+                    <label>详细说明或材料内容</label>
+                    <textarea
+                      rows={4}
+                      value={fbContent}
+                      placeholder="描述你希望怎么优化、在哪个页面使用，或粘贴想投稿的词表 / 公开播客 RSS 链接…"
+                      required
+                      onChange={(e) => setFbContent(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="feedback-attachment-row">
+                    <button type="button" onClick={() => void handlePickFeedbackFile()}>
+                      上传文本材料/词本 (.txt/.csv/.md)
+                    </button>
+                    <label className="ghost-pill-btn" style={{ cursor: 'pointer' }}>
+                      网页选文件
+                      <input
+                        type="file"
+                        accept=".txt,.csv,.md,.json,.srt,.lrc"
+                        style={{ display: 'none' }}
+                        onChange={(e) => void handleWebFeedbackFile(e.target.files?.[0])}
+                      />
+                    </label>
+                    {fbAttachmentName && (
+                      <span className="sub">
+                        已选：{fbAttachmentName} ({formatBytes(fbAttachmentSize)})
+                        <button
+                          type="button"
+                          className="link-inline-btn"
+                          style={{ marginLeft: 6 }}
+                          onClick={() => {
+                            setFbAttachmentName('');
+                            setFbAttachmentContent('');
+                            setFbAttachmentSize(0);
+                          }}
+                        >
+                          移除
+                        </button>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="import-modal-actions">
+                    {fbRepoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => void openUrlSafe(fbRepoUrl)}
+                      >
+                        GitHub Issues ↗
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      className="primary"
+                      disabled={fbBusy || fbTitle.trim().length < 2 || fbContent.trim().length < 4}
+                    >
+                      {fbBusy ? '正在提交…' : '提交需求'}
+                    </button>
+                  </div>
+                </form>
+
+                {fbResultLink && (
+                  <div className="feedback-sync-bar">
+                    <span>可直接在 GitHub 查看或补充该需求详情：</span>
+                    <button
+                      type="button"
+                      className="link-inline-btn"
+                      onClick={() => void openUrlSafe(fbResultLink)}
+                    >
+                      打开 GitHub Issue ↗
+                    </button>
+                  </div>
+                )}
+
+                {fbList.length > 0 && (
+                  <div className="feedback-history-list">
+                    <span className="settings-section-title">我提交过的需求（{fbList.length}）</span>
+                    {fbList.map((item) => {
+                      const statusText =
+                        item.status === 'done'
+                          ? '已上线'
+                          : item.status === 'planned'
+                            ? '已采纳'
+                            : item.status === 'declined'
+                              ? '暂不考虑'
+                              : '待评估';
+                      return (
+                        <div key={item.id} className="feedback-history-item">
+                          <div className="feedback-history-top">
+                            <strong>{item.title}</strong>
+                            <span className={`feedback-status-tag ${item.status}`}>{statusText}</span>
+                          </div>
+                          <small className="sub">
+                            {new Date(item.createdAt).toLocaleString('zh-CN')}
+                            {item.attachmentName ? ` · 附件：${item.attachmentName}` : ''}
+                            {item.githubIssueNumber ? ` · Issue #${item.githubIssueNumber}` : ''}
+                          </small>
+                          {item.adminReply && (
+                            <div className="feedback-admin-reply">作者回复：{item.adminReply}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

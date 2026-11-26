@@ -17,22 +17,26 @@ import {
   DEFAULT_TRIAL_UNITS,
   cancelOrder,
   confirmOrderAndIssueCode,
+  createFeedback,
   createOrder,
   createRedeemCodes,
   createUserWithTrial,
   creditUserBalance,
   deductUserBalance,
+  getFeedbackById,
   getOrderByNo,
   getStoreSettings,
   getUserByEmail,
   getUserById,
   isUserDeviceActive,
+  listAllFeedbacks,
   listAllUsers,
   listOrders,
   listRecentLedger,
   listRedeemCodes,
   listUnusedRedeemCodes,
   listUserDevices,
+  listUserFeedbacks,
   listUserLedger,
   lookupOrdersByEmail,
   openDatabase,
@@ -42,6 +46,7 @@ import {
   saveStoreSettings,
   serializeUser,
   touchUserDevice,
+  updateFeedback,
 } from './db.mjs';
 import {
   RECHARGE_PACKS,
@@ -59,13 +64,13 @@ export const CODE_PRESETS = [
   {
     id: 'pro_99',
     payYuan: 99,
-    label: '¥99 终身通行证（赠 ¥10 对话加油包）',
-    shortTitle: 'Lirio 终身通行证',
-    badge: '一次开通 · 永久有效',
-    subtitle: '绑定个人账号（支持 3 台设备）+ 本地免费语音与切分 + 赠 ¥10 对话额度',
+    label: '¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）',
+    shortTitle: 'Lirio Pro · 永久版',
+    badge: '永久有效 · 支持提需求',
+    subtitle: '绑定个人账号（3 台设备）+ 本地免费语音切分 + 赠 ¥10 对话额度 + 专属提需求通道',
     amountUnits: 100000, // ¥10.00
     upgradeToPro: true,
-    note: '开通 Lirio 终身通行证 + 赠 ¥10.00 初始对话余额',
+    note: '开通 Lirio Pro · 永久版 + 赠 ¥10.00 初始对话余额',
   },
   {
     id: 'topup_10',
@@ -324,6 +329,7 @@ function buildOverview(db) {
   const ledger = listRecentLedger(db, 50);
   const codes = listRedeemCodes(db, 100);
   const orders = listOrders(db, 100);
+  const feedbacks = listAllFeedbacks(db, 100);
   const storeSettings = getStoreSettings(db);
 
   const paidOrders = orders.filter((o) => o.status === 'paid');
@@ -339,6 +345,7 @@ function buildOverview(db) {
     totalRevenueYuan: paidOrders.reduce((sum, o) => sum + Number(o.payYuan || 0), 0),
     unusedCodes: codes.filter((c) => !c.redeemedAt).length,
     usedCodes: codes.filter((c) => Boolean(c.redeemedAt)).length,
+    openFeedbacks: feedbacks.filter((f) => f.status === 'open').length,
   };
 
   return {
@@ -355,6 +362,9 @@ function buildOverview(db) {
     ledger,
     codes,
     orders,
+    feedbacks,
+    githubConfigured: Boolean(String(process.env.LIRIO_GITHUB_TOKEN || '').trim()),
+    githubRepo: getGithubRepo(),
     storeSettings,
     codePresets: CODE_PRESETS,
   };
@@ -462,6 +472,7 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
 
   <div class="tabs" id="adminTabs">
     <button type="button" class="tab-btn active" data-tab="orders">购卡订单 <span class="tab-badge" id="pendingTabBadge">${overview.stats.pendingOrders}</span></button>
+    <button type="button" class="tab-btn" data-tab="feedbacks">用户反馈与需求 <span class="tab-badge" id="feedbackTabBadge">${overview.stats.openFeedbacks}</span></button>
     <button type="button" class="tab-btn" data-tab="codes">卡密发码中心</button>
     <button type="button" class="tab-btn" data-tab="settings">收款与店铺配置</button>
     <button type="button" class="tab-btn" data-tab="users">用户与流水</button>
@@ -488,12 +499,33 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
     </div>
   </section>
 
+  <section class="panel" id="panel-feedbacks">
+    <div class="card">
+      <div class="toolbar-row">
+        <div class="filter-group" id="feedbackFilterChips">
+          <button type="button" class="chip active" data-fb-status="all">全部</button>
+          <button type="button" class="chip" data-fb-status="open">待评估</button>
+          <button type="button" class="chip" data-fb-status="planned">已采纳</button>
+          <button type="button" class="chip" data-fb-status="done">已上线</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span id="fbMsg" class="status-msg"></span>
+          <span class="sub" id="ghStatusPill">${overview.githubConfigured ? 'GitHub Issue 自动同步已开启' : '未配置 LIRIO_GITHUB_TOKEN（本地收件箱）'}</span>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>时间 / 分类</th><th>提交账号</th><th>需求标题与正文 / 文本附件</th><th>GitHub</th><th>处理状态与回复</th></tr></thead>
+        <tbody id="feedbacksBody"></tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="panel" id="panel-codes">
     <div class="card">
       <div class="toolbar-row">
         <div class="filter-group">
           <select id="codePreset">
-            <option value="pro_99">¥99 终身通行证（赠 ¥10 对话加油包）</option>
+            <option value="pro_99">¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）</option>
             <option value="topup_10">¥10 AI 对话加油包</option>
             <option value="topup_30">¥30 AI 对话加油包（赠 ¥5）</option>
           </select>
@@ -607,6 +639,7 @@ const fmtTime = (ms) => new Date(ms).toLocaleString('zh-CN', { month: '2-digit',
 let state = ${initialJson};
 let orderFilter = 'all';
 let codeFilter = 'all';
+let fbFilter = 'all';
 let settingsDirty = false;
 
 function switchTab(name) {
@@ -723,11 +756,40 @@ function renderAll() {
   const pp = document.getElementById('periodPill');
   pp.textContent = state.isPeak ? '高峰价（工作日 09-12 / 14-18）' : '空闲价';
   pp.className = 'pill' + (state.isPeak ? ' peak' : '');
+  document.getElementById('feedbackTabBadge').textContent = String(state.stats?.openFeedbacks || 0);
   renderKpis();
   renderOrders();
+  renderFeedbacks();
   renderCodes();
   renderUsersAndLedger();
   hydrateSettingsForm();
+}
+
+function renderFeedbacks() {
+  const catLabel = { feature: '功能建议', vocab: '词本投稿', listening: '听力/播客', bug: '问题反馈' };
+  const list = (state.feedbacks || []).filter((f) => fbFilter === 'all' || f.status === fbFilter);
+  document.getElementById('feedbacksBody').innerHTML = list.length ? list.map((f) => {
+    const attHtml = f.attachmentName
+      ? '<div style="margin-top:4px;"><a class="copy-btn" href="/api/admin/feedbacks/' + esc(f.id) + '/attachment">下载附件：' + esc(f.attachmentName) + '</a></div>'
+      : '';
+    const ghHtml = f.githubIssueUrl
+      ? '<a class="copy-btn" href="' + esc(f.githubIssueUrl) + '" target="_blank" rel="noopener noreferrer">#' + esc(f.githubIssueNumber || '') + ' ↗</a>'
+      : '<span class="sub">仅站内记录</span>';
+    return '<tr><td><span class="tag">' + esc(catLabel[f.category] || f.category) + '</span><div class="sub">' + esc(fmtTime(f.createdAt)) + '</div></td>' +
+      '<td><strong>' + esc(f.userEmail) + '</strong><div class="sub">' + (f.userTier === 'pro' ? 'PRO 永久版' : '体验版') + (f.appVersion ? ' · v' + esc(f.appVersion) : '') + '</div></td>' +
+      '<td><strong>' + esc(f.title) + '</strong><div class="sub" style="white-space:pre-wrap;max-width:340px;">' + esc((f.content || '').slice(0, 260)) + '</div>' + attHtml + '</td>' +
+      '<td>' + ghHtml + '</td>' +
+      '<td><div style="display:flex;gap:6px;flex-direction:column;min-width:190px;">' +
+        '<select data-fb-status-sel="' + esc(f.id) + '">' +
+          '<option value="open"' + (f.status === 'open' ? ' selected' : '') + '>待评估</option>' +
+          '<option value="planned"' + (f.status === 'planned' ? ' selected' : '') + '>已采纳</option>' +
+          '<option value="done"' + (f.status === 'done' ? ' selected' : '') + '>已上线</option>' +
+          '<option value="declined"' + (f.status === 'declined' ? ' selected' : '') + '>暂不考虑</option>' +
+        '</select>' +
+        '<input type="text" data-fb-reply="' + esc(f.id) + '" value="' + esc(f.adminReply || '') + '" placeholder="回复用户一句话…" />' +
+        '<button type="button" class="btn primary" data-fb-save="' + esc(f.id) + '">保存状态</button>' +
+      '</div></td></tr>';
+  }).join('') : '<tr><td colspan="5" class="empty">暂无符合条件的用户反馈</td></tr>';
 }
 
 async function reloadOverview() {
@@ -871,6 +933,29 @@ document.getElementById('codesBody').addEventListener('click', async (e) => {
 });
 
 document.getElementById('refreshBtn').addEventListener('click', reloadOverview);
+document.getElementById('feedbackFilterChips').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-fb-status]');
+  if (!c) return;
+  fbFilter = c.dataset.fbStatus;
+  document.querySelectorAll('#feedbackFilterChips .chip').forEach((el) => el.classList.toggle('active', el === c));
+  renderFeedbacks();
+});
+document.getElementById('feedbacksBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-fb-save]');
+  if (!btn) return;
+  const id = btn.dataset.fbSave;
+  const statusEl = document.querySelector('[data-fb-status-sel="' + id + '"]');
+  const replyEl = document.querySelector('[data-fb-reply="' + id + '"]');
+  const msg = document.getElementById('fbMsg');
+  msg.textContent = '保存中…';
+  const res = await fetch('/api/admin/feedbacks/' + encodeURIComponent(id) + '/status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: statusEl?.value, adminReply: replyEl?.value || '' }),
+  });
+  msg.textContent = res.ok ? '已更新处理状态与回复' : '更新失败';
+  await reloadOverview();
+});
 const logoutBtn = document.getElementById('adminLogoutBtn');
 if (logoutBtn) {
   logoutBtn.addEventListener('click', async () => {
@@ -915,6 +1000,101 @@ async function readJsonBody(req, maxBytes = 12 * 1024 * 1024) {
 
 function getMaxDevices() {
   return Math.max(1, Number(process.env.LIRIO_MAX_DEVICES || 3));
+}
+
+function getGithubRepo() {
+  return String(process.env.LIRIO_GITHUB_REPO || 'liruirui321/lirio').trim();
+}
+
+function buildGithubIssuePayload({
+  category,
+  title,
+  content,
+  userEmail,
+  userName,
+  userTier,
+  appVersion,
+  attachmentName,
+  attachmentContent,
+}) {
+  const catMeta = {
+    feature: { tag: '[功能建议]', labels: ['feedback', 'enhancement'] },
+    vocab: { tag: '[词本投稿]', labels: ['feedback', 'vocab'] },
+    listening: { tag: '[听力/播客建议]', labels: ['feedback', 'listening'] },
+    bug: { tag: '[问题反馈]', labels: ['feedback', 'bug'] },
+  }[category] || { tag: '[需求反馈]', labels: ['feedback'] };
+
+  const repo = getGithubRepo();
+  const issueTitle = `${catMeta.tag} ${String(title || '').trim()}`.slice(0, 140);
+  const tierLabel = userTier === 'pro' ? 'Lirio Pro · 永久版' : '3天体验用户';
+  const metaLine = `- 提交来源：Lirio 客户端\n- 账号身份：${tierLabel}${appVersion ? ` · v${appVersion}` : ''}\n- 联系邮箱：${userEmail}${userName ? ` (${userName})` : ''}`;
+  let issueBody = `${metaLine}\n\n### 需求详情\n\n${String(content || '').trim()}`;
+  if (attachmentName && attachmentContent) {
+    const truncated = String(attachmentContent).slice(0, 25000);
+    const bytes = Buffer.byteLength(String(attachmentContent), 'utf8');
+    issueBody += `\n\n<details>\n<summary>用户上传文本附件：${attachmentName} (${bytes} bytes)</summary>\n\n\`\`\`\n${truncated}\n\`\`\`\n</details>`;
+  }
+
+  const shortBody = issueBody.slice(0, 2600);
+  const newIssueUrl = `https://github.com/${repo}/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(shortBody)}`;
+  return {
+    repo,
+    title: issueTitle,
+    body: issueBody,
+    labels: catMeta.labels,
+    newIssueUrl,
+  };
+}
+
+async function tryCreateGithubIssue(payload) {
+  const ghToken = String(process.env.LIRIO_GITHUB_TOKEN || '').trim();
+  if (process.env.LIRIO_MOCK_GITHUB === '1') {
+    return {
+      synced: true,
+      issueNumber: 101,
+      issueUrl: `https://github.com/${payload.repo}/issues/101`,
+      newIssueUrl: payload.newIssueUrl,
+    };
+  }
+  if (!ghToken) {
+    return {
+      synced: false,
+      issueNumber: null,
+      issueUrl: '',
+      newIssueUrl: payload.newIssueUrl,
+    };
+  }
+  try {
+    const resp = await fetch(`https://api.github.com/repos/${payload.repo}/issues`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${ghToken}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'lirio-pro-server',
+      },
+      body: JSON.stringify({
+        title: payload.title,
+        body: payload.body,
+        labels: payload.labels,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data?.number && data?.html_url) {
+      return {
+        synced: true,
+        issueNumber: Number(data.number),
+        issueUrl: String(data.html_url),
+        newIssueUrl: payload.newIssueUrl,
+      };
+    }
+  } catch {}
+  return {
+    synced: false,
+    issueNumber: null,
+    issueUrl: '',
+    newIssueUrl: payload.newIssueUrl,
+  };
 }
 
 function getTrialDays() {
@@ -1452,6 +1632,150 @@ export function createLirioServer({ dbPath } = {}) {
           'Cache-Control': 'no-store',
         });
         res.end(headOnly ? undefined : txt);
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/feedback') {
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录账号再提交需求或建议。');
+        if (!authState) return;
+        const user = authState.user;
+        const body = await readJsonBody(req, 1024 * 1024);
+        const category = ['feature', 'vocab', 'listening', 'bug'].includes(body.category)
+          ? body.category
+          : 'feature';
+        const title = String(body.title || '').trim();
+        const content = String(body.content || '').trim();
+        if (title.length < 2 || title.length > 120) {
+          sendJson(res, 400, { error: '请填写 2–120 字的需求标题。' });
+          return;
+        }
+        if (content.length < 4 || content.length > 20000) {
+          sendJson(res, 400, { error: '请填写 4–20000 字的详细说明。' });
+          return;
+        }
+        const attachmentName = String(body.attachmentName || '').trim();
+        const attachmentContent = String(body.attachmentContent || '');
+        if (attachmentName || attachmentContent) {
+          const cleanName = path.basename(attachmentName || 'attachment.txt');
+          if (!/\.(txt|csv|md|json|srt|lrc)$/i.test(cleanName)) {
+            sendJson(res, 400, { error: '仅支持上传文本格式材料（.txt / .csv / .md / .json / .srt / .lrc），音频请直接在本地导入。' });
+            return;
+          }
+          if (Buffer.byteLength(attachmentContent, 'utf8') > 512 * 1024) {
+            sendJson(res, 400, { error: '上传的文本附件需在 512 KB 以内。' });
+            return;
+          }
+        }
+        const safeAttachmentName = attachmentName ? path.basename(attachmentName) : '';
+        const appVersion = String(body.appVersion || '').trim().slice(0, 32);
+        const ghPayload = buildGithubIssuePayload({
+          category,
+          title,
+          content,
+          userEmail: user.email,
+          userName: user.name,
+          userTier: user.tier,
+          appVersion,
+          attachmentName: safeAttachmentName,
+          attachmentContent,
+        });
+        const ghRes = await tryCreateGithubIssue(ghPayload);
+        const feedback = createFeedback(db, {
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          userTier: user.tier,
+          category,
+          title,
+          content,
+          attachmentName: safeAttachmentName,
+          attachmentContent,
+          appVersion,
+          githubIssueNumber: ghRes.issueNumber,
+          githubIssueUrl: ghRes.issueUrl,
+        });
+        sendJson(res, 201, {
+          ok: true,
+          feedback,
+          githubSynced: ghRes.synced,
+          githubNewIssueUrl: ghRes.newIssueUrl,
+        });
+        return;
+      }
+
+      if (isRead && pathname === '/api/feedback/mine') {
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录。');
+        if (!authState) return;
+        sendJson(
+          res,
+          200,
+          {
+            ok: true,
+            feedbacks: listUserFeedbacks(db, authState.user.id, 30),
+            repoUrl: `https://github.com/${getGithubRepo()}/issues`,
+          },
+          headOnly,
+        );
+        return;
+      }
+
+      if (isRead && pathname === '/api/admin/feedbacks') {
+        if (!isAdminAuthorized(req)) {
+          sendJson(res, 401, { error: '需要管理员口令（LIRIO_ADMIN_TOKEN）。' }, headOnly);
+          return;
+        }
+        sendJson(
+          res,
+          200,
+          {
+            ok: true,
+            feedbacks: listAllFeedbacks(db, 100),
+            githubConfigured: Boolean(String(process.env.LIRIO_GITHUB_TOKEN || '').trim()),
+          },
+          headOnly,
+        );
+        return;
+      }
+
+      const fbAttachmentMatch = pathname.match(/^\/api\/admin\/feedbacks\/([^/]+)\/attachment$/);
+      if (isRead && fbAttachmentMatch) {
+        if (!isAdminAuthorized(req)) {
+          sendJson(res, 401, { error: '需要管理员口令（LIRIO_ADMIN_TOKEN）。' }, headOnly);
+          return;
+        }
+        const item = getFeedbackById(db, decodeURIComponent(fbAttachmentMatch[1]), { includeAttachment: true });
+        if (!item || !item.attachmentName) {
+          sendJson(res, 404, { error: '附件不存在。' }, headOnly);
+          return;
+        }
+        const safeName = item.attachmentName.replace(/["\r\n]/g, '_');
+        res.writeHead(200, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `attachment; filename="feedback-attachment.txt"; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+          'Cache-Control': 'no-store',
+        });
+        res.end(headOnly ? undefined : item.attachmentContent);
+        return;
+      }
+
+      const fbStatusMatch = pathname.match(/^\/api\/admin\/feedbacks\/([^/]+)\/status$/);
+      if (req.method === 'POST' && fbStatusMatch) {
+        if (!isAdminAuthorized(req)) {
+          sendJson(res, 401, { error: '需要管理员口令（LIRIO_ADMIN_TOKEN）。' });
+          return;
+        }
+        const body = await readJsonBody(req);
+        const status = ['open', 'planned', 'done', 'declined'].includes(body.status) ? body.status : 'open';
+        const updated = updateFeedback(db, {
+          id: decodeURIComponent(fbStatusMatch[1]),
+          status,
+          adminReply: body.adminReply !== undefined ? String(body.adminReply) : undefined,
+        });
+        if (!updated) {
+          sendJson(res, 404, { error: '反馈记录不存在。' });
+          return;
+        }
+        sendJson(res, 200, { ok: true, feedback: updated });
         return;
       }
 

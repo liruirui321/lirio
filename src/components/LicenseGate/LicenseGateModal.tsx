@@ -193,9 +193,9 @@ export function LicenseGateModal({
             </h2>
             <p>
               {access.reason === 'trial_expired'
-                ? '激活「Lirio 终身通行证（¥99）」即可永久使用精听、词卡与本地语音功能（赠 ¥10 对话加油包）。'
+                ? '激活「Lirio Pro · 永久版（¥99）」即可永久使用精听、词卡与本地语音功能（赠 ¥10 对话加油包 + 专属提需求通道）。'
                 : access.reason === 'offline_expired'
-                  ? '离线连续使用已超过 14 天，请联网校验一次你的终身通行证身份。'
+                  ? '离线连续使用已超过 14 天，请联网校验一次你的 Pro · 永久版授权。'
                   : '新注册账号享 3 天全功能免费体验 + 赠 ¥5 对话额度 · 单账号支持 3 台个人设备'}
             </p>
           </div>
@@ -301,7 +301,7 @@ export function LicenseGateModal({
               className="link-inline-btn"
               onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
             >
-              了解 ¥99 Lirio 终身通行证与兑换码 ↗
+              了解 ¥99 Lirio Pro · 永久版与兑换码 ↗
             </button>
           </form>
         )}
@@ -345,7 +345,7 @@ export function LicenseGateModal({
 
             <div className="redeem-actions-row">
               <button type="button" className="ghost-pill-btn" onClick={() => void handleOpenBuyPro()}>
-                {showBuy ? '收起下单' : '购买 ¥99 终身通行证'}
+                {showBuy ? '收起下单' : '开通 ¥99 Lirio Pro · 永久版'}
               </button>
               <button
                 type="button"
@@ -381,10 +381,10 @@ export function LicenseGateModal({
                     </div>
                     <div className="buy-pack-card">
                       <div className="buy-pack-head">
-                        <strong>Lirio 终身通行证（赠 ¥10 对话加油包）</strong>
+                        <strong>Lirio Pro · 永久版（赠 ¥10 对话加油包）</strong>
                         <span>¥99</span>
                       </div>
-                      <small>一码永久解锁本人 3 台设备，本地语音与切分永久免费</small>
+                      <small>一码永久解锁本人 3 台设备 + 专属提需求通道，本地语音与切分永久免费</small>
                       <div className="buy-pack-btns">
                         {storeConfig?.settings?.shopUrlPro99 && (
                           <button
