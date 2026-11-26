@@ -187,14 +187,16 @@ export function LicenseGateModal({
                 ? '3 天免费体验已结束'
                 : access.reason === 'offline_expired'
                   ? '需要联网续期离线授权'
-                  : '登录 Lirio 账号以启用'}
+                  : authMode === 'register'
+                    ? '注册 Lirio'
+                    : '登录 Lirio'}
             </h2>
             <p>
               {access.reason === 'trial_expired'
                 ? '激活「Lirio Pro · 永久版（¥99）」即可永久使用精听、词卡与本地语音功能（赠 ¥10 对话加油包 + 专属提需求通道）。'
                 : access.reason === 'offline_expired'
                   ? '离线连续使用已超过 14 天，请联网校验一次你的 Pro · 永久版授权。'
-                  : '新注册账号享 3 天全功能免费体验 + 赠 ¥0.5 对话额度 · 单账号支持 3 台个人设备'}
+                  : '新用户免费试 3 天 · 赠 ¥0.5 对话额度'}
             </p>
           </div>
         </div>
@@ -218,7 +220,7 @@ export function LicenseGateModal({
                     setErrorMsg('');
                   }}
                 >
-                  登录已有账号
+                  登录
                 </button>
                 <button
                   type="button"
@@ -228,7 +230,7 @@ export function LicenseGateModal({
                     setErrorMsg('');
                   }}
                 >
-                  注册领 3 天体验
+                  注册
                 </button>
               </div>
             </div>
@@ -245,11 +247,11 @@ export function LicenseGateModal({
             </div>
 
             <div className="speak-field">
-              <label>密码（至少 6 位）</label>
+              <label>密码</label>
               <input
                 type="password"
                 value={password}
-                placeholder="输入登录密码"
+                placeholder="至少 6 位"
                 required
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -257,11 +259,11 @@ export function LicenseGateModal({
 
             {authMode === 'register' && (
               <div className="speak-field">
-                <label>昵称（可选）</label>
+                <label>昵称</label>
                 <input
                   type="text"
                   value={nickname}
-                  placeholder="如何称呼你"
+                  placeholder="选填"
                   onChange={(e) => setNickname(e.target.value)}
                 />
               </div>
@@ -272,7 +274,7 @@ export function LicenseGateModal({
               className="primary-btn full-width"
               disabled={busy || !email.trim() || password.length < 6}
             >
-              {busy ? '请稍候…' : authMode === 'register' ? '注册并开始 3 天免费体验' : '登录并验证授权'}
+              {busy ? '请稍候…' : authMode === 'register' ? '注册' : '登录'}
             </button>
 
             <button
@@ -280,7 +282,7 @@ export function LicenseGateModal({
               className="link-inline-btn"
               onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
             >
-              了解 ¥99 Lirio Pro · 永久版与兑换码 ↗
+              了解 Lirio Pro · 永久版 ↗
             </button>
           </form>
         )}

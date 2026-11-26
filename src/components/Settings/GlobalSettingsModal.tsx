@@ -665,7 +665,7 @@ export function GlobalSettingsModal({
                         className={authMode === 'register' ? 'active' : ''}
                         onClick={() => setAuthMode('register')}
                       >
-                        注册（赠 ¥0.5）
+                        注册
                       </button>
                     </div>
                   </div>
@@ -717,14 +717,14 @@ export function GlobalSettingsModal({
                     </button>
                   </div>
                   <div className="settings-rate-tip" style={{ textAlign: 'center' }}>
-                    按量扣费 · 文本 ¥3~6/百万 tok · 本地语音免费
+                    新用户赠 ¥0.5 · 按量扣费 · 本地免费
                   </div>
                   <button
                     type="button"
                     className="link-inline-btn"
                     onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
                   >
-                    还没激活？前往官网开通 ¥99 Lirio Pro · 永久版 ↗
+                    了解 Lirio Pro · 永久版 ↗
                   </button>
                 </div>
               ) : (
