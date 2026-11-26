@@ -386,7 +386,26 @@ export async function commitPreparedImportsToLibrary(
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const cleanTitle = item.title.trim() || item.project.name;
-    const finalProject: Project = { ...item.project, name: cleanTitle };
+    const lineMap = new Map(item.previewLines.map((l) => [l.id, l]));
+    const dictation = item.project.dictation;
+    const finalProject: Project = dictation
+      ? {
+          ...item.project,
+          name: cleanTitle,
+          dictation: {
+            ...dictation,
+            sentences: dictation.sentences.map((s) => {
+              const edited = lineMap.get(s.id);
+              if (!edited) return s;
+              return {
+                ...s,
+                text: edited.text.trim() || s.text,
+                translation: edited.translation?.trim() || undefined,
+              };
+            }),
+          },
+        }
+      : { ...item.project, name: cleanTitle };
 
     onProgress?.({
       step: 'save',

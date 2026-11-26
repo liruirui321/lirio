@@ -126,6 +126,17 @@ export default function App() {
   const [importError, setImportError] = useState('');
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [preparedImports, setPreparedImports] = useState<PreparedImportItem[]>([]);
+  const [editingImportCell, setEditingImportCell] = useState<{
+    itemIdx: number;
+    lineId: string;
+    field: 'text' | 'translation';
+  } | null>(null);
+  const [editingImportDraft, setEditingImportDraft] = useState('');
+  const editingImportRef = useRef<{
+    cell: { itemIdx: number; lineId: string; field: 'text' | 'translation' };
+    draft: string;
+  } | null>(null);
+  const importEditTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const importCancelRef = useRef({ cancelled: false });
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -555,12 +566,108 @@ export default function App() {
     };
   }, [showImportModal, importBusy, importSaving, preparedImports.length, startPrepareImportFromPaths]);
 
+  useEffect(() => {
+    const el = importEditTextareaRef.current;
+    if (!editingImportCell || !el) return;
+    el.focus();
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }, [editingImportCell]);
+
+  const applyImportCellEdit = (
+    items: PreparedImportItem[],
+    cell: { itemIdx: number; lineId: string; field: 'text' | 'translation' },
+    draft: string,
+  ): PreparedImportItem[] =>
+    items.map((item, idx) => {
+      if (idx !== cell.itemIdx) return item;
+      const nextPreviewLines = item.previewLines.map((line) => {
+        if (line.id !== cell.lineId) return line;
+        if (cell.field === 'text') {
+          const nextText = draft.trim() || line.text;
+          return {
+            ...line,
+            text: nextText,
+            changed: nextText !== line.rawText.trim(),
+          };
+        }
+        const nextTr = draft.trim();
+        return {
+          ...line,
+          translation: nextTr || undefined,
+        };
+      });
+      const dictation = item.project.dictation;
+      const editedLine = nextPreviewLines.find((l) => l.id === cell.lineId);
+      const nextDictation =
+        dictation && editedLine
+          ? {
+              ...dictation,
+              sentences: dictation.sentences.map((s) =>
+                s.id === cell.lineId
+                  ? { ...s, text: editedLine.text, translation: editedLine.translation }
+                  : s,
+              ),
+            }
+          : dictation;
+      return {
+        ...item,
+        previewLines: nextPreviewLines,
+        changedCount: nextPreviewLines.filter((l) => l.changed).length,
+        translatedCount: nextPreviewLines.filter((l) => Boolean(l.translation?.trim())).length,
+        project: {
+          ...item.project,
+          dictation: nextDictation,
+        },
+      };
+    });
+
+  const startEditingImportCell = (
+    itemIdx: number,
+    lineId: string,
+    field: 'text' | 'translation',
+    currentVal: string,
+  ) => {
+    if (importSaving) return;
+    const pending = editingImportRef.current;
+    if (pending) {
+      setPreparedImports((prev) => applyImportCellEdit(prev, pending.cell, pending.draft));
+    }
+    const cell = { itemIdx, lineId, field };
+    editingImportRef.current = { cell, draft: currentVal };
+    setEditingImportCell(cell);
+    setEditingImportDraft(currentVal);
+  };
+
+  const commitEditingImportCell = () => {
+    const pending = editingImportRef.current;
+    if (!pending) return;
+    editingImportRef.current = null;
+    setEditingImportCell(null);
+    setPreparedImports((prev) => applyImportCellEdit(prev, pending.cell, pending.draft));
+  };
+
+  const cancelEditingImportCell = () => {
+    editingImportRef.current = null;
+    setEditingImportCell(null);
+  };
+
   const handleConfirmPreparedImports = async () => {
     if (!preparedImports.length || importSaving) return;
+    let itemsToCommit = preparedImports;
+    if (editingImportRef.current) {
+      const { cell, draft } = editingImportRef.current;
+      editingImportRef.current = null;
+      setEditingImportCell(null);
+      itemsToCommit = applyImportCellEdit(preparedImports, cell, draft);
+      setPreparedImports(itemsToCommit);
+    }
     setImportError('');
     setImportSaving(true);
     try {
-      const res = await commitPreparedImportsToLibrary(preparedImports, (p) => setImportProgress(p));
+      const res = await commitPreparedImportsToLibrary(itemsToCommit, (p) => setImportProgress(p));
       setLibraryRefreshKey((k) => k + 1);
       if (importWarnings.length) {
         setError(importWarnings.join('；'));
@@ -582,6 +689,8 @@ export default function App() {
 
   const handleDiscardPreparedImports = () => {
     if (importBusy || importSaving) return;
+    editingImportRef.current = null;
+    setEditingImportCell(null);
     setPreparedImports([]);
     setImportWarnings([]);
     setImportError('');
@@ -1293,7 +1402,6 @@ export default function App() {
                   {preparedImports.map((item, idx) => {
                     const fmtTime = (sec: number) =>
                       `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
-                    const previewSlice = item.previewLines.slice(0, 12);
                     return (
                       <div key={item.project.id} className="import-preview-box">
                         <div className="import-preview-title-row">
@@ -1321,28 +1429,109 @@ export default function App() {
                           </div>
                         </div>
                         <div className="import-preview-list">
-                          {previewSlice.map((line, li) => (
-                            <div key={line.id} className="import-preview-line">
-                              <div className="import-preview-line-meta">
-                                <span>
-                                  {li + 1}. {fmtTime(line.start)}
-                                </span>
-                                {line.changed && <span className="import-fixed-tag">已修正</span>}
+                          {item.previewLines.map((line, li) => {
+                            const isEditingEn =
+                              editingImportCell?.itemIdx === idx &&
+                              editingImportCell.lineId === line.id &&
+                              editingImportCell.field === 'text';
+                            const isEditingZh =
+                              editingImportCell?.itemIdx === idx &&
+                              editingImportCell.lineId === line.id &&
+                              editingImportCell.field === 'translation';
+                            return (
+                              <div key={line.id} className="import-preview-line">
+                                <div className="import-preview-line-meta">
+                                  <span>
+                                    {li + 1}. {fmtTime(line.start)}
+                                  </span>
+                                  {line.changed && <span className="import-fixed-tag">已修正</span>}
+                                </div>
+                                {isEditingEn ? (
+                                  <textarea
+                                    ref={importEditTextareaRef}
+                                    className="import-inline-edit en"
+                                    rows={1}
+                                    value={editingImportDraft}
+                                    disabled={importSaving}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditingImportDraft(val);
+                                      if (editingImportRef.current) {
+                                        editingImportRef.current.draft = val;
+                                      }
+                                      e.currentTarget.style.height = 'auto';
+                                      e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                                    }}
+                                    onBlur={commitEditingImportCell}
+                                    onKeyDown={(e) => {
+                                      if (e.nativeEvent.isComposing) return;
+                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        commitEditingImportCell();
+                                      } else if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        cancelEditingImportCell();
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <div
+                                    className="import-preview-en"
+                                    onClick={() => startEditingImportCell(idx, line.id, 'text', line.text)}
+                                  >
+                                    {line.text}
+                                  </div>
+                                )}
+                                {line.changed && (
+                                  <div className="import-preview-raw">原识别：{line.rawText}</div>
+                                )}
+                                {(isEditingZh || line.translation) &&
+                                  (isEditingZh ? (
+                                    <textarea
+                                      ref={importEditTextareaRef}
+                                      className="import-inline-edit zh"
+                                      rows={1}
+                                      value={editingImportDraft}
+                                      disabled={importSaving}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditingImportDraft(val);
+                                        if (editingImportRef.current) {
+                                          editingImportRef.current.draft = val;
+                                        }
+                                        e.currentTarget.style.height = 'auto';
+                                        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                                      }}
+                                      onBlur={commitEditingImportCell}
+                                      onKeyDown={(e) => {
+                                        if (e.nativeEvent.isComposing) return;
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
+                                          commitEditingImportCell();
+                                        } else if (e.key === 'Escape') {
+                                          e.preventDefault();
+                                          cancelEditingImportCell();
+                                        }
+                                      }}
+                                    />
+                                  ) : (
+                                    <div
+                                      className="import-preview-zh"
+                                      onClick={() =>
+                                        startEditingImportCell(
+                                          idx,
+                                          line.id,
+                                          'translation',
+                                          line.translation || '',
+                                        )
+                                      }
+                                    >
+                                      {line.translation}
+                                    </div>
+                                  ))}
                               </div>
-                              <div className="import-preview-en">{line.text}</div>
-                              {line.changed && (
-                                <div className="import-preview-raw">原识别：{line.rawText}</div>
-                              )}
-                              {line.translation && (
-                                <div className="import-preview-zh">{line.translation}</div>
-                              )}
-                            </div>
-                          ))}
-                          {item.previewLines.length > 12 && (
-                            <div className="import-preview-more">
-                              其余 {item.previewLines.length - 12} 句已一并就绪，入库后即可逐句听写。
-                            </div>
-                          )}
+                            );
+                          })}
                         </div>
                       </div>
                     );

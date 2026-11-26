@@ -499,7 +499,8 @@ html[data-mobile="true"] .import-dropzone-icon {
   height: 40px;
 }
 
-html[data-mobile="true"] .import-preview-title-row input {
+html[data-mobile="true"] .import-preview-title-row input,
+html[data-mobile="true"] .import-inline-edit {
   font-size: 16px;
 }
 
