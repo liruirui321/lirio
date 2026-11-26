@@ -764,7 +764,7 @@ renderAll();
 </html>`;
 }
 
-async function readJsonBody(req, maxBytes = 12 * 1024 * 1024) {
+function readBinaryBody(req, maxBytes = 12 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let total = 0;
@@ -778,18 +778,20 @@ async function readJsonBody(req, maxBytes = 12 * 1024 * 1024) {
       chunks.push(chunk);
     });
     req.on('end', () => {
-      if (!chunks.length) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-      } catch {
-        reject(new Error('无效的 JSON 请求体'));
-      }
+      resolve(chunks.length ? Buffer.concat(chunks) : Buffer.alloc(0));
     });
     req.on('error', reject);
   });
+}
+
+async function readJsonBody(req, maxBytes = 12 * 1024 * 1024) {
+  const buf = await readBinaryBody(req, maxBytes);
+  if (!buf.length) return {};
+  try {
+    return JSON.parse(buf.toString('utf8'));
+  } catch {
+    throw new Error('无效的 JSON 请求体');
+  }
 }
 
 function getMaxDevices() {
@@ -1005,8 +1007,9 @@ export function createLirioServer({ dbPath } = {}) {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Token, X-Admin-Key',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Token, X-Admin-Key, X-Audio-Duration, Accept',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Max-Age': '86400',
       });
       res.end();
       return;
@@ -1882,6 +1885,17 @@ export function createLirioServer({ dbPath } = {}) {
           accent: body.accent,
           voice: body.voice,
         });
+        if (String(req.headers.accept || '').includes('audio/mpeg')) {
+          const buf = ttsRes.audioBuf || Buffer.from(ttsRes.audioBase64 || '', 'base64');
+          res.writeHead(200, {
+            'Content-Type': ttsRes.mime || 'audio/mpeg',
+            'Content-Length': buf.length,
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'private, max-age=3600',
+          });
+          res.end(buf);
+          return;
+        }
         sendJson(res, 200, {
           audioBase64: ttsRes.audioBase64,
           mime: ttsRes.mime,
@@ -1899,11 +1913,21 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
         if (!authState) return;
         const user = authState.user;
-        const body = await readJsonBody(req);
-        const asrRes = await forwardTranscribe({
-          wavBase64: body.wavBase64,
-          durationSec: body.durationSec,
-        });
+        const ct = String(req.headers['content-type'] || '').toLowerCase();
+        const isBinaryAudio = ct.startsWith('audio/') || ct.startsWith('application/octet-stream');
+        const asrRes = isBinaryAudio
+          ? await forwardTranscribe({
+              wavBuf: await readBinaryBody(req),
+              mimeType: ct,
+              durationSec: Number(req.headers['x-audio-duration'] || 0) || undefined,
+            })
+          : await (async () => {
+              const body = await readJsonBody(req);
+              return forwardTranscribe({
+                wavBase64: body.wavBase64,
+                durationSec: body.durationSec,
+              });
+            })();
         sendJson(res, 200, {
           text: asrRes.text,
           model: asrRes.model,

@@ -564,12 +564,6 @@ export async function proxyChat(opts: {
   return res.content;
 }
 
-function uint8ToBase64(bytes: Uint8Array): string {
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
-}
-
 function base64ToBlobUrl(b64: string, mime: string): string {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -577,35 +571,83 @@ function base64ToBlobUrl(b64: string, mime: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/mpeg' }));
 }
 
+function handleUnauthorized(status: number, st: AccountState, errorMsg?: string) {
+  if (status === 401 && st.token) {
+    updateAccountState({
+      token: null,
+      user: null,
+      entitlement: null,
+      devices: [],
+      aiMode: 'byok',
+      lastAuthNotice: errorMsg || '登录状态已失效，请重新登录。',
+    });
+  }
+}
+
 export async function proxyTts(text: string, accent: Accent, voice?: string, feature = '云端语音合成'): Promise<string> {
   const st = getAccountState();
   if (!st.token) {
     throw new Error('请先登录 Lirio 账号后再使用云端语音。');
   }
-  const res = await apiFetch<{ audioBase64: string; mime: string; costUnits?: number; user: AccountUser }>('/api/ai/tts', {
-    method: 'POST',
-    body: JSON.stringify({ text, accent, voice, feature }),
-  });
+  const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  let resp: Response;
+  try {
+    resp = await fetch(`${base}/api/ai/tts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'audio/mpeg, application/json',
+        Authorization: `Bearer ${st.token}`,
+      },
+      body: JSON.stringify({ text, accent, voice, feature }),
+    });
+  } catch {
+    throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
+  }
+  const ct = (resp.headers.get('content-type') || '').toLowerCase();
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    handleUnauthorized(resp.status, st, data?.error);
+    throw new Error(data?.error || `请求失败 (${resp.status})`);
+  }
+  if (ct.startsWith('audio/')) {
+    return URL.createObjectURL(await resp.blob());
+  }
+  const res = (await resp.json()) as { audioBase64: string; mime: string; user?: AccountUser };
   if (res.user) updateAccountState({ user: res.user });
   return base64ToBlobUrl(res.audioBase64, res.mime);
 }
 
-export async function proxyTranscribe(wavBytes: Uint8Array, feature = '云端语音识别'): Promise<string> {
+export async function proxyTranscribe(wavBytes: Uint8Array, _feature = '云端语音识别'): Promise<string> {
   const st = getAccountState();
   if (!st.token) {
     throw new Error('请先登录 Lirio 账号后再使用云端识别。');
   }
   const approxSec = Math.max(1, Math.round(wavBytes.length / 32000));
-  const res = await apiFetch<{ text: string; costUnits?: number; user: AccountUser }>('/api/ai/transcribe', {
-    method: 'POST',
-    body: JSON.stringify({
-      wavBase64: uint8ToBase64(wavBytes),
-      durationSec: approxSec,
-      feature,
-    }),
-  });
-  if (res.user) updateAccountState({ user: res.user });
-  return res.text;
+  const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  let resp: Response;
+  try {
+    const safeBytes = new Uint8Array(wavBytes.byteLength);
+    safeBytes.set(wavBytes);
+    resp = await fetch(`${base}/api/ai/transcribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'audio/wav',
+        'X-Audio-Duration': String(approxSec),
+        Authorization: `Bearer ${st.token}`,
+      },
+      body: new Blob([safeBytes.buffer], { type: 'audio/wav' }),
+    });
+  } catch {
+    throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
+  }
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    handleUnauthorized(resp.status, st, data?.error);
+    throw new Error(data?.error || `请求失败 (${resp.status})`);
+  }
+  if (data.user) updateAccountState({ user: data.user });
+  return String(data.text || '').trim();
 }
 
 export interface CommunityConfig {
