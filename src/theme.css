@@ -2543,6 +2543,139 @@ textarea:focus { outline: none; }
   gap: 10px;
   padding-top: 4px;
 }
+.import-modal.wide {
+  max-width: 620px;
+  max-height: 86vh;
+}
+.import-steps-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.import-step-pill {
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.import-step-pill.active {
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+.import-step-pill.done {
+  background: var(--surface-2);
+  color: var(--text-strong);
+}
+.import-preview-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.import-preview-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--bg);
+}
+.import-preview-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.import-preview-title-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 200px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.import-preview-title-row input {
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--card-bg);
+  color: var(--text-strong);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.import-preview-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.import-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.import-preview-line {
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.import-preview-line-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+}
+.import-fixed-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.import-preview-en {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-strong);
+}
+.import-preview-raw {
+  font-size: 11.5px;
+  color: var(--subtle);
+  text-decoration: line-through;
+}
+.import-preview-zh {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.import-preview-more {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--subtle);
+  padding: 4px 0;
+}
+.library-import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
 /* ---------- Selection Translate & Read Aloud Popover ---------- */
 .selection-popover {

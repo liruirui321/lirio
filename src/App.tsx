@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import './theme.css';
 import './styles/mobile.css';
 import { invoke } from '@tauri-apps/api/core';
@@ -42,9 +42,12 @@ import {
   type MicPermissionStatus,
 } from './services/micPermission';
 import {
+  commitPreparedImportsToLibrary,
   importAudioFilesToLibrary,
+  prepareAudioFilesForImport,
   type ImportProgress,
   type ImportTierChoice,
+  type PreparedImportItem,
 } from './services/importAgent';
 import { useProjectStore } from './stores/projectStore';
 import { usePlayerStore } from './stores/playerStore';
@@ -101,10 +104,14 @@ export default function App() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importLanguage, setImportLanguage] = useState('en');
   const [importTier, setImportTier] = useState<ImportTierChoice>('auto');
-  const [importAiPolish, setImportAiPolish] = useState(false);
+  const [importAiPolish, setImportAiPolish] = useState(true);
   const [importBusy, setImportBusy] = useState(false);
+  const [importSaving, setImportSaving] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [importError, setImportError] = useState('');
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [preparedImports, setPreparedImports] = useState<PreparedImportItem[]>([]);
+  const importCancelRef = useRef({ cancelled: false });
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
@@ -361,6 +368,7 @@ export default function App() {
       setImportBusy(true);
       setAsrBusy(true);
       setImportProgress({
+        step: 'decode',
         fileIndex: 1,
         totalFiles: paths.length,
         fileName: paths[0].split(/[/\\]/).pop() || '',
@@ -399,6 +407,7 @@ export default function App() {
 
   const handleBatchImportAudio = async () => {
     setImportError('');
+    setImportWarnings([]);
     const picked = await open({
       filters: [
         { name: '音频', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'aif', 'aiff', 'mp4'] },
@@ -408,7 +417,87 @@ export default function App() {
     });
     const paths = Array.isArray(picked) ? picked : typeof picked === 'string' ? [picked] : [];
     if (!paths.length) return;
-    await handleImportLocalAudioPaths(paths);
+
+    stopListeningAudio();
+    importCancelRef.current = { cancelled: false };
+    setPreparedImports([]);
+    setShowImportModal(true);
+    setImportBusy(true);
+    setAsrBusy(true);
+    setImportProgress({
+      step: 'decode',
+      fileIndex: 1,
+      totalFiles: paths.length,
+      fileName: paths[0].split(/[/\\]/).pop() || '',
+      stage: '正在检查并解码音频…',
+    });
+
+    try {
+      const { prepared, warnings } = await prepareAudioFilesForImport({
+        paths,
+        language: importLanguage,
+        tier: importTier,
+        aiPolish: {
+          enabled: importAiPolish,
+          fixText: true,
+          addTranslation: true,
+        },
+        signal: importCancelRef.current,
+        onProgress: (p) => setImportProgress(p),
+      });
+      if (importCancelRef.current.cancelled) {
+        setImportProgress(null);
+        return;
+      }
+      setPreparedImports(prepared);
+      setImportWarnings(warnings);
+      setImportProgress(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (importCancelRef.current.cancelled || /已取消/.test(msg)) {
+        setImportError('');
+      } else {
+        setImportError('导入处理失败：' + msg);
+      }
+      setImportProgress(null);
+    } finally {
+      setImportBusy(false);
+      setAsrBusy(false);
+    }
+  };
+
+  const handleConfirmPreparedImports = async () => {
+    if (!preparedImports.length || importSaving) return;
+    setImportError('');
+    setImportSaving(true);
+    try {
+      const res = await commitPreparedImportsToLibrary(preparedImports, (p) => setImportProgress(p));
+      setLibraryRefreshKey((k) => k + 1);
+      if (importWarnings.length) {
+        setError(importWarnings.join('；'));
+      }
+      setPreparedImports([]);
+      setImportWarnings([]);
+      setImportProgress(null);
+      setShowImportModal(false);
+      if (res.lastLibraryId) {
+        await openMaterial(res.lastLibraryId);
+      }
+    } catch (e) {
+      setImportError('写入材料库失败：' + String(e));
+    } finally {
+      setImportSaving(false);
+      setImportProgress(null);
+    }
+  };
+
+  const handleDiscardPreparedImports = () => {
+    if (importBusy || importSaving) return;
+    setPreparedImports([]);
+    setImportWarnings([]);
+    setImportError('');
+    setImportProgress(null);
+    setShowImportModal(false);
   };
 
   const handleJumpToSentence = useCallback(
@@ -464,7 +553,11 @@ export default function App() {
         return true;
       }
       if (showImportModal) {
-        if (!importBusy) setShowImportModal(false);
+        if (!importBusy && !importSaving) {
+          setPreparedImports([]);
+          setImportWarnings([]);
+          setShowImportModal(false);
+        }
         return true;
       }
       if (settingsOpen) {
@@ -894,6 +987,12 @@ export default function App() {
               onImportDownloadedPodcast={(path, _title, tier) =>
                 handleImportLocalAudioPaths([path], tier || 'auto', 'en')
               }
+              onOpenImport={() => {
+                setImportError('');
+                setImportWarnings([]);
+                setPreparedImports([]);
+                setShowImportModal(true);
+              }}
               refreshKey={libraryRefreshKey}
             />
           ) : project ? (
@@ -1040,77 +1139,183 @@ export default function App() {
         </div>
       )}
 
-      {/* Automated Audio Import & Segmentation Agent Modal */}
+      {/* Automated Audio Import, AI Proofreading & Preview Wizard */}
       {showImportModal && (
         <div
           className="import-modal-backdrop"
           onClick={() => {
-            if (!importBusy) setShowImportModal(false);
+            if (!importBusy && !importSaving) handleDiscardPreparedImports();
           }}
         >
-          <div className="import-modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className={`import-modal${preparedImports.length > 0 ? ' wide' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="import-modal-head">
-              <h2>导入新音频 · 自动入库</h2>
+              <h2>
+                {preparedImports.length > 0
+                  ? '字幕精校预览 · 确认加入材料库'
+                  : '导入音频 · 自动制作精听材料'}
+              </h2>
               <button
                 type="button"
                 className="icon-btn"
-                disabled={importBusy}
+                disabled={importBusy || importSaving}
                 aria-label="关闭"
-                onClick={() => setShowImportModal(false)}
+                onClick={handleDiscardPreparedImports}
               >
                 <IconClose size={15} />
               </button>
             </div>
-            <p className="import-modal-desc">
-              选择 1 个或多个本地音频（MP3 / M4A / WAV / MP4），自动完成本机识别、意群分句、静音裁剪并存入 SSD 材料库。
-            </p>
-            <div className="import-modal-grid">
-              <label>
-                识别语言
-                <CustomSelect
-                  value={importLanguage}
-                  disabled={importBusy}
-                  options={[
-                    { value: 'en', label: '英语' },
-                    { value: 'zh', label: '中文' },
-                    { value: 'auto', label: '自动' },
-                  ]}
-                  minWidth={150}
-                  onChange={(v) => setImportLanguage(v)}
-                />
-              </label>
-              <label>
-                放入阶梯
-                <CustomSelect
-                  value={importTier}
-                  disabled={importBusy}
-                  options={[
-                    { value: 'auto', label: '自动归类' },
-                    { value: 'L1', label: 'L1 初学者（A1–A2）' },
-                    { value: 'L2', label: 'L2 高中生（A2–B1）' },
-                    { value: 'L3', label: 'L3 大学生（B1–B2）' },
-                    { value: 'L4', label: 'L4 高阶进阶（C1–C2）' },
-                  ]}
-                  minWidth={150}
-                  onChange={(v) => setImportTier(v as ImportTierChoice)}
-                />
-              </label>
-            </div>
 
-            <label className="import-ai-opt">
-              <input
-                type="checkbox"
-                checked={importAiPolish}
-                disabled={importBusy}
-                onChange={(e) => setImportAiPolish(e.target.checked)}
-              />
-              <div>
-                <strong>导入后 AI 精校字幕 + 生成中文译文（可选）</strong>
-                <small>
-                  默认离线免费识别；导入后也可随时按需 AI 精校。
-                </small>
-              </div>
-            </label>
+            {/* 4-step pipeline status strip when processing or previewing */}
+            {(importBusy || importSaving || preparedImports.length > 0) && (() => {
+              const curStep = preparedImports.length > 0 && !importSaving
+                ? 3
+                : importProgress?.step === 'save'
+                  ? 3
+                  : importProgress?.step === 'polish'
+                    ? 2
+                    : importProgress?.step === 'transcribe'
+                      ? 1
+                      : 0;
+              return (
+                <div className="import-steps-bar" aria-label="导入处理流程">
+                  {['1 解码音频', '2 识别分句', '3 AI 精校', '4 预览入库'].map((label, idx) => (
+                    <span
+                      key={label}
+                      className={`import-step-pill${
+                        idx < curStep ? ' done' : idx === curStep ? ' active' : ''
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {preparedImports.length > 0 ? (
+              <>
+                {importWarnings.length > 0 && (
+                  <div className="corpus-banner" style={{ borderRadius: 10 }}>
+                    {importWarnings.join('；')}
+                  </div>
+                )}
+                <div className="import-preview-scroll">
+                  {preparedImports.map((item, idx) => {
+                    const fmtTime = (sec: number) =>
+                      `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+                    const previewSlice = item.previewLines.slice(0, 12);
+                    return (
+                      <div key={item.project.id} className="import-preview-box">
+                        <div className="import-preview-title-row">
+                          <label>
+                            <span>材料名称</span>
+                            <input
+                              type="text"
+                              value={item.title}
+                              disabled={importSaving}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPreparedImports((prev) =>
+                                  prev.map((x, j) => (j === idx ? { ...x, title: val } : x)),
+                                );
+                              }}
+                            />
+                          </label>
+                          <div className="import-preview-stats">
+                            <span>共 {item.sentenceCount} 句</span>
+                            {item.aiPolished && (
+                              <span className="tier-badge small pro">
+                                AI 修正 {item.changedCount} 处 · 译文 {item.translatedCount} 句
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="import-preview-list">
+                          {previewSlice.map((line, li) => (
+                            <div key={line.id} className="import-preview-line">
+                              <div className="import-preview-line-meta">
+                                <span>
+                                  {li + 1}. {fmtTime(line.start)}
+                                </span>
+                                {line.changed && <span className="import-fixed-tag">已修正</span>}
+                              </div>
+                              <div className="import-preview-en">{line.text}</div>
+                              {line.changed && (
+                                <div className="import-preview-raw">原识别：{line.rawText}</div>
+                              )}
+                              {line.translation && (
+                                <div className="import-preview-zh">{line.translation}</div>
+                              )}
+                            </div>
+                          ))}
+                          {item.previewLines.length > 12 && (
+                            <div className="import-preview-more">
+                              其余 {item.previewLines.length - 12} 句已一并就绪，入库后即可逐句听写。
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="import-modal-desc">
+                  选择本地音频（MP3 / M4A / WAV / MP4），自动完成音频解码、识别分句并由 AI 精校字幕与中文译文，确认预览后即可直接作为听写材料使用。
+                </p>
+                <div className="import-modal-grid">
+                  <label>
+                    识别语言
+                    <CustomSelect
+                      value={importLanguage}
+                      disabled={importBusy}
+                      options={[
+                        { value: 'en', label: '英语' },
+                        { value: 'zh', label: '中文' },
+                        { value: 'auto', label: '自动' },
+                      ]}
+                      minWidth={150}
+                      onChange={(v) => setImportLanguage(v)}
+                    />
+                  </label>
+                  <label>
+                    放入阶梯
+                    <CustomSelect
+                      value={importTier}
+                      disabled={importBusy}
+                      options={[
+                        { value: 'auto', label: '自动归类' },
+                        { value: 'L1', label: 'L1 初学者（A1–A2）' },
+                        { value: 'L2', label: 'L2 高中生（A2–B1）' },
+                        { value: 'L3', label: 'L3 大学生（B1–B2）' },
+                        { value: 'L4', label: 'L4 高阶进阶（C1–C2）' },
+                      ]}
+                      minWidth={150}
+                      onChange={(v) => setImportTier(v as ImportTierChoice)}
+                    />
+                  </label>
+                </div>
+
+                <label className="import-ai-opt">
+                  <input
+                    type="checkbox"
+                    checked={importAiPolish}
+                    disabled={importBusy}
+                    onChange={(e) => setImportAiPolish(e.target.checked)}
+                  />
+                  <div>
+                    <strong>AI 精校字幕并生成中文译文</strong>
+                    <small>
+                      自动修正语音识别中的拼写、专有名词与标点，并生成对照译文；未联网或未登录时自动保留原始识别字幕。
+                    </small>
+                  </div>
+                </label>
+              </>
+            )}
 
             {importError && (
               <div className="app-error" style={{ borderRadius: 10 }} onClick={() => setImportError('')}>
@@ -1118,7 +1323,7 @@ export default function App() {
               </div>
             )}
 
-            {importBusy && importProgress && (
+            {(importBusy || importSaving) && importProgress && (
               <div className="import-progress-box">
                 <strong>
                   正在处理 {importProgress.fileIndex}/{importProgress.totalFiles}：{importProgress.fileName}
@@ -1132,18 +1337,33 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    void invoke('cancel_transcription');
+                    importCancelRef.current.cancelled = true;
+                    void invoke('cancel_transcription').catch(() => {});
                   }}
                 >
                   取消处理
                 </button>
+              ) : preparedImports.length > 0 ? (
+                <>
+                  <button type="button" disabled={importSaving} onClick={handleDiscardPreparedImports}>
+                    放弃
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={importSaving}
+                    onClick={() => void handleConfirmPreparedImports()}
+                  >
+                    {importSaving ? '正在入库…' : '确认入库并开始听写'}
+                  </button>
+                </>
               ) : (
                 <>
-                  <button type="button" onClick={() => setShowImportModal(false)}>
+                  <button type="button" onClick={handleDiscardPreparedImports}>
                     关闭
                   </button>
                   <button type="button" className="primary" onClick={() => void handleBatchImportAudio()}>
-                    选择音频并自动处理
+                    选择音频并自动生成精听材料
                   </button>
                 </>
               )}

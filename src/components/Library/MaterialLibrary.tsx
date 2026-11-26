@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { simplifyMaterialTitle } from '../../services/materialTitle';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
-import { IconExport, IconHeadphones, IconReplay } from '../Icons';
+import { IconExport, IconFolderAudio, IconHeadphones, IconReplay } from '../Icons';
 import './MaterialLibrary.css';
 
 interface Material {
@@ -173,6 +173,7 @@ export function MaterialLibrary({
   onOpen,
   onOpenLocalPath,
   onImportDownloadedPodcast,
+  onOpenImport,
   refreshKey = 0,
 }: {
   onOpen: (id: string) => Promise<void>;
@@ -182,6 +183,7 @@ export function MaterialLibrary({
     title?: string,
     tier?: Exclude<TierId, 'all'>,
   ) => Promise<void>;
+  onOpenImport?: () => void;
   refreshKey?: number;
 }) {
   const [items, setItems] = useState<Material[]>([]);
@@ -313,7 +315,18 @@ export function MaterialLibrary({
           <h1>阶梯精听库</h1>
           <p>按听写能力分为四级循序精听（初学者 → 高中生 → 大学生 → 高阶进阶），音频自动保存在你的数据目录中。</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {onOpenImport && (
+            <button
+              type="button"
+              className="primary library-import-btn"
+              disabled={loading || !!opening}
+              onClick={onOpenImport}
+            >
+              <IconFolderAudio size={15} />
+              <span>导入我的音频</span>
+            </button>
+          )}
           <div className="corpus-tabs">
             <button className={subTab === 'local' ? 'active' : ''} onClick={() => setSubTab('local')}>
               本机阶梯库 ({items.length})

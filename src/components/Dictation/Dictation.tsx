@@ -18,8 +18,6 @@ import {
 import { FUNCTION_WORDS, record } from '../../services/submissions';
 import { addMistakeToWordBook, loadCorpusState } from '../../services/corpusService';
 import { simplifyMaterialTitle } from '../../services/materialTitle';
-import { getAccountState, subscribeAccount, type AccountState } from '../../services/accountService';
-import { loadSpeakState, proofreadDictationSentences } from '../../services/speakService';
 import { handleDictationKeySound } from '../../services/typingSound';
 import type { Sentence } from '../../types/project';
 import { CustomSelect } from '../Corpus/CustomSelect';
@@ -45,7 +43,6 @@ const gradedAnswer = (s: Sentence) => (s.submittedAnswer !== undefined ? s.submi
 export function Dictation({
   onBusy,
   onDiscussInSpeak,
-  onOpenAiSettings,
   autoPlayOnOpen,
   onAutoPlayConsumed,
 }: {
@@ -75,10 +72,6 @@ export function Dictation({
   const [editing, setEditing] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAiPolish, setShowAiPolish] = useState(false);
-  const [aiPolishing, setAiPolishing] = useState(false);
-  const [polishFixText, setPolishFixText] = useState(true);
-  const [polishAddZh, setPolishAddZh] = useState(true);
   const [showTranslation, setShowTranslation] = useState(() => {
     try {
       return localStorage.getItem('aboboo-dict-show-zh') !== '0';
@@ -86,7 +79,6 @@ export function Dictation({
       return true;
     }
   });
-  const [accountState, setAccountState] = useState<AccountState>(() => getAccountState());
   const [showComplete, setShowComplete] = useState(false);
   const [addedMistakes, setAddedMistakes] = useState<Record<string, boolean>>({});
   const [reference, setReference] = useState('');
@@ -95,7 +87,6 @@ export function Dictation({
   const [end, setEnd] = useState('');
 
   const submitting = useRef(false);
-  const aiCancelRef = useRef({ cancelled: false });
   const commandGesture = useRef<{ used: boolean } | null>(null);
   const autoPlaySentence = useRef<string | null>(null);
   const [position, setPosition] = useState(0);
@@ -156,11 +147,9 @@ export function Dictation({
   }, [project?.dictation]);
 
   useEffect(() => {
-    onBusy(busy || aiPolishing);
+    onBusy(busy);
     return () => onBusy(false);
-  }, [busy, aiPolishing, onBusy]);
-
-  useEffect(() => subscribeAccount(setAccountState), []);
+  }, [busy, onBusy]);
 
   useEffect(() => {
     setShowComplete(false);
@@ -278,7 +267,7 @@ export function Dictation({
       } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
         submit();
-      } else if (e.key === 'Escape' && !showDrawer && !showSettings && !showAiPolish) {
+      } else if (e.key === 'Escape' && !showDrawer && !showSettings) {
         e.preventDefault();
         update({ revealed: !sentence.revealed, assisted: sentence.assisted || !sentence.revealed });
       }
@@ -481,103 +470,8 @@ export function Dictation({
       dictationBackups: backups.slice(0, -1),
     });
     setWrongOnly(false);
-    setShowAiPolish(false);
     setShowSettings(false);
-    setStatus('已还原精校前的字幕版本');
-  };
-
-  const runAiPolish = async (scope: 'current' | 'all') => {
-    if (!project.dictation || !items.length || aiPolishing || busy) return;
-    if (!polishFixText && !polishAddZh) {
-      setError('请至少勾选「修正英文文本」或「生成中文译文」中的一项。');
-      return;
-    }
-    const targets = scope === 'current' ? (sentence ? [sentence] : []) : items;
-    if (!targets.length) return;
-
-    stop();
-    setError('');
-    setShowAiPolish(false);
-    setShowSettings(false);
-    setAiPolishing(true);
-    aiCancelRef.current = { cancelled: false };
-    setStatus(scope === 'current' ? '正在 AI 精校当前句…' : `正在 AI 精校全篇（共 ${targets.length} 句）…`);
-
-    try {
-      const res = await proofreadDictationSentences(
-        targets.map((s) => ({ id: s.id, text: s.text, translation: s.translation })),
-        {
-          fixText: polishFixText,
-          addTranslation: polishAddZh,
-          materialTitle: shortTitle || project.name,
-          signal: aiCancelRef.current,
-          onProgress: (done, total, bIdx, bTotal) => {
-            setStatus(
-              scope === 'current'
-                ? '正在 AI 精校当前句…'
-                : `正在 AI 精校字幕（第 ${bIdx}/${bTotal} 批，${done}/${total} 句）…`,
-            );
-          },
-        },
-      );
-
-      if (aiCancelRef.current.cancelled) {
-        setStatus('已取消 AI 精校（原字幕未改动）');
-        return;
-      }
-
-      const currentProj = useProjectStore.getState().project;
-      if (!currentProj?.dictation || currentProj.id !== project.id) return;
-
-      const currentItems = currentProj.dictation.sentences;
-      const nextSentences = currentItems.map((s) => {
-        const patch = res.updates.get(s.id);
-        if (!patch) return s;
-        return {
-          ...s,
-          text: patch.text !== undefined ? patch.text : s.text,
-          translation: patch.translation !== undefined ? patch.translation : s.translation,
-        };
-      });
-
-      const baseSource = (currentProj.dictation.source || '本机离线识别').replace(/ · AI 精校$/, '');
-      updateProject({
-        dictationBackups: [...(currentProj.dictationBackups || []), currentProj.dictation].slice(-3),
-        dictation: {
-          ...currentProj.dictation,
-          sentences: nextSentences,
-          aiPolished: true,
-          source: `${baseSource} · AI 精校`,
-        },
-      });
-
-      if (polishAddZh && !showTranslation) {
-        setShowTranslation(true);
-        try {
-          localStorage.setItem('aboboo-dict-show-zh', '1');
-        } catch {}
-      }
-
-      if (scope === 'current') {
-        setStatus(
-          `第 ${index + 1} 句 AI 精校完成（修正 ${res.changedCount} 处 · 译文 ${res.translatedCount} 句）`,
-        );
-      } else {
-        setStatus(
-          `全篇 AI 精校完成：共优化 ${res.changedCount} 句文本，生成 ${res.translatedCount} 句中文译文（已备份原版，可随时还原）`,
-        );
-      }
-    } catch (e) {
-      const msg = String(e);
-      if (aiCancelRef.current.cancelled || msg.includes('已取消')) {
-        setStatus('已取消 AI 精校（原字幕未改动）');
-      } else {
-        setError('AI 精校失败：' + msg);
-        setStatus('');
-      }
-    } finally {
-      setAiPolishing(false);
-    }
+    setStatus('已还原上一版字幕');
   };
 
   const favoriteSentence = () => {
@@ -776,27 +670,11 @@ export function Dictation({
           {items.length > 0 && (
             <button
               type="button"
-              className={`dict-slow-btn dict-ai-btn${showAiPolish || project.dictation?.aiPolished ? ' active' : ''}`}
-              disabled={busy}
-              title="AI 精校字幕与中文译文"
-              onClick={() => {
-                setShowDrawer(false);
-                setShowSettings(false);
-                setShowAiPolish((v) => !v);
-              }}
-            >
-              {aiPolishing ? '精校中…' : project.dictation?.aiPolished ? 'AI 已精校 ✓' : 'AI 精校'}
-            </button>
-          )}
-          {items.length > 0 && (
-            <button
-              type="button"
               className={`icon-btn${showDrawer ? ' active' : ''}`}
               title="全篇句子目录"
               aria-label="句子目录"
               onClick={() => {
                 setShowSettings(false);
-                setShowAiPolish(false);
                 setShowDrawer((d) => !d);
               }}
             >
@@ -810,7 +688,6 @@ export function Dictation({
             aria-label="精听设置"
             onClick={() => {
               setShowDrawer(false);
-              setShowAiPolish(false);
               setShowSettings((s) => !s);
             }}
           >
@@ -823,130 +700,14 @@ export function Dictation({
       {(status || error) && (
         <div
           className={error ? 'app-error' : 'corpus-banner'}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
           onClick={() => {
-            if (aiPolishing) return;
             setStatus('');
             setError('');
           }}
         >
           <span>{error || status}</span>
-          {aiPolishing && (
-            <button
-              type="button"
-              className="dict-slow-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                aiCancelRef.current.cancelled = true;
-                setStatus('正在取消 AI 精校…');
-              }}
-            >
-              取消精校
-            </button>
-          )}
         </div>
       )}
-
-      {/* AI Polish & Bilingual Subtitle Popover */}
-      {showAiPolish && items.length > 0 && (() => {
-        const speakCfg = loadSpeakState().config;
-        const usingOfficial = accountState.aiMode === 'pro_balance';
-        const channelLabel = usingOfficial
-          ? (accountState.user ? 'Lirio 云端服务' : '请先登录账号启用云端精校')
-          : `自填 API Key · ${speakCfg.textModel || 'deepseek-chat'}`;
-        const hasBackups = (project.dictationBackups?.length ?? 0) > 0;
-        const translatedInDoc = items.filter((s) => Boolean(s.translation?.trim())).length;
-
-        return (
-          <div className="corpus-popover dict-ai-popover">
-            <div className="corpus-popover-head">
-              <strong>字幕校对模式（本地 / AI 精校）</strong>
-              <button className="icon-btn" onClick={() => setShowAiPolish(false)} aria-label="关闭">
-                <IconClose size={14} />
-              </button>
-            </div>
-            <div className="dict-ai-meta">
-              <span className={`dict-ai-mode-pill${project.dictation?.aiPolished ? ' polished' : ''}`}>
-                {project.dictation?.aiPolished ? 'AI 已精校' : '离线字幕'}
-              </span>
-              <span className="dict-ai-source" title={project.dictation?.source || ''}>
-                {project.dictation?.source || '本机识别'}
-                {translatedInDoc > 0 ? ` · 含译文 ${translatedInDoc}/${items.length}` : ''}
-              </span>
-            </div>
-            <div className="dict-ai-channel">
-              <span>当前通道：{channelLabel}</span>
-              {onOpenAiSettings && (
-                <button
-                  type="button"
-                  className="link-inline-btn"
-                  onClick={() => {
-                    setShowAiPolish(false);
-                    onOpenAiSettings();
-                  }}
-                >
-                  切换 AI 设置
-                </button>
-              )}
-            </div>
-            <p className="dict-ai-note">
-              可按需修正识别错误并补全中文译文，精校前自动备份，随时可还原。
-            </p>
-            <div className="corpus-popover-checks dict-ai-checks">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={polishFixText}
-                  disabled={aiPolishing}
-                  onChange={(e) => setPolishFixText(e.target.checked)}
-                />
-                修正拼写、专有名词、大小写与标点
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={polishAddZh}
-                  disabled={aiPolishing}
-                  onChange={(e) => setPolishAddZh(e.target.checked)}
-                />
-                同步生成中文参考译文
-              </label>
-            </div>
-            <div className="dict-ai-actions">
-              <button
-                type="button"
-                disabled={busy || aiPolishing || !sentence}
-                onClick={() => void runAiPolish('current')}
-              >
-                精校当前句
-              </button>
-              <button
-                type="button"
-                className="primary"
-                disabled={busy || aiPolishing}
-                onClick={() => void runAiPolish('all')}
-              >
-                {aiPolishing ? '精校中…' : `全篇 AI 精校（${items.length} 句）`}
-              </button>
-              {aiPolishing && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    aiCancelRef.current.cancelled = true;
-                  }}
-                >
-                  取消精校
-                </button>
-              )}
-              {hasBackups && !aiPolishing && (
-                <button type="button" onClick={restorePreviousDictation}>
-                  还原上一版字幕
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Settings Popover */}
       {showSettings && (
@@ -1022,32 +783,21 @@ export function Dictation({
             </label>
           </div>
           <div className="corpus-popover-links">
-            <button disabled={busy || aiPolishing} onClick={() => void transcribe()}>
+            <button disabled={busy} onClick={() => void transcribe()}>
               {items.length ? '本地重提字幕' : '自动提取字幕'}
             </button>
-            {items.length > 0 && (
-              <button
-                disabled={busy || aiPolishing}
-                onClick={() => {
-                  setShowSettings(false);
-                  setShowAiPolish(true);
-                }}
-              >
-                AI 精校字幕
-              </button>
-            )}
             {(project.dictationBackups?.length ?? 0) > 0 && (
-              <button disabled={busy || aiPolishing} onClick={restorePreviousDictation}>
+              <button disabled={busy} onClick={restorePreviousDictation}>
                 还原上一版
               </button>
             )}
             {busy && <button onClick={() => invoke('cancel_transcription').catch(failure)}>取消</button>}
             {items.length > 0 && (
-              <button disabled={busy || aiPolishing} title="免重识别，1秒内按意群切长句、合并碎句" onClick={resegmentCurrent}>
+              <button disabled={busy} title="免重识别，1秒内按意群切长句、合并碎句" onClick={resegmentCurrent}>
                 智能重排分句
               </button>
             )}
-            <button disabled={busy || aiPolishing} onClick={() => importSubs().catch(failure)}>导入 SRT</button>
+            <button disabled={busy} onClick={() => importSubs().catch(failure)}>导入 SRT</button>
             {items.length > 0 && <button onClick={() => exportSubs().catch(failure)}>导出 SRT</button>}
             {sentence && (
               <>
