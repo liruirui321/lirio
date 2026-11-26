@@ -263,7 +263,14 @@ export function Dictation({
       } else if (!e.metaKey && !e.ctrlKey && !e.shiftKey && ((!e.altKey && !typing && e.code === 'Space') || (e.altKey && e.code === 'KeyP'))) {
         e.preventDefault();
         togglePlayback().catch(failure);
-      } else if (!e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.code === 'Tab' && (!typing || target === inputRef.current)) {
+      } else if (
+        !e.altKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.shiftKey &&
+        e.code === 'Tab' &&
+        (!typing || target === inputRef.current || slotRefs.current.includes(target as HTMLInputElement))
+      ) {
         e.preventDefault();
         play().catch(failure);
       } else if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'ArrowRight') {
@@ -365,8 +372,21 @@ export function Dictation({
     if (item) choose(item.i, direction > 0);
   };
 
+  const resetFeedbackForRetry = () => {
+    if (!sentence) return;
+    const changes: Partial<Sentence> = {};
+    if (sentence.revealed) changes.revealed = false;
+    if (sentence.submitted && !grade(sentence.text, gradedAnswer(sentence)).correct) {
+      changes.submitted = false;
+    }
+    if (Object.keys(changes).length > 0) {
+      update(changes);
+    }
+  };
+
   const play = async () => {
     if (!sentence) return;
+    resetFeedbackForRetry();
     stop();
     setError('');
     await audioEngine.playRange(original.id, segStart, segEnd, rate);
@@ -390,6 +410,7 @@ export function Dictation({
 
   const playSlow = async () => {
     if (!sentence) return;
+    resetFeedbackForRetry();
     stop();
     setError('');
     await audioEngine.playRange(original.id, segStart, segEnd, 0.75);
