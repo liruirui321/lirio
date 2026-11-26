@@ -25,10 +25,10 @@ interface TierDef {
 }
 
 const TIERS: TierDef[] = [
-  { id: 'L1', code: 'L1', title: '基础生活', subtitle: 'Part 1 日常对话 · 慢速精听', cefr: 'A2–B1' },
-  { id: 'L2', code: 'L2', title: '进阶叙事', subtitle: 'Part 2 场景独白 · 日常播客', cefr: 'B1–B2' },
-  { id: 'L3', code: 'L3', title: '高阶研讨', subtitle: 'Part 3 学术讨论 · 机经考点', cefr: 'B2–C1' },
-  { id: 'L4', code: 'L4', title: '专业讲座', subtitle: 'Part 4 学术独白 · 深度播客', cefr: 'C1–C2' },
+  { id: 'L1', code: 'L1', title: '初学者', subtitle: '零基础 / 初中 · 慢速清晰短句', cefr: 'A1–A2' },
+  { id: 'L2', code: 'L2', title: '高中生', subtitle: '高中 / 四级 · 慢速日常话题', cefr: 'A2–B1' },
+  { id: 'L3', code: 'L3', title: '大学生', subtitle: '六级 / 雅思 Part 1–2 · 日常原声', cefr: 'B1–B2' },
+  { id: 'L4', code: 'L4', title: '高阶进阶', subtitle: '雅思 Part 3–4 · 学术讲座与深度播客', cefr: 'C1–C2' },
 ];
 
 interface AwesomePodcast {
@@ -42,45 +42,80 @@ interface AwesomePodcast {
 // Curated from github.com/yvoronoy/awesome-english (Listening > Podcasts by level)
 const AWESOME_PODCASTS: AwesomePodcast[] = [
   {
-    slug: 'bbc-6min',
+    slug: 'voa-everyday-grammar',
     tier: 'L1',
+    name: 'VOA Everyday Grammar',
+    desc: '美音慢速基础语法与短句精听，语速清晰缓慢，适合零基础与初学者入门',
+    rssUrl: 'https://learningenglish.voanews.com/podcast/?zoneId=4456',
+  },
+  {
+    slug: 'bbc-6min-grammar',
+    tier: 'L1',
+    name: 'BBC 6 Minute Grammar',
+    desc: '6 分钟英音慢速基础句型精讲，结构清晰、短句好听写',
+    rssUrl: 'https://podcasts.files.bbci.co.uk/p02pc9s1.rss',
+  },
+  {
+    slug: 'bbc-vocab',
+    tier: 'L1',
+    name: 'BBC Learning English Vocabulary',
+    desc: '慢速高频核心词与生活例句，初学者积累听觉词汇首选',
+    rssUrl: 'https://podcasts.files.bbci.co.uk/p02pc9xz.rss',
+  },
+  {
+    slug: 'voa-as-it-is',
+    tier: 'L2',
+    name: 'VOA Learning English (As It Is)',
+    desc: '经典美音慢速新闻与生活故事（约 100 词/分），高中生与四级过渡必备',
+    rssUrl: 'https://learningenglish.voanews.com/podcast/?zoneId=3521',
+  },
+  {
+    slug: 'bbc-6min',
+    tier: 'L2',
     name: 'BBC 6 Minute English',
-    desc: '经典 6 分钟英音慢速精听，每周聚焦一个生活与社会话题，结构清晰',
+    desc: '经典 6 分钟英音生活与社会话题，适合高中与四级进阶精听',
     rssUrl: 'https://podcasts.files.bbci.co.uk/p02pc9tn.rss',
   },
   {
-    slug: 'all-ears-english',
+    slug: 'bbc-ew-speak',
     tier: 'L2',
+    name: 'BBC The English We Speak',
+    desc: '3 分钟地道日常短语与情景小对话，轻巧易跟听',
+    rssUrl: 'https://podcasts.files.bbci.co.uk/p02pc9zn.rss',
+  },
+  {
+    slug: 'all-ears-english',
+    tier: 'L3',
     name: 'All Ears English',
-    desc: '自然美式口语对话与文化习语，适合从应试过渡到真实语速',
+    desc: '自然美式日常对话与文化习语，衔接大学六级、雅思与真实语速',
     rssUrl: 'https://feeds.megaphone.fm/allearsenglish',
   },
   {
     slug: 'lukes-english',
-    tier: 'L2',
+    tier: 'L3',
     name: "Luke's English Podcast",
-    desc: '英国喜剧演员兼英语老师主持，英音自然幽默，词汇表达丰富',
+    desc: '英国老师兼喜剧演员主持，英音自然幽默，表达地道丰富',
     rssUrl: 'https://audioboom.com/channels/4997220.rss',
   },
   {
-    slug: 'curious-minds',
+    slug: 'npr-news',
     tier: 'L3',
-    name: 'English Learning for Curious Minds',
-    desc: '历史、哲学、科技与文化深度话题，语速适中、逻辑严密',
-    rssUrl: 'https://feeds.transistor.fm/english-learning-for-curious-minds',
+    name: 'NPR News Now',
+    desc: 'awesome-english 首页精选，5 分钟标准美音新闻快报，大学生与雅思基础精听标配',
+    rssUrl: 'https://feeds.npr.org/500005/podcast.xml',
   },
   {
     slug: 'this-american-life',
     tier: 'L4',
     name: 'This American Life',
-    desc: '美国深度纪实叙事广播，真实连读、多口音与复杂叙事结构',
+    desc: 'awesome-english 高阶精选，美国深度纪实叙事广播，真实连读、多口音与复杂叙事',
     rssUrl: 'https://www.thisamericanlife.org/podcast/rss.xml',
   },
   {
     slug: 'hard-fork',
     tier: 'L4',
     name: 'Hard Fork (NYT Tech)',
-    desc: '纽约时报科技与 AI 前沿对谈播客，高语速真实访谈精听挑战',
+    desc: 'awesome-english 首页精选，纽约时报科技与 AI 前沿高语速访谈精听挑战',
     rssUrl: 'https://feeds.simplecast.com/l2i9YnTd',
   },
 ];
@@ -97,10 +132,32 @@ function classifyMaterial(name: string) {
   const explicitTier = name.match(/^\[(L[1-4])\]/i)?.[1]?.toUpperCase() as Exclude<TierId, 'all'> | undefined;
   let tier: Exclude<TierId, 'all'> = explicitTier || 'L2';
   if (!explicitTier) {
-    if (part === '1' || /bbc|6\s*min|beginner|esl/i.test(name)) tier = 'L1';
-    else if (part === '2' || /all\s*ears|luke|culips/i.test(name)) tier = 'L2';
-    else if (part === '3' || (kind === 'recalled' && !part) || /curious/i.test(name)) tier = 'L3';
-    else if (part === '4' || /american\s*life|hard\s*fork|lecture|ted/i.test(name)) tier = 'L4';
+    if (
+      /everyday\s*grammar|6\s*minute\s*grammar|learning\s*english\s*vocab|beginner|elementary|esl|零基础|初级|初中|入门|新概念\s*[1一]/i.test(
+        name,
+      )
+    ) {
+      tier = 'L1';
+    } else if (
+      /6\s*min(?:ute)?\s*english|english\s*we\s*speak|as\s*it\s*is|voa|culips|高中|高考|四级|cet-?4|新概念\s*[2二]|intermediate/i.test(
+        name,
+      )
+    ) {
+      tier = 'L2';
+    } else if (
+      part === '1' ||
+      part === '2' ||
+      /all\s*ears|luke|npr|cnn\s*10|六级|cet-?6|考研|托福|toefl|新概念\s*[3三]/i.test(name)
+    ) {
+      tier = 'L3';
+    } else if (
+      part === '3' ||
+      part === '4' ||
+      kind === 'recalled' ||
+      /american\s*life|hard\s*fork|curious|lecture|ted|专八|tem-?8|高阶|新概念\s*[4四]/i.test(name)
+    ) {
+      tier = 'L4';
+    }
   }
 
   return {
@@ -249,7 +306,7 @@ export function MaterialLibrary({
       <header className="library-head">
         <div>
           <h1>阶梯精听库</h1>
-          <p>按难度阶梯循序精听，所有音频与拓展播客均优先存储于外接 SSD。</p>
+          <p>按听写能力分为四级循序精听（初学者 → 高中生 → 大学生 → 高阶进阶），音频自动保存在你的数据目录中。</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div className="corpus-tabs">
@@ -380,7 +437,7 @@ export function MaterialLibrary({
           {loading ? (
             <p className="corpus-empty">正在读取材料…</p>
           ) : !items.length ? (
-            <p className="corpus-empty">材料库为空。点击上方打开音频，或去「拓展播客」一键拉取最新一期到 SSD。</p>
+            <p className="corpus-empty">材料库为空。点击上方导入音频，或切到「拓展播客」一键拉取对应难度的分级播客开始精听。</p>
           ) : !shown.length ? (
             <p className="corpus-empty">当前阶梯筛选下没有匹配的材料。</p>
           ) : (
@@ -439,7 +496,7 @@ export function MaterialLibrary({
                   type="button"
                   className="icon-btn primary"
                   disabled={!!downloadingSlug}
-                  title="拉取最新一集 MP3 到外接 SSD 并直接打开精听"
+                  title="拉取最新一集 MP3 到数据目录并直接打开精听"
                   aria-label={`下载 ${pod.name} 最新一集`}
                   onClick={() => handleDownloadPodcast(pod)}
                 >
