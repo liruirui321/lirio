@@ -809,19 +809,22 @@ export async function synthesizeSpeech(
   };
 
   if (acct.aiMode === 'pro_balance') {
+    const cloudVoice = voiceOverride?.edgeVoice || voiceOverride?.openaiVoice || config.speechVoice;
     if (acct.proCloudSpeech) {
       try {
-        return await proxyTts(
-          text,
-          effectiveAccent,
-          voiceOverride?.openaiVoice || config.speechVoice,
-          '云端语音合成',
-        );
+        return await proxyTts(text, effectiveAccent, cloudVoice, '云端语音合成');
       } catch (err) {
         console.warn('[TTS] pro cloud speech failed, falling back to free local/Edge TTS:', err);
       }
     }
-    return invokeFreeTts();
+    try {
+      return await invokeFreeTts();
+    } catch (localErr) {
+      if (acct.token) {
+        return await proxyTts(text, effectiveAccent, cloudVoice, '云端语音合成');
+      }
+      throw localErr;
+    }
   }
 
   const apiKey = (config.speechApiKey || '').trim();

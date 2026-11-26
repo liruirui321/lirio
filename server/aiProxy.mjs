@@ -1,8 +1,9 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import readline from 'node:readline';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -219,33 +220,189 @@ const NEURAL_VOICE_BY_ACCENT = {
   in: 'en-IN-NeerjaNeural',
 };
 
-async function synthLocalNeuralEdgeTts(text, accent) {
-  const voice = NEURAL_VOICE_BY_ACCENT[accent] || NEURAL_VOICE_BY_ACCENT.uk;
-  const outPath = path.join(os.tmpdir(), `lirio-pro-tts-${randomUUID()}.mp3`);
-  const script = `
-import sys, asyncio, edge_tts
+const NEURAL_VOICE_ALIAS = {
+  shimmer: 'en-US-AvaMultilingualNeural',
+  nova: 'en-US-AvaMultilingualNeural',
+  alloy: 'en-US-AvaMultilingualNeural',
+  claire: 'en-US-AvaMultilingualNeural',
+  echo: 'en-US-AndrewMultilingualNeural',
+  onyx: 'en-US-AndrewMultilingualNeural',
+  ash: 'en-US-AndrewMultilingualNeural',
+  alex: 'en-US-AndrewMultilingualNeural',
+  benjamin: 'en-US-AndrewMultilingualNeural',
+  fable: 'en-GB-RyanNeural',
+  ballad: 'en-GB-RyanNeural',
+  charles: 'en-GB-RyanNeural',
+  sage: 'en-GB-SoniaNeural',
+  anna: 'en-GB-SoniaNeural',
+};
+
+function resolveNeuralEdgeVoice(accent, voice) {
+  const raw = String(voice || '').trim();
+  if (/^[a-z]{2,3}-[A-Z]{2}-[A-Za-z0-9]+Neural$/.test(raw)) {
+    return raw;
+  }
+  const alias = NEURAL_VOICE_ALIAS[raw.toLowerCase()];
+  if (alias) return alias;
+  return NEURAL_VOICE_BY_ACCENT[accent] || NEURAL_VOICE_BY_ACCENT.uk;
+}
+
+const EDGE_WORKER_PY = `
+import sys, json, asyncio, edge_tts
+
+async def synth(text, voice, out_path):
+    comm = edge_tts.Communicate(text, voice)
+    await comm.save(out_path)
+
 async def main():
-    comm = edge_tts.Communicate(sys.argv[1], sys.argv[2])
-    await comm.save(sys.argv[3])
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+            await synth(req["text"], req["voice"], req["out"])
+            print("OK", flush=True)
+        except Exception as e:
+            print("ERR:" + str(e).replace("\\n", " "), flush=True)
+
 asyncio.run(main())
 `;
+
+function resolveEdgePythonBin() {
+  const custom = (process.env.LIRIO_EDGE_TTS_PYTHON || '').trim();
+  if (custom) return custom;
+  const venvPy = '/opt/lirio/venv/bin/python3';
+  if (fs.existsSync(venvPy)) return venvPy;
+  return 'python3';
+}
+
+let edgeWorker = null;
+let edgeQueue = Promise.resolve();
+
+function killEdgeWorker() {
+  if (!edgeWorker) return;
   try {
-    await execFileAsync('python3', ['-c', script, text, voice, outPath], { timeout: 25000 });
-    const bytes = fs.readFileSync(outPath);
-    if (bytes.length < 200) throw new Error('语音合成输出为空');
-    return {
-      provider: 'lirio-neural',
-      model: 'lirio-tts-neural',
-      voice,
-      chars: text.length,
-      mime: 'audio/mpeg',
-      audioBase64: bytes.toString('base64'),
-    };
-  } finally {
-    try {
-      if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
-    } catch {}
+    edgeWorker.rl?.close();
+  } catch {}
+  try {
+    edgeWorker.proc?.kill('SIGKILL');
+  } catch {}
+  edgeWorker = null;
+}
+
+function ensureEdgeWorker() {
+  if (edgeWorker && !edgeWorker.proc.killed && edgeWorker.proc.exitCode === null) {
+    return edgeWorker;
   }
+  const pyBin = resolveEdgePythonBin();
+  const proc = spawn(pyBin, ['-u', '-c', EDGE_WORKER_PY], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  proc.unref();
+  proc.stdin?.unref?.();
+  proc.stdout?.unref?.();
+  proc.stderr?.unref?.();
+
+  const rl = readline.createInterface({ input: proc.stdout });
+  const waiters = [];
+  let stderrTail = '';
+
+  proc.stderr.on('data', (chunk) => {
+    stderrTail = (stderrTail + chunk.toString('utf8')).slice(-600);
+  });
+
+  rl.on('line', (line) => {
+    const w = waiters.shift();
+    if (w) w.resolve(String(line || '').trim());
+  });
+
+  const failAll = (msg) => {
+    while (waiters.length) {
+      const w = waiters.shift();
+      w.reject(new Error(msg));
+    }
+    if (edgeWorker && edgeWorker.proc === proc) {
+      edgeWorker = null;
+    }
+  };
+
+  proc.on('error', (err) => failAll(`Edge TTS worker error: ${err.message}`));
+  proc.on('close', (code) => {
+    const detail = stderrTail.trim();
+    failAll(`Edge TTS worker closed (${code ?? 'signal'})${detail ? `: ${detail}` : ''}`);
+  });
+
+  edgeWorker = {
+    proc,
+    rl,
+    request(payload, timeoutMs = 12000) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          const idx = waiters.indexOf(entry);
+          if (idx >= 0) waiters.splice(idx, 1);
+          killEdgeWorker();
+          reject(new Error('Edge TTS 请求超时'));
+        }, timeoutMs);
+        timer.unref?.();
+
+        const entry = {
+          resolve: (val) => {
+            clearTimeout(timer);
+            resolve(val);
+          },
+          reject: (err) => {
+            clearTimeout(timer);
+            reject(err);
+          },
+        };
+        waiters.push(entry);
+        try {
+          proc.stdin.write(JSON.stringify(payload) + '\n');
+        } catch (err) {
+          const idx = waiters.indexOf(entry);
+          if (idx >= 0) waiters.splice(idx, 1);
+          clearTimeout(timer);
+          killEdgeWorker();
+          reject(err);
+        }
+      });
+    },
+  };
+  return edgeWorker;
+}
+
+function synthLocalNeuralEdgeTts(text, accent, requestedVoice) {
+  const task = edgeQueue.then(async () => {
+    const voice = resolveNeuralEdgeVoice(accent, requestedVoice);
+    const outPath = path.join(os.tmpdir(), `lirio-pro-tts-${randomUUID()}.mp3`);
+    try {
+      const worker = ensureEdgeWorker();
+      const resp = await worker.request({ text, voice, out: outPath }, 12000);
+      if (resp !== 'OK') {
+        throw new Error(resp.startsWith('ERR:') ? resp.slice(4) : `Edge TTS 异常响应: ${resp}`);
+      }
+      const bytes = fs.readFileSync(outPath);
+      if (bytes.length < 300) throw new Error('语音合成输出为空');
+      return {
+        provider: 'lirio-neural',
+        model: 'lirio-tts-neural',
+        voice,
+        chars: Buffer.byteLength(text, 'utf8'),
+        mime: 'audio/mpeg',
+        audioBase64: bytes.toString('base64'),
+      };
+    } catch (err) {
+      killEdgeWorker();
+      throw err;
+    } finally {
+      try {
+        if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+      } catch {}
+    }
+  });
+  edgeQueue = task.catch(() => {});
+  return task;
 }
 
 const COSYVOICE_VOICE_MAP = {
@@ -289,16 +446,23 @@ export async function forwardTts({ text, accent = 'uk', voice }) {
     return {
       provider: 'lirio-neural',
       model: 'lirio-tts-neural',
-      voice: NEURAL_VOICE_BY_ACCENT[accent] || chosenVoice,
-      chars: cleanText.length,
+      voice: resolveNeuralEdgeVoice(accent, chosenVoice),
+      chars: Buffer.byteLength(cleanText, 'utf8'),
       mime: 'audio/mpeg',
       audioBase64: stub.toString('base64'),
     };
   }
 
   const speechKey = (process.env.LIRIO_SPEECH_API_KEY || '').trim();
-  if (!speechKey) {
-    return synthLocalNeuralEdgeTts(cleanText, accent);
+  const preferEdge = process.env.LIRIO_TTS_PREFER_EDGE !== '0';
+
+  if (preferEdge || !speechKey) {
+    try {
+      return await synthLocalNeuralEdgeTts(cleanText, accent, chosenVoice);
+    } catch (edgeErr) {
+      if (!speechKey) throw edgeErr;
+      console.warn('[TTS] Edge Neural failed, falling back to cloud API:', edgeErr?.message || edgeErr);
+    }
   }
 
   const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
