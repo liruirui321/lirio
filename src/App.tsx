@@ -1420,66 +1420,47 @@ export default function App() {
               </div>
             )}
 
-            <div className="import-modal-actions">
-              {importBusy ? (
-                <button
-                  type="button"
-                  className="icon-action-btn danger"
-                  title="取消处理"
-                  aria-label="取消处理"
-                  onClick={() => {
-                    importCancelRef.current.cancelled = true;
-                    void invoke('cancel_transcription').catch(() => {});
-                  }}
-                >
-                  <IconStop size={17} />
-                </button>
-              ) : preparedImports.length > 0 ? (
-                <>
+            {(importBusy || preparedImports.length > 0) && (
+              <div className="import-modal-actions">
+                {importBusy ? (
                   <button
                     type="button"
-                    className="icon-action-btn"
-                    disabled={importSaving}
-                    title="放弃本次导入"
-                    aria-label="放弃"
-                    onClick={handleDiscardPreparedImports}
+                    className="icon-action-btn danger"
+                    title="取消处理"
+                    aria-label="取消处理"
+                    onClick={() => {
+                      importCancelRef.current.cancelled = true;
+                      void invoke('cancel_transcription').catch(() => {});
+                    }}
                   >
-                    <IconTrash size={17} />
+                    <IconStop size={17} />
                   </button>
-                  <button
-                    type="button"
-                    className="icon-action-btn primary"
-                    disabled={importSaving}
-                    title={importSaving ? '正在入库…' : '确认入库并开始听写'}
-                    aria-label="确认入库并开始听写"
-                    onClick={() => void handleConfirmPreparedImports()}
-                  >
-                    <IconCheck size={19} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="icon-action-btn"
-                    title="关闭"
-                    aria-label="关闭"
-                    onClick={handleDiscardPreparedImports}
-                  >
-                    <IconClose size={17} />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-action-btn primary"
-                    title="选择本地音频并自动制作精听材料"
-                    aria-label="选择音频并自动生成精听材料"
-                    onClick={() => void handleBatchImportAudio()}
-                  >
-                    <IconUpload size={19} />
-                  </button>
-                </>
-              )}
-            </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="icon-action-btn"
+                      disabled={importSaving}
+                      title="放弃本次导入"
+                      aria-label="放弃"
+                      onClick={handleDiscardPreparedImports}
+                    >
+                      <IconTrash size={17} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-action-btn primary"
+                      disabled={importSaving}
+                      title={importSaving ? '正在入库…' : '确认入库并开始听写'}
+                      aria-label="确认入库并开始听写"
+                      onClick={() => void handleConfirmPreparedImports()}
+                    >
+                      <IconCheck size={19} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
