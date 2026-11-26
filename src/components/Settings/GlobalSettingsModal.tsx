@@ -6,45 +6,39 @@ import { open as openExternalUrl } from '@tauri-apps/plugin-shell';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import type { Accent } from '../../services/corpusService';
 import {
-  createStoreOrder,
-  evaluateLocalAccess,
-  fetchBillingLedger,
+  fetchCommunityConfig,
   fetchMyFeedbacks,
-  fetchStoreConfig,
-  fetchStoreOrder,
-  formatPoints,
   getAccountState,
-  getDeviceIdentity,
-  getStoreWebsiteUrl,
   loginAccount,
   logoutAccount,
-  redeemCode,
+  pullCloudSyncSnapshot,
   refreshAccountMe,
   registerAccount,
-  removeBoundDevice,
-  simulatePayStoreOrder,
   submitFeedback,
   subscribeAccount,
   updateAccountState,
   validateAccountId,
   validatePassword,
   type AccountState,
+  type CommunityConfig,
   type FeedbackCategory,
   type FeedbackItem,
-  type LedgerEntry,
-  type StoreConfig,
-  type StoreOrder,
 } from '../../services/accountService';
 import {
+  applySyncedStateJson,
   exportAllStateJson,
   flushAllStateToDisk,
   forceReloadStateFromDisk,
   formatBytes,
+  getLastCloudSyncAt,
   getStorageInfo,
   importAllStateJson,
   openStorageDir,
   resetStorageDir,
+  restoreStateFromCloudIfLocalEmpty,
+  setLastCloudSyncAt,
   setStorageDir,
+  syncStateToCloudNow,
   type StorageInfo,
 } from '../../services/stateSync';
 import {
@@ -69,7 +63,7 @@ import {
   subscribeUpdateState,
   type UpdateState,
 } from '../../services/updaterService';
-import { IconClose, IconEye, IconReplay, IconUpload } from '../Icons';
+import { IconClose, IconEye, IconUpload } from '../Icons';
 
 export type GlobalSettingsTab = 'ai' | 'data' | 'feedback';
 
@@ -129,11 +123,6 @@ const ACCENT_OPTS: SelectOption[] = [
   { value: 'in', label: '印音 IN' },
 ];
 
-function formatLedgerUsage(entry: LedgerEntry): string {
-  if (entry.kind !== 'usage') return entry.note || '';
-  return '';
-}
-
 export function GlobalSettingsModal({
   open: isOpen,
   initialTab = 'ai',
@@ -156,14 +145,10 @@ export function GlobalSettingsModal({
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
-  const [redeemInput, setRedeemInput] = useState('');
-  const [showBuyPanel, setShowBuyPanel] = useState(false);
-  const [storeConfig, setStoreConfig] = useState<StoreConfig | null>(null);
-  const [storeBusy, setStoreBusy] = useState(false);
-  const [buyChannel, setBuyChannel] = useState<'wechat' | 'alipay'>('wechat');
-  const [activeOrder, setActiveOrder] = useState<StoreOrder | null>(null);
-  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
-  const [ledgerBusy, setLedgerBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(() => getLastCloudSyncAt());
+  const [communityCfg, setCommunityCfg] = useState<CommunityConfig | null>(null);
+  const [copiedQq, setCopiedQq] = useState(false);
 
   const [showTextKey, setShowTextKey] = useState(false);
   const [showSpeechKey, setShowSpeechKey] = useState(false);
@@ -209,16 +194,9 @@ export function GlobalSettingsModal({
     setStatusMsg('');
     setErrorMsg('');
     setTestResult(null);
+    setLastSyncAt(getLastCloudSyncAt());
     if (acct.token) {
-      setLedgerBusy(true);
-      refreshAccountMe()
-        .then((res) => {
-          if (res?.ledger) setLedger(res.ledger);
-        })
-        .catch(() => {})
-        .finally(() => setLedgerBusy(false));
-    } else {
-      setLedger([]);
+      refreshAccountMe().catch(() => {});
     }
     const unsubSpeak = subscribeSpeakState((next) => setPersisted(next));
     const unsubAcct = subscribeAccount((next) => setAccount(next));
@@ -249,21 +227,11 @@ export function GlobalSettingsModal({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || !showBuyPanel || !activeOrder || activeOrder.status !== 'pending') return;
-    const emailForOrder = activeOrder.buyerEmail || account.user?.email || '';
-    if (!emailForOrder) return;
-    const timer = window.setInterval(() => {
-      fetchStoreOrder(activeOrder.orderNo, emailForOrder)
-        .then((res) => {
-          if (res.order) setActiveOrder(res.order);
-        })
-        .catch(() => {});
-    }, 2500);
-    return () => window.clearInterval(timer);
-  }, [isOpen, showBuyPanel, activeOrder, account.user?.email]);
-
-  useEffect(() => {
-    if (!isOpen || tab !== 'feedback' || !account.token) return;
+    if (!isOpen || tab !== 'feedback') return;
+    fetchCommunityConfig()
+      .then((cfg) => setCommunityCfg(cfg))
+      .catch(() => {});
+    if (!account.token) return;
     fetchMyFeedbacks()
       .then((res) => {
         setFbList(res.feedbacks || []);
@@ -295,7 +263,7 @@ export function GlobalSettingsModal({
   const handleActivateAiMode = (mode: 'pro_balance' | 'byok') => {
     setErrorMsg('');
     updateAccountState({ aiMode: mode });
-    setStatusMsg(mode === 'pro_balance' ? '已启用官方 API' : '已启用自配置 API');
+    setStatusMsg(mode === 'pro_balance' ? '已启用云端服务' : '已启用自配置');
   };
 
   const handleAuthSubmit = async () => {
@@ -317,13 +285,22 @@ export function GlobalSettingsModal({
     setErrorMsg('');
     setStatusMsg('');
     try {
-      const res =
-        authMode === 'register'
-          ? await registerAccount({ email: email.trim(), password, name: nickname.trim() })
-          : await loginAccount({ email: email.trim(), password });
-      setLedger(res.ledger || []);
+      if (authMode === 'register') {
+        await registerAccount({ email: email.trim(), password, name: nickname.trim() });
+      } else {
+        await loginAccount({ email: email.trim(), password });
+      }
       setPassword('');
-      setStatusMsg(authMode === 'register' ? `已赠 ${formatPoints(res.user.balanceUnits)}` : '已登录');
+      const restored = await restoreStateFromCloudIfLocalEmpty();
+      setLastSyncAt(getLastCloudSyncAt());
+      if (restored) {
+        setStatusMsg('已登录并从云端恢复学习记录，正在刷新…');
+        setTimeout(() => window.location.reload(), 650);
+      } else {
+        await syncStateToCloudNow();
+        setLastSyncAt(getLastCloudSyncAt());
+        setStatusMsg(authMode === 'register' ? '已注册并开启云端同步' : '已登录');
+      }
     } catch (e) {
       setErrorMsg(String(e));
     } finally {
@@ -331,26 +308,45 @@ export function GlobalSettingsModal({
     }
   };
 
-  const handleRedeemCode = async (overrideCode?: string) => {
-    const code = (overrideCode ?? redeemInput).trim();
-    if (!code) {
-      setErrorMsg('请输入卡密兑换码。');
-      return;
-    }
-    setAuthBusy(true);
+  const handlePushCloudSync = async () => {
+    setSyncBusy(true);
     setErrorMsg('');
     setStatusMsg('');
     try {
-      const res = await redeemCode(code);
-      setLedger(res.ledger || []);
-      if (!overrideCode) setRedeemInput('');
-      setActiveOrder(null);
-      setShowBuyPanel(false);
-      setStatusMsg(`兑换成功 +${formatPoints(res.entry.amountUnits)}`);
+      const snap = await syncStateToCloudNow();
+      if (!snap) throw new Error('云端同步失败，请检查网络连接。');
+      setLastSyncAt(snap.updatedAt);
+      setStatusMsg(`已同步到云端（${formatBytes(snap.byteSize)}）`);
     } catch (e) {
       setErrorMsg(String(e));
     } finally {
-      setAuthBusy(false);
+      setSyncBusy(false);
+    }
+  };
+
+  const handlePullCloudSync = async () => {
+    setSyncBusy(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    try {
+      const snap = await pullCloudSyncSnapshot();
+      if (!snap?.payload) {
+        setStatusMsg('云端暂无备份记录');
+        return;
+      }
+      const restored = applySyncedStateJson(snap.payload);
+      setLastCloudSyncAt(snap.updatedAt);
+      setLastSyncAt(snap.updatedAt);
+      if (restored > 0) {
+        setStatusMsg('已从云端恢复本地记录，即将刷新…');
+        setTimeout(() => window.location.reload(), 650);
+      } else {
+        setStatusMsg('云端备份为空');
+      }
+    } catch (e) {
+      setErrorMsg(String(e));
+    } finally {
+      setSyncBusy(false);
     }
   };
 
@@ -359,73 +355,6 @@ export function GlobalSettingsModal({
       await openExternalUrl(url);
     } catch {
       window.open(url, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  const handleToggleBuyPanel = async () => {
-    const next = !showBuyPanel;
-    setShowBuyPanel(next);
-    setErrorMsg('');
-    if (next && !storeConfig) {
-      setStoreBusy(true);
-      try {
-        const cfg = await fetchStoreConfig();
-        setStoreConfig(cfg);
-      } catch (e) {
-        setErrorMsg(String(e));
-      } finally {
-        setStoreBusy(false);
-      }
-    }
-  };
-
-  const handleCreateOrder = async (planId: string) => {
-    const buyerEmail = account.user?.email || '';
-    if (!buyerEmail) {
-      setErrorMsg('请先登录账号再下单。');
-      return;
-    }
-    setStoreBusy(true);
-    setErrorMsg('');
-    try {
-      const res = await createStoreOrder({ planId, buyerEmail, payChannel: buyChannel });
-      setActiveOrder(res.order);
-      setStoreConfig((prev) => ({
-        presets: prev?.presets || [],
-        settings: res.settings,
-        sandboxPayEnabled: res.sandboxPayEnabled,
-      }));
-    } catch (e) {
-      setErrorMsg(String(e));
-    } finally {
-      setStoreBusy(false);
-    }
-  };
-
-  const handleSimulatePay = async () => {
-    if (!activeOrder) return;
-    setStoreBusy(true);
-    setErrorMsg('');
-    try {
-      const res = await simulatePayStoreOrder(activeOrder.orderNo, activeOrder.buyerEmail);
-      setActiveOrder(res.order);
-    } catch (e) {
-      setErrorMsg(String(e));
-    } finally {
-      setStoreBusy(false);
-    }
-  };
-
-  const handleRefreshLedger = async () => {
-    setLedgerBusy(true);
-    setErrorMsg('');
-    try {
-      const res = await fetchBillingLedger(50);
-      setLedger(res.ledger || []);
-    } catch (e) {
-      setErrorMsg(String(e));
-    } finally {
-      setLedgerBusy(false);
     }
   };
 
@@ -668,7 +597,7 @@ export function GlobalSettingsModal({
                 className={tab === 'ai' ? 'active' : ''}
                 onClick={() => setTab('ai')}
               >
-                AI
+                账号
               </button>
               <button
                 type="button"
@@ -682,7 +611,7 @@ export function GlobalSettingsModal({
                 className={tab === 'feedback' ? 'active' : ''}
                 onClick={() => setTab('feedback')}
               >
-                反馈
+                社区
               </button>
             </div>
           </div>
@@ -712,7 +641,7 @@ export function GlobalSettingsModal({
                 className={aiViewMode === 'pro_balance' ? 'active' : ''}
                 onClick={() => handleViewAiMode('pro_balance')}
               >
-                <span>官方 API</span>
+                <span>云端服务</span>
                 {account.aiMode === 'pro_balance' && (
                   <span className="ai-active-dot" title="当前生效通道" aria-label="当前生效" />
                 )}
@@ -731,7 +660,7 @@ export function GlobalSettingsModal({
 
             {aiViewMode !== account.aiMode && (
               <div className="ai-channel-switch-bar">
-                <span>当前生效：{account.aiMode === 'pro_balance' ? '官方 API' : '自配置'}</span>
+                <span>当前生效：{account.aiMode === 'pro_balance' ? '云端服务' : '自配置'}</span>
                 {aiViewMode === 'pro_balance' ? (
                   <button
                     type="button"
@@ -739,7 +668,7 @@ export function GlobalSettingsModal({
                     disabled={!account.user}
                     onClick={() => handleActivateAiMode('pro_balance')}
                   >
-                    {account.user ? '启用官方 API' : '登录后可启用'}
+                    {account.user ? '启用云端服务' : '登录后可启用'}
                   </button>
                 ) : (
                   <button
@@ -830,15 +759,8 @@ export function GlobalSettingsModal({
                     </button>
                   </div>
                   <div className="settings-rate-tip" style={{ textAlign: 'center' }}>
-                    新用户赠 50 积分 · 本地模式免费
+                    登录后可云端同步学习记录；不登录也可直接使用本地功能
                   </div>
-                  <button
-                    type="button"
-                    className="link-inline-btn"
-                    onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
-                  >
-                    了解 Lirio Pro · 永久版 ↗
-                  </button>
                 </div>
               ) : (
                 <>
@@ -848,9 +770,6 @@ export function GlobalSettingsModal({
                       <div className="account-profile-info">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <strong>{account.user.name}</strong>
-                          <span className={`tier-badge small${account.user.tier === 'pro' ? ' pro' : ''}`}>
-                            {account.user.tier === 'pro' ? 'Pro · 永久版' : '3天体验'}
-                          </span>
                         </div>
                         <small>{account.user.email}</small>
                       </div>
@@ -858,276 +777,35 @@ export function GlobalSettingsModal({
                         退出
                       </button>
                     </div>
+                  </div>
 
-                    {(() => {
-                      const accessInfo = evaluateLocalAccess(account);
-                      const maxDev = account.entitlement?.maxDevices ?? 3;
-                      const devs = account.devices || [];
-                      const curDevId = getDeviceIdentity().deviceId;
-                      return (
-                        <div className="entitlement-strip">
-                          <span>
-                            {accessInfo.mode === 'lifetime' && accessInfo.offlineValidUntil
-                              ? `Pro 永久版生效中 · 离线可用至 ${new Date(accessInfo.offlineValidUntil).toLocaleDateString('zh-CN')}`
-                              : accessInfo.mode === 'trial'
-                                ? `免费体验剩余约 ${accessInfo.trialRemainingHours} 小时`
-                                : '授权待激活'}
-                          </span>
-                          {devs.length > 0 && (
-                            <details className="device-details">
-                              <summary>
-                                已授权设备（{devs.length} / {maxDev}）
-                              </summary>
-                              <div className="device-list-box">
-                                {devs.map((d) => (
-                                  <div key={d.deviceId} className="device-row">
-                                    <span>
-                                      {d.deviceName || d.platform || d.deviceId.slice(0, 8)}
-                                      {d.deviceId === curDevId && <em>（当前设备）</em>}
-                                    </span>
-                                    {d.deviceId !== curDevId && (
-                                      <button
-                                        type="button"
-                                        className="ghost-pill-btn"
-                                        disabled={authBusy}
-                                        onClick={() => {
-                                          setAuthBusy(true);
-                                          void removeBoundDevice(d.deviceId)
-                                            .then(() => setStatusMsg('已移除设备授权'))
-                                            .catch((e) => setErrorMsg(String(e)))
-                                            .finally(() => setAuthBusy(false));
-                                        }}
-                                      >
-                                        下线
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </details>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    <div className="account-balance-strip">
-                      <div className="account-balance-main">
-                        <span>当前积分</span>
-                        <strong>{formatPoints(account.user.balanceUnits)}</strong>
-                      </div>
-                      <div
-                        className="account-balance-stats"
-                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}
+                  <div className="sync-status-card">
+                    <div className="sync-status-head">
+                      <strong>本地与云端双同步</strong>
+                      <small>
+                        {lastSyncAt
+                          ? `上次云端备份：${new Date(lastSyncAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                          : '本地已实时保存 · 尚未备份到云端'}
+                      </small>
+                    </div>
+                    <div className="sync-status-actions">
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        disabled={syncBusy}
+                        onClick={() => void handlePushCloudSync()}
                       >
-                        {account.user.tier === 'pro' && (
-                          <button
-                            type="button"
-                            className="ghost-pill-btn"
-                            onClick={() => void handleToggleBuyPanel()}
-                          >
-                            {showBuyPanel ? '收起' : '充值'}
-                          </button>
-                        )}
-                        <span>已获 {formatPoints(account.user.totalRechargedUnits)} · 已用 {formatPoints(account.user.totalSpentUnits)}</span>
-                      </div>
+                        {syncBusy ? '同步中…' : '立即同步到云端'}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-pill-btn"
+                        disabled={syncBusy}
+                        onClick={() => void handlePullCloudSync()}
+                      >
+                        从云端恢复
+                      </button>
                     </div>
-
-                    <div className="settings-pricing-mini">
-                      <div className="pricing-mini-row">
-                        <span>计费方式</span>
-                        <span>按量消耗积分 · 长期有效</span>
-                      </div>
-                      <div className="pricing-mini-row">
-                        <span>语音模式</span>
-                        <span>{account.proCloudSpeech ? '云端模式（更快，消耗积分）' : '本地模式（免费，较慢）'}</span>
-                      </div>
-                    </div>
-
-                    {(account.user.tier !== 'pro' || showBuyPanel) && (
-                      <div className="redeem-code-wrap">
-                        <div className="redeem-code-row">
-                          <input
-                            type="text"
-                            value={redeemInput}
-                            onChange={(e) => setRedeemInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !authBusy) {
-                                e.preventDefault();
-                                void handleRedeemCode();
-                              }
-                            }}
-                            placeholder={
-                              account.user.tier === 'pro'
-                                ? '输入积分卡密兑换码'
-                                : '输入卡密兑换码（LIRIO-XXXX-XXXX-XXXX）'
-                            }
-                            spellCheck={false}
-                            autoCapitalize="characters"
-                            disabled={authBusy}
-                          />
-                          <button
-                            type="button"
-                            className="primary-btn"
-                            disabled={authBusy || !redeemInput.trim()}
-                            onClick={() => void handleRedeemCode()}
-                          >
-                            兑换
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {account.user.tier !== 'pro' && (
-                      <div className="redeem-actions-row">
-                        <button
-                          type="button"
-                          className="ghost-pill-btn"
-                          onClick={() => void handleToggleBuyPanel()}
-                        >
-                          {showBuyPanel ? '收起购卡' : '购买卡密'}
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-pill-btn"
-                          onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
-                        >
-                          官网购卡页 ↗
-                        </button>
-                      </div>
-                    )}
-
-                    {showBuyPanel && (
-                      <div className="buy-code-panel">
-                        {!activeOrder ? (
-                          <>
-                            <div className="buy-channel-bar">
-                              <span>支付方式</span>
-                              <div className="buy-channel-pills">
-                                <button
-                                  type="button"
-                                  className={buyChannel === 'wechat' ? 'active' : ''}
-                                  onClick={() => setBuyChannel('wechat')}
-                                >
-                                  微信支付
-                                </button>
-                                <button
-                                  type="button"
-                                  className={buyChannel === 'alipay' ? 'active' : ''}
-                                  onClick={() => setBuyChannel('alipay')}
-                                >
-                                  支付宝
-                                </button>
-                              </div>
-                            </div>
-                            {storeBusy && !storeConfig?.presets?.length ? (
-                              <div className="sub">正在加载卡密套餐…</div>
-                            ) : (
-                              <div className="buy-pack-grid">
-                                {(storeConfig?.presets || [])
-                                  .filter((p) => (account.user?.tier === 'pro' ? !p.upgradeToPro : true))
-                                  .map((p) => {
-                                    const st = storeConfig?.settings;
-                                    const extUrl =
-                                      p.id === 'pro_99'
-                                        ? st?.shopUrlPro99
-                                        : p.id === 'topup_10'
-                                          ? st?.shopUrlTopup10
-                                          : st?.shopUrlTopup30;
-                                    return (
-                                      <div key={p.id} className="buy-pack-card">
-                                        <div className="buy-pack-head">
-                                          <strong>{p.shortTitle || p.label}</strong>
-                                          <span>¥{p.payYuan}</span>
-                                        </div>
-                                        <small>{p.subtitle || p.note}</small>
-                                        <div className="buy-pack-btns">
-                                          {extUrl ? (
-                                            <button
-                                              type="button"
-                                              className="ghost-pill-btn"
-                                              onClick={() => void openUrlSafe(extUrl)}
-                                            >
-                                              店铺购卡 ↗
-                                            </button>
-                                          ) : null}
-                                          <button
-                                            type="button"
-                                            className="primary-btn"
-                                            disabled={storeBusy}
-                                            onClick={() => void handleCreateOrder(p.id)}
-                                          >
-                                            应用内下单
-                                          </button>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                              </div>
-                            )}
-                          </>
-                        ) : activeOrder.status === 'paid' && activeOrder.issuedCode ? (
-                          <div className="buy-order-box">
-                            <div className="sub">收款已确认 · 卡密已生成（{activeOrder.orderNo}）</div>
-                            <div className="buy-issued-code">{activeOrder.issuedCode}</div>
-                            <div className="redeem-actions-row">
-                              <button
-                                type="button"
-                                className="primary-btn"
-                                disabled={authBusy}
-                                onClick={() => void handleRedeemCode(activeOrder.issuedCode!)}
-                              >
-                                一键立即兑换到当前账号
-                              </button>
-                              <button
-                                type="button"
-                                className="ghost-pill-btn"
-                                onClick={() => setActiveOrder(null)}
-                              >
-                                返回
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="buy-order-box">
-                            <div className="buy-pack-head">
-                              <strong>订单 {activeOrder.orderNo}</strong>
-                              <span>实付 ¥{activeOrder.payYuan}</span>
-                            </div>
-                            {((buyChannel === 'alipay' ? storeConfig?.settings?.alipayQr : storeConfig?.settings?.wechatQr) || '') ? (
-                              <img
-                                className="buy-qr-img"
-                                src={buyChannel === 'alipay' ? storeConfig!.settings.alipayQr : storeConfig!.settings.wechatQr}
-                                alt="收款码"
-                              />
-                            ) : (
-                              <div className="sub">店主尚未上传二维码，可点击「官网购卡页」查看详情或联系客服</div>
-                            )}
-                            <div className="sub">
-                              {storeConfig?.settings?.paymentNotice || '付款后页面每 2.5 秒自动查询核实并出码…'}
-                            </div>
-                            <div className="redeem-actions-row">
-                              {storeConfig?.sandboxPayEnabled && (
-                                <button
-                                  type="button"
-                                  className="ghost-pill-btn"
-                                  disabled={storeBusy}
-                                  onClick={() => void handleSimulatePay()}
-                                >
-                                  本地演示：模拟支付并出码
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                className="ghost-pill-btn"
-                                onClick={() => setActiveOrder(null)}
-                              >
-                                取消返回
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   <div className="settings-row-between">
@@ -1142,7 +820,7 @@ export function GlobalSettingsModal({
                     </div>
                     <label
                       className="settings-check-line"
-                      title="开启后使用云端语音，响应更快；关闭后使用本地语音，免费但较慢"
+                      title="开启后使用云端语音，响应更快；关闭后使用本地语音，速度会慢一些"
                     >
                       <input
                         type="checkbox"
@@ -1153,59 +831,7 @@ export function GlobalSettingsModal({
                     </label>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -4, lineHeight: 1.5 }}>
-                    云端模式响应更快（消耗积分）；关闭后使用本地模式，免费但速度会慢一些。
-                  </div>
-
-                  <div className="ledger-section">
-                    <div className="ledger-head">
-                      <span>账单</span>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        disabled={ledgerBusy}
-                        title="刷新"
-                        aria-label="刷新账单"
-                        onClick={() => void handleRefreshLedger()}
-                      >
-                        <IconReplay size={14} />
-                      </button>
-                    </div>
-                    {ledger.length === 0 ? (
-                      <div className="corpus-empty" style={{ padding: 12 }}>
-                        {ledgerBusy ? '加载中…' : '暂无记录'}
-                      </div>
-                    ) : (
-                      <div className="ledger-list">
-                        {ledger.map((row) => {
-                          const isPlus = row.amountUnits >= 0;
-                          const usage = formatLedgerUsage(row);
-                          const timeStr = new Date(row.createdAt).toLocaleString([], {
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          });
-                          return (
-                            <div key={row.id} className="ledger-row">
-                              <div className="ledger-col-main">
-                                <strong>{row.feature}</strong>
-                                <small>
-                                  {timeStr}
-                                  {usage ? ` · ${usage}` : ''}
-                                </small>
-                              </div>
-                              <div className="ledger-col-amt">
-                                <strong className={isPlus ? 'plus' : 'minus'}>
-                                  {isPlus ? '+' : '-'}
-                                  {formatPoints(Math.abs(row.amountUnits))}
-                                </strong>
-                                <small>余 {formatPoints(row.balanceAfterUnits)}</small>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                    云端模式响应更快；关闭后使用本地语音与转写（速度会慢一些）。
                   </div>
 
                   <div className="import-modal-actions">
@@ -1550,8 +1176,8 @@ export function GlobalSettingsModal({
 
               <div className="settings-row-between">
                 <div className="settings-version-meta">
-                  <span className="settings-section-title">手册</span>
-                  <small>费用与使用说明</small>
+                  <span className="settings-section-title">说明</span>
+                  <small>数据存储与语音模式</small>
                 </div>
                 <button type="button" onClick={() => setShowGuide((v) => !v)}>
                   {showGuide ? '收起' : '查看'}
@@ -1562,15 +1188,15 @@ export function GlobalSettingsModal({
             {showGuide && (
               <div className="settings-guide-card">
                 <div className="guide-block">
-                  <strong>本地免费功能</strong>
+                  <strong>本地优先与云端双同步</strong>
                   <p>
-                    导入音频、自动断句、本地语音与转写、单词听写与错词本均免费不限次（本地速度会慢一些）。
+                    精听进度、单词记录、错词本与收藏均优先保存在本地；登录账号后会自动同步到云端，更换设备或重装后可随时恢复。
                   </p>
                 </div>
                 <div className="guide-block">
-                  <strong>积分说明</strong>
+                  <strong>本地与云端语音</strong>
                   <p>
-                    口语对话、雅思考官、字幕精校与云端极速语音按量消耗积分，积分长期有效。
+                    日常学习功能均可本地运行；开启云端模式响应更快，关闭后使用本地语音与转写（速度会慢一些）。
                   </p>
                 </div>
               </div>
@@ -1586,10 +1212,51 @@ export function GlobalSettingsModal({
 
         {tab === 'feedback' && (
           <div className="settings-tab-body">
+            <div className="community-modal-card">
+              <div className="community-modal-info">
+                <strong>{communityCfg?.qqGroupName || 'Lirio 学习交流群'}</strong>
+                <p>{communityCfg?.communityNote || '交流英语学习方法、分享精听素材与改进建议。'}</p>
+                <div className="community-modal-actions">
+                  <span className="community-modal-code">
+                    {communityCfg?.qqGroupNumber ? `QQ 群号：${communityCfg.qqGroupNumber}` : 'QQ 群号待补充'}
+                  </span>
+                  {communityCfg?.qqGroupNumber && (
+                    <button
+                      type="button"
+                      className="ghost-pill-btn"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(communityCfg.qqGroupNumber);
+                        setCopiedQq(true);
+                        setTimeout(() => setCopiedQq(false), 1600);
+                      }}
+                    >
+                      {copiedQq ? '已复制' : '复制群号'}
+                    </button>
+                  )}
+                  {communityCfg?.qqGroupLink && (
+                    <button
+                      type="button"
+                      className="ghost-pill-btn"
+                      onClick={() => void openUrlSafe(communityCfg.qqGroupLink)}
+                    >
+                      加入 QQ 群 ↗
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="community-modal-qr">
+                {communityCfg?.qqGroupQr ? (
+                  <img src={communityCfg.qqGroupQr} alt="QQ 群二维码" />
+                ) : (
+                  <span>群二维码待配置</span>
+                )}
+              </div>
+            </div>
+
             {!account.token ? (
               <div className="account-auth-box">
                 <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--muted)' }}>
-                  请先在「AI」页登录账号后提交反馈
+                  登录后可在应用内直接提交功能建议与问题反馈
                 </p>
                 <button type="button" className="primary-btn" onClick={() => setTab('ai')}>
                   前往登录

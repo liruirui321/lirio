@@ -123,6 +123,15 @@ export function openDatabase(dbPath = process.env.LIRIO_DB_PATH || path.join(__d
 
     CREATE INDEX IF NOT EXISTS idx_feedbacks_created ON feedbacks(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_feedbacks_user ON feedbacks(user_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS user_sync_snapshots (
+      user_id TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      device_name TEXT NOT NULL DEFAULT '',
+      byte_size INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   return db;
@@ -518,8 +527,13 @@ export const DEFAULT_STORE_SETTINGS = {
   shopUrlPro99: '',
   shopUrlTopup10: '',
   shopUrlTopup30: '',
-  supportContact: '售后联系：support@lirio.app',
-  paymentNotice: '扫码付款时请在备注栏填写订单号，确认收款后页面将自动弹出卡密兑换码。',
+  supportContact: '',
+  paymentNotice: '',
+  qqGroupNumber: '',
+  qqGroupName: 'Lirio 学习交流群',
+  qqGroupQr: '',
+  qqGroupLink: '',
+  communityNote: '交流英语学习方法、分享精听素材与使用建议。',
 };
 
 export function getStoreSettings(db) {
@@ -973,4 +987,48 @@ export function updateFeedback(db, { id, status, adminReply, githubIssueNumber, 
      WHERE id = ?`,
   ).run(nextStatus, nextReply, nextNum, nextUrl, now, row.id);
   return getFeedbackById(db, row.id, { includeAttachment: false });
+}
+
+export function saveUserSyncSnapshot(
+  db,
+  { userId, payload, deviceName = '', updatedAt = Date.now() },
+) {
+  const serialized = typeof payload === 'string' ? payload : JSON.stringify(payload || {});
+  const byteSize = Buffer.byteLength(serialized, 'utf8');
+  const cleanDevice = String(deviceName || '').slice(0, 80);
+  db.prepare(
+    `INSERT INTO user_sync_snapshots (user_id, payload, updated_at, device_name, byte_size)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       payload = excluded.payload,
+       updated_at = excluded.updated_at,
+       device_name = excluded.device_name,
+       byte_size = excluded.byte_size`,
+  ).run(userId, serialized, updatedAt, cleanDevice, byteSize);
+  return { updatedAt, deviceName: cleanDevice, byteSize };
+}
+
+export function getUserSyncSnapshot(db, userId) {
+  const row = db
+    .prepare('SELECT payload, updated_at, device_name, byte_size FROM user_sync_snapshots WHERE user_id = ?')
+    .get(userId);
+  if (!row) return null;
+  return {
+    payload: row.payload,
+    updatedAt: Number(row.updated_at),
+    deviceName: row.device_name || '',
+    byteSize: Number(row.byte_size || 0),
+  };
+}
+
+export function listUserSyncMeta(db) {
+  const rows = db
+    .prepare('SELECT user_id, updated_at, device_name, byte_size FROM user_sync_snapshots ORDER BY updated_at DESC')
+    .all();
+  return rows.map((row) => ({
+    userId: row.user_id,
+    updatedAt: Number(row.updated_at),
+    deviceName: row.device_name || '',
+    byteSize: Number(row.byte_size || 0),
+  }));
 }

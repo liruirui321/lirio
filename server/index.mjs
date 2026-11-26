@@ -28,6 +28,7 @@ import {
   getStoreSettings,
   getUserByEmail,
   getUserById,
+  getUserSyncSnapshot,
   isUserDeviceActive,
   listAllFeedbacks,
   listAllUsers,
@@ -38,12 +39,14 @@ import {
   listUserDevices,
   listUserFeedbacks,
   listUserLedger,
+  listUserSyncMeta,
   lookupOrdersByEmail,
   openDatabase,
   redeemCodeForUser,
   registerUserDevice,
   removeUserDevice,
   saveStoreSettings,
+  saveUserSyncSnapshot,
   serializeUser,
   touchUserDevice,
   updateFeedback,
@@ -338,7 +341,17 @@ function compareSemver(a, b) {
 
 function buildOverview(db) {
   const isPeak = isDeepSeekPeakBeijing();
-  const users = listAllUsers(db);
+  const syncMeta = listUserSyncMeta(db);
+  const syncByUser = new Map(syncMeta.map((s) => [s.userId, s]));
+  const users = listAllUsers(db).map((u) => {
+    const sync = syncByUser.get(u.id);
+    return {
+      ...u,
+      syncUpdatedAt: sync?.updatedAt || null,
+      syncDeviceName: sync?.deviceName || '',
+      syncByteSize: sync?.byteSize || 0,
+    };
+  });
   const ledger = listRecentLedger(db, 50);
   const codes = listRedeemCodes(db, 100);
   const orders = listOrders(db, 100);
@@ -349,6 +362,7 @@ function buildOverview(db) {
   const pendingOrders = orders.filter((o) => o.status === 'pending');
   const stats = {
     totalUsers: users.length,
+    syncedUsers: syncMeta.length,
     proUsers: users.filter((u) => u.tier === 'pro').length,
     totalBalanceUnits: users.reduce((sum, u) => sum + Number(u.balanceUnits || 0), 0),
     totalSpentUnits: users.reduce((sum, u) => sum + Number(u.totalSpentUnits || 0), 0),
@@ -363,7 +377,7 @@ function buildOverview(db) {
 
   return {
     ok: true,
-    service: 'lirio-pro-server',
+    service: 'lirio-server',
     isPeak,
     period: getDeepSeekPeriodLabel(),
     rates: {
@@ -386,7 +400,6 @@ function buildOverview(db) {
 }
 
 function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
-  const periodBadge = overview.isPeak ? '高峰价（工作日 09-12 / 14-18）' : '空闲价';
   const initialJson = JSON.stringify(overview).replace(/</g, '\\u003c');
 
   return `<!doctype html>
@@ -394,12 +407,12 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Lirio Pro 运营管理台</title>
+<title>Lirio 管理后台</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; background: #FBF9F5; color: #1D1B18; }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 26px 20px 52px; display: flex; flex-direction: column; gap: 16px; }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 26px 20px 52px; display: flex; flex-direction: column; gap: 16px; }
   .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   h1 { margin: 0; font-size: 20px; font-weight: 700; }
@@ -409,11 +422,8 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
   .btn:hover { border-color: #3D6B52; color: #3D6B52; }
   .btn.primary { background: #3D6B52; border-color: #3D6B52; color: #fff; font-weight: 600; }
   .btn.primary:hover { background: #315843; color: #fff; }
-  .btn.danger { color: #B85C38; }
-  .btn.danger:hover { border-color: #B85C38; }
-  .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .kpi { background: #FFFDF9; border: 1px solid #EAE5DB; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
-  .kpi.alert { border-color: #D9A05B; background: #FFF9F0; cursor: pointer; }
   .kpi-label { font-size: 12px; color: #7C766D; }
   .kpi-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: #1D1B18; }
   .kpi-sub { font-size: 11.5px; color: #7C766D; font-variant-numeric: tabular-nums; }
@@ -438,27 +448,20 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
   th { font-size: 11.5px; color: #7C766D; font-weight: 500; white-space: nowrap; }
   tr:last-child td { border-bottom: 0; }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .strong { font-weight: 600; }
   .sub { font-size: 11.5px; color: #7C766D; }
   .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #E9F2EC; color: #3D6B52; font-weight: 600; display: inline-block; white-space: nowrap; }
-  .tag.pending { background: #F8EFE3; color: #9A5B13; }
-  .tag.used, .tag.cancelled { background: #F0ECE3; color: #7C766D; }
-  .plus { color: #3D6B52; font-weight: 600; }
-  .minus { color: #B85C38; font-weight: 600; }
   .empty { text-align: center; color: #8D867C; padding: 20px; }
-  .code-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; letter-spacing: 0.03em; }
-  .copy-btn { border: 1px solid #E4DFD4; background: transparent; color: #5F5A52; border-radius: 999px; padding: 3px 9px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  .copy-btn { border: 1px solid #E4DFD4; background: transparent; color: #5F5A52; border-radius: 999px; padding: 3px 9px; font-size: 11px; cursor: pointer; font-family: inherit; text-decoration: none; display: inline-block; }
   .copy-btn:hover { border-color: #3D6B52; color: #3D6B52; }
   .status-msg { font-size: 12px; color: #3D6B52; font-weight: 500; }
-  .rates { background: #FFFDF9; border: 1px solid #EAE5DB; border-radius: 14px; padding: 12px 16px; font-size: 12.5px; color: #5F5A52; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .qr-card { border: 1px solid #EAE5DB; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #FBF9F5; }
-  .qr-preview { width: 148px; height: 148px; border-radius: 10px; border: 1px dashed #D9D2C5; background: #fff; display: grid; place-items: center; overflow: hidden; font-size: 12px; color: #8D867C; }
+  .qr-preview { width: 168px; height: 168px; border-radius: 10px; border: 1px dashed #D9D2C5; background: #fff; display: grid; place-items: center; overflow: hidden; font-size: 12px; color: #8D867C; }
   .qr-preview img { width: 100%; height: 100%; object-fit: contain; }
   .field-col { display: flex; flex-direction: column; gap: 5px; }
   .field-col label { font-size: 12px; font-weight: 600; color: #4A453E; }
   @media (max-width: 820px) {
-    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpi-grid { grid-template-columns: 1fr; }
     .settings-grid { grid-template-columns: 1fr; }
   }
 </style>
@@ -467,9 +470,8 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
 <div class="wrap">
   <div class="top">
     <div class="title-row">
-      <h1>Lirio Pro 运营管理台</h1>
+      <h1>Lirio 管理后台</h1>
       <span class="pill">运行中</span>
-      <span id="periodPill" class="pill${overview.isPeak ? ' peak' : ''}">${escapeHtml(periodBadge)}</span>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       ${adminAuthEnabled ? '<button class="btn" id="adminLogoutBtn" type="button">退出管理</button>' : '<span class="pill peak">未设管理口令（仅限本机）</span>'}
@@ -479,42 +481,18 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
   </div>
 
   <div class="kpi-grid" id="kpiGrid">
-    <div class="kpi"><span class="kpi-label">累计已收款</span><span class="kpi-val" id="kpiRev">¥${overview.stats.totalRevenueYuan.toFixed(2)}</span><span class="kpi-sub" id="kpiPaidSub">${overview.stats.paidOrders} 笔已发卡</span></div>
-    <div class="kpi${overview.stats.pendingOrders > 0 ? ' alert' : ''}" id="kpiPendingCard"><span class="kpi-label">待核单付款</span><span class="kpi-val" id="kpiPending">${overview.stats.pendingOrders}</span><span class="kpi-sub">点击前往审核发卡</span></div>
-    <div class="kpi"><span class="kpi-label">注册用户 / PRO</span><span class="kpi-val" id="kpiUsers">${overview.stats.totalUsers} / ${overview.stats.proUsers}</span><span class="kpi-sub" id="kpiBalSub">总剩余 ${escapeHtml(formatPoints(overview.stats.totalBalanceUnits))}</span></div>
-    <div class="kpi"><span class="kpi-label">卡密库存（可用/已用）</span><span class="kpi-val" id="kpiCodes">${overview.stats.unusedCodes} / ${overview.stats.usedCodes}</span><span class="kpi-sub">支持单码与批量导出</span></div>
+    <div class="kpi"><span class="kpi-label">待处理反馈</span><span class="kpi-val" id="kpiOpenFeedbacks">${overview.stats.openFeedbacks}</span><span class="kpi-sub" id="kpiFeedbackSub">共 ${overview.feedbacks.length} 条记录</span></div>
+    <div class="kpi"><span class="kpi-label">注册账号</span><span class="kpi-val" id="kpiUsers">${overview.stats.totalUsers}</span><span class="kpi-sub">登录可云端同步与对话</span></div>
+    <div class="kpi"><span class="kpi-label">已开启云同步</span><span class="kpi-val" id="kpiSyncedUsers">${overview.stats.syncedUsers || 0}</span><span class="kpi-sub">本地与云端双备份</span></div>
   </div>
 
   <div class="tabs" id="adminTabs">
-    <button type="button" class="tab-btn active" data-tab="orders">购卡订单 <span class="tab-badge" id="pendingTabBadge">${overview.stats.pendingOrders}</span></button>
-    <button type="button" class="tab-btn" data-tab="feedbacks">用户反馈与需求 <span class="tab-badge" id="feedbackTabBadge">${overview.stats.openFeedbacks}</span></button>
-    <button type="button" class="tab-btn" data-tab="codes">卡密发码中心</button>
-    <button type="button" class="tab-btn" data-tab="settings">收款与店铺配置</button>
-    <button type="button" class="tab-btn" data-tab="users">用户与流水</button>
+    <button type="button" class="tab-btn active" data-tab="feedbacks">用户反馈与建议 <span class="tab-badge" id="feedbackTabBadge">${overview.stats.openFeedbacks}</span></button>
+    <button type="button" class="tab-btn" data-tab="settings">QQ 交流群配置</button>
+    <button type="button" class="tab-btn" data-tab="users">账号与云同步</button>
   </div>
 
-  <section class="panel active" id="panel-orders">
-    <div class="card">
-      <div class="toolbar-row">
-        <div class="filter-group" id="orderFilterChips">
-          <button type="button" class="chip active" data-order-status="all">全部</button>
-          <button type="button" class="chip" data-order-status="pending">待确认</button>
-          <button type="button" class="chip" data-order-status="paid">已发卡</button>
-          <button type="button" class="chip" data-order-status="cancelled">已取消</button>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="orderMsg" class="status-msg"></span>
-          <input id="orderSearch" class="search-input" type="search" placeholder="搜索订单号 / 邮箱 / 卡密" />
-        </div>
-      </div>
-      <table>
-        <thead><tr><th>时间 / 订单号</th><th>买家邮箱</th><th>套餐 / 渠道</th><th class="num">实付</th><th>状态 / 发放卡密</th><th class="num">操作</th></tr></thead>
-        <tbody id="ordersBody"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel" id="panel-feedbacks">
+  <section class="panel active" id="panel-feedbacks">
     <div class="card">
       <div class="toolbar-row">
         <div class="filter-group" id="feedbackFilterChips">
@@ -525,45 +503,12 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <span id="fbMsg" class="status-msg"></span>
-          <span class="sub" id="ghStatusPill">${overview.githubConfigured ? 'GitHub Issue 自动同步已开启' : '未配置 LIRIO_GITHUB_TOKEN（本地收件箱）'}</span>
+          <span class="sub">${overview.githubConfigured ? 'GitHub Issue 自动同步已开启' : '未配置 LIRIO_GITHUB_TOKEN（站内收件箱）'}</span>
         </div>
       </div>
       <table>
-        <thead><tr><th>时间 / 分类</th><th>提交账号</th><th>需求标题与正文 / 文本附件</th><th>GitHub</th><th>处理状态与回复</th></tr></thead>
+        <thead><tr><th>时间 / 分类</th><th>提交账号</th><th>标题与正文 / 附件</th><th>GitHub</th><th>状态与回复</th></tr></thead>
         <tbody id="feedbacksBody"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel" id="panel-codes">
-    <div class="card">
-      <div class="toolbar-row">
-        <div class="filter-group">
-          <select id="codePreset">
-            <option value="pro_99">¥99 Lirio Pro · 永久版（含 1,000 积分）</option>
-            <option value="topup_10">¥10 积分加油包（1,000 积分）</option>
-            <option value="topup_30">¥30 积分加油包（3,500 积分）</option>
-          </select>
-          <label class="sub">数量 <input id="codeCount" type="number" min="1" max="100" value="5" style="width:68px;text-align:center;" /></label>
-          <button class="btn primary" id="genCodeBtn" type="button">生成卡密</button>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="codeMsg" class="status-msg"></span>
-          <a class="btn" href="/api/admin/codes/export" download="lirio-unused-codes.txt">导出未兑换 TXT</a>
-          <button class="btn" id="copyUnusedBtn" type="button">复制全部未兑换</button>
-        </div>
-      </div>
-      <div class="toolbar-row" style="margin-bottom:8px;">
-        <div class="filter-group" id="codeFilterChips">
-          <button type="button" class="chip active" data-code-status="all">全部</button>
-          <button type="button" class="chip" data-code-status="unused">可用</button>
-          <button type="button" class="chip" data-code-status="used">已兑换</button>
-        </div>
-        <input id="codeSearch" class="search-input" type="search" placeholder="搜索卡密或核销邮箱" />
-      </div>
-      <table>
-        <thead><tr><th>卡密</th><th>类型 / 备注</th><th class="num">面额</th><th>状态</th><th class="num">操作</th></tr></thead>
-        <tbody id="codesBody"></tbody>
       </table>
     </div>
   </section>
@@ -571,7 +516,7 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
   <section class="panel" id="panel-settings">
     <div class="card">
       <div class="toolbar-row">
-        <h2 style="margin:0;">收款码与第三方店铺配置（保存后官网主页与 App 买码同步生效）</h2>
+        <h2 style="margin:0;">QQ 交流群设置（保存后官网主页与客户端内同步展示）</h2>
         <div style="display:flex;gap:8px;align-items:center;">
           <span id="settingsMsg" class="status-msg"></span>
           <button type="button" class="btn primary" id="saveSettingsBtn">保存配置</button>
@@ -580,81 +525,57 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
       <div class="settings-grid">
         <div class="qr-card">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <strong>微信收款码</strong>
-            <button type="button" class="copy-btn" id="clearWechatQr">清除</button>
+            <strong>QQ 群二维码</strong>
+            <button type="button" class="copy-btn" id="clearQqQr">清除</button>
           </div>
-          <div class="qr-preview" id="wechatQrPreview">未上传</div>
-          <input type="file" id="wechatQrFile" accept="image/*" />
-          <input type="text" id="wechatQrInput" placeholder="或直接填写收款码图片链接 / Data URL" />
+          <div class="qr-preview" id="qqGroupQrPreview">未上传</div>
+          <input type="file" id="qqGroupQrFile" accept="image/*" />
+          <input type="text" id="qqGroupQrInput" placeholder="或粘贴二维码图片链接 / Data URL" />
         </div>
-        <div class="qr-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <strong>支付宝收款码</strong>
-            <button type="button" class="copy-btn" id="clearAlipayQr">清除</button>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="field-col">
+            <label>群名称</label>
+            <input type="text" id="qqGroupNameInput" placeholder="例如 Lirio 学习交流群" />
           </div>
-          <div class="qr-preview" id="alipayQrPreview">未上传</div>
-          <input type="file" id="alipayQrFile" accept="image/*" />
-          <input type="text" id="alipayQrInput" placeholder="或直接填写收款码图片链接 / Data URL" />
+          <div class="field-col">
+            <label>QQ 群号</label>
+            <input type="text" id="qqGroupNumberInput" placeholder="例如 123456789" />
+          </div>
+          <div class="field-col">
+            <label>一键加群链接（选填）</label>
+            <input type="url" id="qqGroupLinkInput" placeholder="https://qm.qq.com/..." />
+          </div>
+          <div class="field-col">
+            <label>交流群简介</label>
+            <input type="text" id="communityNoteInput" placeholder="交流英语学习方法、分享精听素材与使用建议。" />
+          </div>
+          <div class="field-col">
+            <label>补充联系方式（选填）</label>
+            <input type="text" id="supportContactInput" placeholder="例如邮箱或微信号" />
+          </div>
         </div>
-      </div>
-      <div class="settings-grid" style="margin-top:14px;">
-        <div class="field-col">
-          <label>¥99 买断卡密第三方店铺链接（可选：面包多/爱发电/发卡网）</label>
-          <input type="url" id="shopUrlPro99" placeholder="留空则默认走官网扫码下单" />
-        </div>
-        <div class="field-col">
-          <label>¥10 充值卡密第三方店铺链接（可选）</label>
-          <input type="url" id="shopUrlTopup10" placeholder="留空则默认走官网扫码下单" />
-        </div>
-        <div class="field-col">
-          <label>¥30 充值卡密第三方店铺链接（可选）</label>
-          <input type="url" id="shopUrlTopup30" placeholder="留空则默认走官网扫码下单" />
-        </div>
-        <div class="field-col">
-          <label>售后联系方式（展示在官网查询区与支付页）</label>
-          <input type="text" id="supportContactInput" placeholder="例如 售后微信 / 邮箱：support@lirio.app" />
-        </div>
-      </div>
-      <div class="field-col" style="margin-top:12px;">
-        <label>付款提示语</label>
-        <input type="text" id="paymentNoticeInput" />
       </div>
     </div>
   </section>
 
   <section class="panel" id="panel-users">
-    <div class="rates">
-      <span>积分制：¥1 = 100 积分 · 按量消耗</span>
-      <span>本地模式：免费（速度较慢）</span>
-      <span>云端模式：响应更快（消耗积分）</span>
-    </div>
     <div class="card">
       <div class="toolbar-row">
-        <h2 style="margin:0;">账号与积分</h2>
-        <input id="userSearch" class="search-input" type="search" placeholder="搜索昵称或邮箱" />
+        <h2 style="margin:0;">注册账号与云端备份</h2>
+        <input id="userSearch" class="search-input" type="search" placeholder="搜索昵称或账号" />
       </div>
       <table>
-        <thead><tr><th>账号</th><th>身份</th><th class="num">当前积分</th><th class="num">累计获得</th><th class="num">累计消耗</th></tr></thead>
+        <thead><tr><th>账号</th><th>注册时间</th><th>最近云同步</th><th class="num">云备份大小</th></tr></thead>
         <tbody id="usersBody"></tbody>
-      </table>
-    </div>
-    <div class="card">
-      <h2>最近积分流水</h2>
-      <table>
-        <thead><tr><th>时间</th><th>账号</th><th>项目</th><th>明细</th><th class="num">积分变动</th><th class="num">剩余积分</th></tr></thead>
-        <tbody id="ledgerBody"></tbody>
       </table>
     </div>
   </section>
 </div>
 <script>
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-const yuan = (u, d = 2) => '¥' + ((Number(u) || 0) / 10000).toFixed(d);
-const pts = (u) => Math.round((Number(u) || 0) / 100).toLocaleString('en-US') + ' 积分';
-const fmtTime = (ms) => new Date(ms).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const fmtTime = (ms) => ms ? new Date(ms).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
+const fmtSize = (b) => !b ? '-' : (b < 1024 ? b + ' B' : (b / 1024).toFixed(1) + ' KB');
 let state = ${initialJson};
-let orderFilter = 'all';
-let codeFilter = 'all';
 let fbFilter = 'all';
 let settingsDirty = false;
 
@@ -666,119 +587,43 @@ document.getElementById('adminTabs').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-tab]');
   if (btn) switchTab(btn.dataset.tab);
 });
-document.getElementById('kpiPendingCard').addEventListener('click', () => {
-  orderFilter = 'pending';
-  document.querySelectorAll('#orderFilterChips .chip').forEach((c) => c.classList.toggle('active', c.dataset.orderStatus === 'pending'));
-  renderOrders();
-  switchTab('orders');
-});
 
 function renderKpis() {
   const st = state.stats || {};
-  document.getElementById('kpiRev').textContent = '¥' + Number(st.totalRevenueYuan || 0).toFixed(2);
-  document.getElementById('kpiPaidSub').textContent = (st.paidOrders || 0) + ' 笔已发卡';
-  document.getElementById('kpiPending').textContent = String(st.pendingOrders || 0);
-  document.getElementById('pendingTabBadge').textContent = String(st.pendingOrders || 0);
-  document.getElementById('kpiPendingCard').className = 'kpi' + ((st.pendingOrders || 0) > 0 ? ' alert' : '');
-  document.getElementById('kpiUsers').textContent = (st.totalUsers || 0) + ' / ' + (st.proUsers || 0);
-  document.getElementById('kpiBalSub').textContent = '总剩余 ' + pts(st.totalBalanceUnits || 0);
-  document.getElementById('kpiCodes').textContent = (st.unusedCodes || 0) + ' / ' + (st.usedCodes || 0);
+  const fbs = state.feedbacks || [];
+  document.getElementById('kpiOpenFeedbacks').textContent = String(st.openFeedbacks || 0);
+  document.getElementById('kpiFeedbackSub').textContent = '共 ' + fbs.length + ' 条记录';
+  document.getElementById('kpiUsers').textContent = String(st.totalUsers || 0);
+  document.getElementById('kpiSyncedUsers').textContent = String(st.syncedUsers || 0);
+  document.getElementById('feedbackTabBadge').textContent = String(st.openFeedbacks || 0);
 }
 
-function renderOrders() {
-  const q = (document.getElementById('orderSearch').value || '').trim().toLowerCase();
-  const list = (state.orders || []).filter((o) => {
-    if (orderFilter !== 'all' && o.status !== orderFilter) return false;
-    if (!q) return true;
-    return [o.orderNo, o.buyerEmail, o.issuedCode, o.label].some((v) => String(v || '').toLowerCase().includes(q));
-  });
-  document.getElementById('ordersBody').innerHTML = list.length ? list.map((o) => {
-    const ch = o.payChannel === 'alipay' ? '支付宝' : '微信支付';
-    let stHtml = '<span class="tag pending">待确认收款</span>';
-    let actHtml = '<button class="btn primary" type="button" data-confirm-order="' + esc(o.orderNo) + '">确认收款并发卡</button> <button class="btn danger" type="button" data-cancel-order="' + esc(o.orderNo) + '">取消</button>';
-    if (o.status === 'paid') {
-      stHtml = '<span class="tag">已发卡</span> <span class="code-mono" style="margin-left:6px;">' + esc(o.issuedCode || '') + '</span>';
-      actHtml = '<button class="copy-btn" type="button" data-copy="' + esc(o.issuedCode || '') + '">复制卡密</button>';
-    } else if (o.status === 'cancelled') {
-      stHtml = '<span class="tag cancelled">已取消</span>';
-      actHtml = '<span class="sub">-</span>';
-    }
-    return '<tr><td><strong class="code-mono">' + esc(o.orderNo) + '</strong><div class="sub">' + esc(fmtTime(o.createdAt)) + '</div></td>' +
-      '<td>' + esc(o.buyerEmail) + '</td>' +
-      '<td>' + esc(o.label) + '<div class="sub">' + ch + '</div></td>' +
-      '<td class="num strong">¥' + Number(o.payYuan || 0).toFixed(2) + '</td>' +
-      '<td>' + stHtml + '</td>' +
-      '<td class="num">' + actHtml + '</td></tr>';
-  }).join('') : '<tr><td colspan="6" class="empty">暂无符合条件的订单</td></tr>';
-}
-
-function renderCodes() {
-  const q = (document.getElementById('codeSearch').value || '').trim().toLowerCase();
-  const list = (state.codes || []).filter((c) => {
-    if (codeFilter === 'unused' && c.redeemedAt) return false;
-    if (codeFilter === 'used' && !c.redeemedAt) return false;
-    if (!q) return true;
-    return [c.code, c.redeemedByEmail, c.label, c.note].some((v) => String(v || '').toLowerCase().includes(q));
-  });
-  document.getElementById('codesBody').innerHTML = list.length ? list.map((c) => {
-    const status = c.redeemedAt
-      ? '<span class="tag used">已用 (' + esc(c.redeemedByEmail || '-') + ')</span>'
-      : '<span class="tag">可用</span>';
-    return '<tr><td class="code-mono">' + esc(c.code) + '</td><td>' + esc(c.label) + (c.note ? '<div class="sub">' + esc(c.note) + '</div>' : '') + '</td>' +
-      '<td class="num strong">' + pts(c.amountUnits) + '</td><td>' + status + '</td>' +
-      '<td class="num"><button class="copy-btn" type="button" data-copy="' + esc(c.code) + '">复制</button></td></tr>';
-  }).join('') : '<tr><td colspan="5" class="empty">暂无符合条件的卡密</td></tr>';
-}
-
-function renderUsersAndLedger() {
+function renderUsers() {
   const q = (document.getElementById('userSearch').value || '').trim().toLowerCase();
   const users = (state.users || []).filter((u) => !q || String(u.name || '').toLowerCase().includes(q) || String(u.email || '').toLowerCase().includes(q));
   document.getElementById('usersBody').innerHTML = users.length ? users.map((u) =>
     '<tr><td><strong>' + esc(u.name) + '</strong><div class="sub">' + esc(u.email) + '</div></td>' +
-    '<td><span class="tag">' + (u.tier === 'pro' ? 'PRO' : 'TRIAL') + '</span></td>' +
-    '<td class="num strong">' + pts(u.balanceUnits) + '</td>' +
-    '<td class="num">' + pts(u.totalRechargedUnits) + '</td>' +
-    '<td class="num">' + pts(u.totalSpentUnits) + '</td></tr>'
-  ).join('') : '<tr><td colspan="5" class="empty">暂无账号</td></tr>';
-  document.getElementById('ledgerBody').innerHTML = (state.ledger || []).length ? state.ledger.map((r) => {
-    const plus = r.amountUnits >= 0;
-    return '<tr><td class="sub">' + esc(fmtTime(r.createdAt)) + '</td><td class="sub">' + esc(r.userEmail || r.userName || '-') + '</td>' +
-      '<td>' + esc(r.feature) + '</td><td class="sub">' + esc(r.note || '-') + '</td>' +
-      '<td class="num ' + (plus ? 'plus' : 'minus') + '">' + (plus ? '+' : '-') + pts(Math.abs(r.amountUnits)) + '</td>' +
-      '<td class="num">' + pts(r.balanceAfterUnits) + '</td></tr>';
-  }).join('') : '<tr><td colspan="6" class="empty">暂无积分流水</td></tr>';
+    '<td class="sub">' + esc(fmtTime(u.createdAt)) + '</td>' +
+    '<td class="sub">' + (u.syncUpdatedAt ? esc(fmtTime(u.syncUpdatedAt)) + (u.syncDeviceName ? ' · ' + esc(u.syncDeviceName) : '') : '尚未同步') + '</td>' +
+    '<td class="num">' + esc(fmtSize(u.syncByteSize)) + '</td></tr>'
+  ).join('') : '<tr><td colspan="4" class="empty">暂无注册账号</td></tr>';
 }
 
 function syncQrPreview(previewId, val) {
   const el = document.getElementById(previewId);
-  el.innerHTML = val ? '<img src="' + esc(val) + '" alt="收款码" />' : '未上传';
+  el.innerHTML = val ? '<img src="' + esc(val) + '" alt="QQ群二维码" />' : '未上传';
 }
 
 function hydrateSettingsForm() {
   if (settingsDirty) return;
   const s = state.storeSettings || {};
-  document.getElementById('wechatQrInput').value = s.wechatQr || '';
-  document.getElementById('alipayQrInput').value = s.alipayQr || '';
-  document.getElementById('shopUrlPro99').value = s.shopUrlPro99 || '';
-  document.getElementById('shopUrlTopup10').value = s.shopUrlTopup10 || '';
-  document.getElementById('shopUrlTopup30').value = s.shopUrlTopup30 || '';
+  document.getElementById('qqGroupQrInput').value = s.qqGroupQr || '';
+  document.getElementById('qqGroupNameInput').value = s.qqGroupName || '';
+  document.getElementById('qqGroupNumberInput').value = s.qqGroupNumber || '';
+  document.getElementById('qqGroupLinkInput').value = s.qqGroupLink || '';
+  document.getElementById('communityNoteInput').value = s.communityNote || '';
   document.getElementById('supportContactInput').value = s.supportContact || '';
-  document.getElementById('paymentNoticeInput').value = s.paymentNotice || '';
-  syncQrPreview('wechatQrPreview', s.wechatQr || '');
-  syncQrPreview('alipayQrPreview', s.alipayQr || '');
-}
-
-function renderAll() {
-  const pp = document.getElementById('periodPill');
-  pp.textContent = state.isPeak ? '高峰价（工作日 09-12 / 14-18）' : '空闲价';
-  pp.className = 'pill' + (state.isPeak ? ' peak' : '');
-  document.getElementById('feedbackTabBadge').textContent = String(state.stats?.openFeedbacks || 0);
-  renderKpis();
-  renderOrders();
-  renderFeedbacks();
-  renderCodes();
-  renderUsersAndLedger();
-  hydrateSettingsForm();
+  syncQrPreview('qqGroupQrPreview', s.qqGroupQr || '');
 }
 
 function renderFeedbacks() {
@@ -790,9 +635,9 @@ function renderFeedbacks() {
       : '';
     const ghHtml = f.githubIssueUrl
       ? '<a class="copy-btn" href="' + esc(f.githubIssueUrl) + '" target="_blank" rel="noopener noreferrer">#' + esc(f.githubIssueNumber || '') + ' ↗</a>'
-      : '<span class="sub">仅站内记录</span>';
+      : '<span class="sub">站内记录</span>';
     return '<tr><td><span class="tag">' + esc(catLabel[f.category] || f.category) + '</span><div class="sub">' + esc(fmtTime(f.createdAt)) + '</div></td>' +
-      '<td><strong>' + esc(f.userEmail) + '</strong><div class="sub">' + (f.userTier === 'pro' ? 'PRO 永久版' : '体验版') + (f.appVersion ? ' · v' + esc(f.appVersion) : '') + '</div></td>' +
+      '<td><strong>' + esc(f.userEmail) + '</strong>' + (f.appVersion ? '<div class="sub">v' + esc(f.appVersion) + '</div>' : '') + '</td>' +
       '<td><strong>' + esc(f.title) + '</strong><div class="sub" style="white-space:pre-wrap;max-width:340px;">' + esc((f.content || '').slice(0, 260)) + '</div>' + attHtml + '</td>' +
       '<td>' + ghHtml + '</td>' +
       '<td><div style="display:flex;gap:6px;flex-direction:column;min-width:190px;">' +
@@ -806,6 +651,13 @@ function renderFeedbacks() {
         '<button type="button" class="btn primary" data-fb-save="' + esc(f.id) + '">保存状态</button>' +
       '</div></td></tr>';
   }).join('') : '<tr><td colspan="5" class="empty">暂无符合条件的用户反馈</td></tr>';
+}
+
+function renderAll() {
+  renderKpis();
+  renderFeedbacks();
+  renderUsers();
+  hydrateSettingsForm();
 }
 
 async function reloadOverview() {
@@ -840,13 +692,10 @@ function compressQrFile(file, inputId, previewId) {
   reader.readAsDataURL(file);
 }
 
-document.getElementById('wechatQrFile').addEventListener('change', (e) => compressQrFile(e.target.files[0], 'wechatQrInput', 'wechatQrPreview'));
-document.getElementById('alipayQrFile').addEventListener('change', (e) => compressQrFile(e.target.files[0], 'alipayQrInput', 'alipayQrPreview'));
-document.getElementById('wechatQrInput').addEventListener('input', (e) => { settingsDirty = true; syncQrPreview('wechatQrPreview', e.target.value.trim()); });
-document.getElementById('alipayQrInput').addEventListener('input', (e) => { settingsDirty = true; syncQrPreview('alipayQrPreview', e.target.value.trim()); });
-document.getElementById('clearWechatQr').addEventListener('click', () => { settingsDirty = true; document.getElementById('wechatQrInput').value = ''; syncQrPreview('wechatQrPreview', ''); });
-document.getElementById('clearAlipayQr').addEventListener('click', () => { settingsDirty = true; document.getElementById('alipayQrInput').value = ''; syncQrPreview('alipayQrPreview', ''); });
-['shopUrlPro99', 'shopUrlTopup10', 'shopUrlTopup30', 'supportContactInput', 'paymentNoticeInput'].forEach((id) => {
+document.getElementById('qqGroupQrFile').addEventListener('change', (e) => compressQrFile(e.target.files[0], 'qqGroupQrInput', 'qqGroupQrPreview'));
+document.getElementById('qqGroupQrInput').addEventListener('input', (e) => { settingsDirty = true; syncQrPreview('qqGroupQrPreview', e.target.value.trim()); });
+document.getElementById('clearQqQr').addEventListener('click', () => { settingsDirty = true; document.getElementById('qqGroupQrInput').value = ''; syncQrPreview('qqGroupQrPreview', ''); });
+['qqGroupNameInput', 'qqGroupNumberInput', 'qqGroupLinkInput', 'communityNoteInput', 'supportContactInput'].forEach((id) => {
   document.getElementById(id).addEventListener('input', () => { settingsDirty = true; });
 });
 
@@ -854,13 +703,12 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
   const msg = document.getElementById('settingsMsg');
   msg.textContent = '保存中…';
   const payload = {
-    wechatQr: document.getElementById('wechatQrInput').value.trim(),
-    alipayQr: document.getElementById('alipayQrInput').value.trim(),
-    shopUrlPro99: document.getElementById('shopUrlPro99').value.trim(),
-    shopUrlTopup10: document.getElementById('shopUrlTopup10').value.trim(),
-    shopUrlTopup30: document.getElementById('shopUrlTopup30').value.trim(),
+    qqGroupQr: document.getElementById('qqGroupQrInput').value.trim(),
+    qqGroupName: document.getElementById('qqGroupNameInput').value.trim(),
+    qqGroupNumber: document.getElementById('qqGroupNumberInput').value.trim(),
+    qqGroupLink: document.getElementById('qqGroupLinkInput').value.trim(),
+    communityNote: document.getElementById('communityNoteInput').value.trim(),
     supportContact: document.getElementById('supportContactInput').value.trim(),
-    paymentNotice: document.getElementById('paymentNoticeInput').value.trim(),
   };
   const res = await fetch('/api/admin/settings', {
     method: 'POST',
@@ -870,84 +718,14 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
   const data = await res.json().catch(() => ({}));
   if (res.ok) {
     settingsDirty = false;
-    msg.textContent = '已保存并同步到官网主页';
+    msg.textContent = '已保存并同步到官网与客户端';
     await reloadOverview();
   } else {
     msg.textContent = data.error || '保存失败';
   }
 });
 
-document.getElementById('orderFilterChips').addEventListener('click', (e) => {
-  const c = e.target.closest('[data-order-status]');
-  if (!c) return;
-  orderFilter = c.dataset.orderStatus;
-  document.querySelectorAll('#orderFilterChips .chip').forEach((el) => el.classList.toggle('active', el === c));
-  renderOrders();
-});
-document.getElementById('orderSearch').addEventListener('input', renderOrders);
-document.getElementById('codeFilterChips').addEventListener('click', (e) => {
-  const c = e.target.closest('[data-code-status]');
-  if (!c) return;
-  codeFilter = c.dataset.codeStatus;
-  document.querySelectorAll('#codeFilterChips .chip').forEach((el) => el.classList.toggle('active', el === c));
-  renderCodes();
-});
-document.getElementById('codeSearch').addEventListener('input', renderCodes);
-document.getElementById('userSearch').addEventListener('input', renderUsersAndLedger);
-
-document.getElementById('ordersBody').addEventListener('click', async (e) => {
-  const confirmBtn = e.target.closest('[data-confirm-order]');
-  const cancelBtn = e.target.closest('[data-cancel-order]');
-  const copyBtn = e.target.closest('[data-copy]');
-  const msg = document.getElementById('orderMsg');
-  if (confirmBtn) {
-    const no = confirmBtn.dataset.confirmOrder;
-    msg.textContent = '正在核单并生成卡密…';
-    const res = await fetch('/api/orders/' + encodeURIComponent(no) + '/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    const data = await res.json().catch(() => ({}));
-    msg.textContent = res.ok ? ('订单 ' + no + ' 已发卡：' + (data.order?.issuedCode || '')) : (data.error || '发卡失败');
-    await reloadOverview();
-  } else if (cancelBtn) {
-    const no = cancelBtn.dataset.cancelOrder;
-    const res = await fetch('/api/orders/' + encodeURIComponent(no) + '/cancel', { method: 'POST' });
-    msg.textContent = res.ok ? ('已取消订单 ' + no) : '取消失败';
-    await reloadOverview();
-  } else if (copyBtn) {
-    await navigator.clipboard.writeText(copyBtn.dataset.copy);
-    msg.textContent = '已复制 ' + copyBtn.dataset.copy;
-  }
-});
-
-document.getElementById('genCodeBtn').addEventListener('click', async () => {
-  const presetId = document.getElementById('codePreset').value;
-  const count = Number(document.getElementById('codeCount').value) || 5;
-  const msg = document.getElementById('codeMsg');
-  msg.textContent = '生成中…';
-  const res = await fetch('/api/admin/codes/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ presetId, count }),
-  });
-  const data = await res.json().catch(() => ({}));
-  msg.textContent = res.ok ? ('已生成 ' + (data.codes?.length || 0) + ' 个卡密') : (data.error || '生成失败');
-  await reloadOverview();
-});
-
-document.getElementById('copyUnusedBtn').addEventListener('click', async () => {
-  const unused = (state.codes || []).filter((c) => !c.redeemedAt).map((c) => c.code);
-  const msg = document.getElementById('codeMsg');
-  if (!unused.length) { msg.textContent = '暂无未兑换卡密'; return; }
-  await navigator.clipboard.writeText(unused.join('\\n'));
-  msg.textContent = '已复制 ' + unused.length + ' 个未兑换卡密';
-});
-
-document.getElementById('codesBody').addEventListener('click', async (e) => {
-  const btn = e.target.closest('[data-copy]');
-  if (!btn) return;
-  await navigator.clipboard.writeText(btn.dataset.copy);
-  document.getElementById('codeMsg').textContent = '已复制 ' + btn.dataset.copy;
-});
-
+document.getElementById('userSearch').addEventListener('input', renderUsers);
 document.getElementById('refreshBtn').addEventListener('click', reloadOverview);
 document.getElementById('feedbackFilterChips').addEventListener('click', (e) => {
   const c = e.target.closest('[data-fb-status]');
@@ -969,7 +747,7 @@ document.getElementById('feedbacksBody').addEventListener('click', async (e) => 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: statusEl?.value, adminReply: replyEl?.value || '' }),
   });
-  msg.textContent = res.ok ? '已更新处理状态与回复' : '更新失败';
+  msg.textContent = res.ok ? '已更新状态与回复' : '更新失败';
   await reloadOverview();
 });
 const logoutBtn = document.getElementById('adminLogoutBtn');
@@ -1860,6 +1638,64 @@ export function createLirioServer({ dbPath } = {}) {
         return;
       }
 
+      if (isRead && pathname === '/api/community/config') {
+        const st = getStoreSettings(db);
+        sendJson(
+          res,
+          200,
+          {
+            ok: true,
+            community: {
+              qqGroupNumber: st.qqGroupNumber || '',
+              qqGroupName: st.qqGroupName || 'Lirio 学习交流群',
+              qqGroupQr: st.qqGroupQr || '',
+              qqGroupLink: st.qqGroupLink || '',
+              communityNote: st.communityNote || '交流英语学习方法、分享精听素材与使用建议。',
+              supportContact: st.supportContact || '',
+            },
+          },
+          headOnly,
+        );
+        return;
+      }
+
+      if (isRead && pathname === '/api/sync/state') {
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
+        if (!authState) return;
+        const snapshot = getUserSyncSnapshot(db, authState.user.id);
+        sendJson(res, 200, { ok: true, snapshot }, headOnly);
+        return;
+      }
+
+      if (req.method === 'PUT' && pathname === '/api/sync/state') {
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
+        if (!authState) return;
+        const body = await readJsonBody(req, 4 * 1024 * 1024);
+        const rawPayload =
+          typeof body.payload === 'string'
+            ? body.payload
+            : body.payload && typeof body.payload === 'object'
+              ? JSON.stringify(body.payload)
+              : '';
+        if (!rawPayload || rawPayload.length < 2) {
+          sendJson(res, 400, { error: '同步内容不能为空。' });
+          return;
+        }
+        try {
+          JSON.parse(rawPayload);
+        } catch {
+          sendJson(res, 400, { error: '同步数据格式无效。' });
+          return;
+        }
+        const snapshot = saveUserSyncSnapshot(db, {
+          userId: authState.user.id,
+          payload: rawPayload,
+          deviceName: String(body.deviceName || ''),
+        });
+        sendJson(res, 200, { ok: true, snapshot });
+        return;
+      }
+
       if (isRead && pathname === '/api/store/config') {
         sendJson(
           res,
@@ -2014,10 +1850,6 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
         if (!authState) return;
         const user = authState.user;
-        if (user.balanceUnits <= 0) {
-          sendJson(res, 402, { error: '当前积分不足，请在「设置 → AI 与账号」中充值积分后继续。' });
-          return;
-        }
         const body = await readJsonBody(req);
         if (!Array.isArray(body.messages) || !body.messages.length) {
           sendJson(res, 400, { error: '缺少对话消息体。' });
@@ -2028,35 +1860,14 @@ export function createLirioServer({ dbPath } = {}) {
           temperature: body.temperature ?? 0.7,
           maxTokens: body.maxTokens,
         });
-        const costUnits = calculateChatCostUnits(
-          aiRes.model,
-          aiRes.usage.promptTokens,
-          aiRes.usage.completionTokens,
-          {
-            cacheHitTokens: aiRes.usage.cacheHitTokens,
-            cacheMissTokens: aiRes.usage.cacheMissTokens,
-          },
-        );
-        const note = '云端对话消耗';
-        const settled = deductUserBalance(db, {
-          userId: user.id,
-          costUnits,
-          feature: String(body.feature || 'AI 对话'),
-          provider: aiRes.provider,
-          model: aiRes.model,
-          inputUnits: aiRes.usage.promptTokens,
-          outputUnits: aiRes.usage.completionTokens,
-          note,
-        });
         sendJson(res, 200, {
           content: aiRes.content,
           model: aiRes.model,
           usage: aiRes.usage,
-          costUnits: settled.deductedUnits,
-          balanceUnits: settled.user.balanceUnits,
-          totalSpentUnits: settled.user.totalSpentUnits,
-          user: settled.user,
-          entry: settled.entry,
+          costUnits: 0,
+          balanceUnits: user.balanceUnits,
+          totalSpentUnits: user.totalSpentUnits,
+          user,
         });
         return;
       }
@@ -2065,37 +1876,21 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
         if (!authState) return;
         const user = authState.user;
-        if (user.balanceUnits <= 0) {
-          sendJson(res, 402, { error: '当前积分不足，请充值积分或关闭云端语音以使用免费本地语音。' });
-          return;
-        }
         const body = await readJsonBody(req);
         const ttsRes = await forwardTts({
           text: body.text,
           accent: body.accent,
           voice: body.voice,
         });
-        const costUnits = calculateTtsCostUnits(ttsRes.chars);
-        const settled = deductUserBalance(db, {
-          userId: user.id,
-          costUnits,
-          feature: String(body.feature || '云端语音合成'),
-          provider: ttsRes.provider,
-          model: ttsRes.model,
-          inputUnits: ttsRes.chars,
-          outputUnits: 0,
-          note: '云端极速语音播报',
-        });
         sendJson(res, 200, {
           audioBase64: ttsRes.audioBase64,
           mime: ttsRes.mime,
           chars: ttsRes.chars,
           model: ttsRes.model,
-          costUnits: settled.deductedUnits,
-          balanceUnits: settled.user.balanceUnits,
-          totalSpentUnits: settled.user.totalSpentUnits,
-          user: settled.user,
-          entry: settled.entry,
+          costUnits: 0,
+          balanceUnits: user.balanceUnits,
+          totalSpentUnits: user.totalSpentUnits,
+          user,
         });
         return;
       }
@@ -2104,49 +1899,19 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
         if (!authState) return;
         const user = authState.user;
-        const asrModelEnv = (process.env.LIRIO_ASR_MODEL || 'whisper-1').trim();
-        const isFreeAsrModel = asrModelEnv.includes('SenseVoiceSmall');
-        if (!isFreeAsrModel && user.balanceUnits <= 0) {
-          sendJson(res, 402, { error: '当前积分不足，请充值积分或切换免费本地转写。' });
-          return;
-        }
         const body = await readJsonBody(req);
         const asrRes = await forwardTranscribe({
           wavBase64: body.wavBase64,
           durationSec: body.durationSec,
         });
-        const costUnits = asrRes.isFree ? 0 : calculateAsrCostUnits(asrRes.durationSec);
-        if (costUnits <= 0) {
-          sendJson(res, 200, {
-            text: asrRes.text,
-            model: asrRes.model,
-            durationSec: asrRes.durationSec,
-            costUnits: 0,
-            balanceUnits: user.balanceUnits,
-            totalSpentUnits: user.totalSpentUnits,
-            user,
-          });
-          return;
-        }
-        const settled = deductUserBalance(db, {
-          userId: user.id,
-          costUnits,
-          feature: String(body.feature || '云端语音识别'),
-          provider: asrRes.provider,
-          model: asrRes.model,
-          inputUnits: asrRes.durationSec,
-          outputUnits: asrRes.text.length,
-          note: `${asrRes.durationSec} 秒音频`,
-        });
         sendJson(res, 200, {
           text: asrRes.text,
           model: asrRes.model,
           durationSec: asrRes.durationSec,
-          costUnits: settled.deductedUnits,
-          balanceUnits: settled.user.balanceUnits,
-          totalSpentUnits: settled.user.totalSpentUnits,
-          user: settled.user,
-          entry: settled.entry,
+          costUnits: 0,
+          balanceUnits: user.balanceUnits,
+          totalSpentUnits: user.totalSpentUnits,
+          user,
         });
         return;
       }

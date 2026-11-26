@@ -224,73 +224,20 @@ export function getDeviceIdentity(): { deviceId: string; deviceName: string; pla
   return { deviceId, deviceName, platform };
 }
 
-export function evaluateLocalAccess(st: AccountState = getAccountState()): LocalAccessResult {
-  if (!st.token || !st.user) {
-    return {
-      allowed: false,
-      reason: 'unauthenticated',
-      message: st.lastAuthNotice || '',
-    };
-  }
-  const now = Date.now();
-  const ent = st.entitlement;
-  if (st.user.tier === 'pro') {
-    const graceUntil = ent?.offlineValidUntil ?? st.user.createdAt + 14 * 86400 * 1000;
-    if (now <= graceUntil) {
-      return {
-        allowed: true,
-        mode: 'lifetime',
-        offlineValidUntil: graceUntil,
-      };
-    }
-    return {
-      allowed: false,
-      reason: 'offline_expired',
-      offlineValidUntil: graceUntil,
-      message: '当前设备离线使用已超过 14 天，请联网验证一次终身通行证授权。',
-    };
-  }
-
-  const trialEndsAt = ent?.trialEndsAt ?? st.user.createdAt + 3 * 86400 * 1000;
-  if (now < trialEndsAt) {
-    return {
-      allowed: true,
-      mode: 'trial',
-      trialEndsAt,
-      trialRemainingHours: Math.max(1, Math.ceil((trialEndsAt - now) / 3600000)),
-    };
-  }
+export function evaluateLocalAccess(_st: AccountState = getAccountState()): LocalAccessResult {
   return {
-    allowed: false,
-    reason: 'trial_expired',
-    trialEndsAt,
-    message: '3 天全功能免费体验已结束，请输入 Lirio 终身通行证激活码永久解锁。',
+    allowed: true,
+    mode: 'lifetime',
   };
 }
 
 const listeners = new Set<(state: AccountState) => void>();
-const lastChargeListeners = new Set<(event: LastChargeEvent) => void>();
 
 export function subscribeAccount(listener: (state: AccountState) => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
-}
-
-export function subscribeLastCharge(listener: (event: LastChargeEvent) => void): () => void {
-  lastChargeListeners.add(listener);
-  return () => {
-    lastChargeListeners.delete(listener);
-  };
-}
-
-function emitLastCharge(event: LastChargeEvent) {
-  lastChargeListeners.forEach((fn) => {
-    try {
-      fn(event);
-    } catch {}
-  });
 }
 
 export function getAccountState(): AccountState {
@@ -606,14 +553,6 @@ export async function proxyChat(opts: {
     body: JSON.stringify(opts),
   });
   if (res.user) updateAccountState({ user: res.user });
-  if (res.costUnits && res.costUnits > 0) {
-    emitLastCharge({
-      amountUnits: res.costUnits,
-      feature: opts.feature || 'AI 对话',
-      balanceAfterUnits: res.user?.balanceUnits ?? 0,
-      at: Date.now(),
-    });
-  }
   return res.content;
 }
 
@@ -640,14 +579,6 @@ export async function proxyTts(text: string, accent: Accent, voice?: string, fea
     body: JSON.stringify({ text, accent, voice, feature }),
   });
   if (res.user) updateAccountState({ user: res.user });
-  if (res.costUnits && res.costUnits > 0) {
-    emitLastCharge({
-      amountUnits: res.costUnits,
-      feature,
-      balanceAfterUnits: res.user?.balanceUnits ?? 0,
-      at: Date.now(),
-    });
-  }
   return base64ToBlobUrl(res.audioBase64, res.mime);
 }
 
@@ -666,13 +597,39 @@ export async function proxyTranscribe(wavBytes: Uint8Array, feature = '云端语
     }),
   });
   if (res.user) updateAccountState({ user: res.user });
-  if (res.costUnits && res.costUnits > 0) {
-    emitLastCharge({
-      amountUnits: res.costUnits,
-      feature,
-      balanceAfterUnits: res.user?.balanceUnits ?? 0,
-      at: Date.now(),
-    });
-  }
   return res.text;
+}
+
+export interface CommunityConfig {
+  qqGroupNumber: string;
+  qqGroupName: string;
+  qqGroupQr: string;
+  qqGroupLink: string;
+  communityNote: string;
+  supportContact: string;
+}
+
+export interface CloudSyncMeta {
+  updatedAt: number;
+  deviceName: string;
+  byteSize: number;
+}
+
+export async function fetchCommunityConfig(): Promise<CommunityConfig> {
+  const res = await apiFetch<{ ok: boolean; community: CommunityConfig }>('/api/community/config');
+  return res.community;
+}
+
+export async function pushCloudSyncSnapshot(payload: string): Promise<CloudSyncMeta> {
+  const { deviceName } = getDeviceIdentity();
+  const res = await apiFetch<{ ok: boolean; snapshot: CloudSyncMeta }>('/api/sync/state', {
+    method: 'PUT',
+    body: JSON.stringify({ payload, deviceName }),
+  });
+  return res.snapshot;
+}
+
+export async function pullCloudSyncSnapshot(): Promise<(CloudSyncMeta & { payload: string }) | null> {
+  const res = await apiFetch<{ ok: boolean; snapshot: (CloudSyncMeta & { payload: string }) | null }>('/api/sync/state');
+  return res.snapshot;
 }

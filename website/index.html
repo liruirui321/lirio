@@ -16,12 +16,12 @@
       </a>
       <nav class="nav-links">
         <a href="#demo">功能演示</a>
-        <a href="#buy">购买卡密</a>
         <a href="#download">客户端下载</a>
+        <a href="#community">交流群</a>
       </nav>
       <div class="nav-actions">
         <button type="button" id="themeBtn" class="theme-btn" aria-label="切换主题">深色</button>
-        <a class="btn-nav-buy" href="#buy">购买</a>
+        <a class="btn-nav-buy" href="#download">下载</a>
       </div>
     </div>
   </header>
@@ -37,8 +37,8 @@
         多性格双语语音陪练与雅思考官 · 本地离线精听断句 · 逐格单词听写
       </p>
       <div class="hero-actions">
-        <a id="primaryDownloadBtn" class="btn-primary btn-cta-lg" href="#download">免费下载试用</a>
-        <a class="btn-ghost btn-cta-lg" href="#buy">查看方案</a>
+        <a id="primaryDownloadBtn" class="btn-primary btn-cta-lg" href="#download">下载客户端</a>
+        <a class="btn-ghost btn-cta-lg" href="#community">加入交流群</a>
       </div>
 
       <div class="preview-shell" aria-label="产品实机动态演示">
@@ -260,7 +260,7 @@
         </button>
         <button type="button" class="feature-pill-card" data-jump-preview="dictation">
           <strong>本地离线精听断句</strong>
-          <span>传音频免费自动切句 · 可选 AI 字幕精校 + 译文</span>
+          <span>传音频自动切句 · 可选 AI 字幕精校与译文</span>
         </button>
         <button type="button" class="feature-pill-card" data-jump-preview="vocab">
           <strong>逐格单词听写</strong>
@@ -269,43 +269,42 @@
       </div>
     </section>
 
-    <section id="buy" class="section">
-      <div class="section-head">
-        <div>
-          <h2>购买卡密</h2>
-          <p class="section-sub">免费试用 3 天；绑定账号支持 3 台设备，按量消耗积分。云端模式响应更快，本地模式免费但速度较慢。</p>
-        </div>
-        <span id="storeModePill" class="ver-pill">一账号一码 · 即买即兑</span>
-      </div>
-
-      <div id="packGrid" class="pack-grid"></div>
-
-      <div class="lookup-card">
-        <div class="lookup-head">
-          <div>
-            <strong>找回卡密</strong>
-            <p>输入下单时的账号即可查看历史订单与兑换码。</p>
-          </div>
-          <span id="supportContactText" class="lookup-support">售后联系：support@lirio.app</span>
-        </div>
-        <form id="lookupForm" class="lookup-form">
-          <input id="lookupEmail" type="text" placeholder="输入下单账号（4–32 位）" required />
-          <input id="lookupOrderNo" type="text" placeholder="订单号（选填，如 LR-261126-XXXXXX）" />
-          <button type="submit" class="btn-primary">找回卡密</button>
-        </form>
-        <div id="lookupResults" class="lookup-results" hidden></div>
-      </div>
-    </section>
-
     <section id="download" class="section">
       <div class="section-head">
         <div>
           <h2>客户端下载</h2>
-          <p class="section-sub">支持 Mac / Windows / Android，iPhone 端敬请期待。</p>
+          <p class="section-sub">支持 Mac / Windows / Android，iPhone 端敬请期待 · 数据优先保存在本地，登录账号可云端同步。</p>
         </div>
         <span id="releaseDateBadge" class="ver-pill">2026-11-26</span>
       </div>
       <div id="platformGrid" class="platform-grid"></div>
+    </section>
+
+    <section id="community" class="section">
+      <div class="section-head">
+        <div>
+          <h2>交流社区</h2>
+          <p class="section-sub">交流英语学习方法、分享实用素材，一起讨论如何把 Lirio 做得更好。</p>
+        </div>
+        <span class="ver-pill">QQ 交流群</span>
+      </div>
+      <div class="community-card">
+        <div class="community-info">
+          <strong id="communityGroupName">Lirio 学习交流群</strong>
+          <p id="communityNote">交流英语学习方法、分享精听素材与使用建议。</p>
+          <div class="community-meta-row" id="communityGroupRow">
+            <span class="community-code" id="communityGroupNumber">群号待补充</span>
+            <button type="button" class="mini-btn" id="copyQqBtn" hidden>复制群号</button>
+            <a id="joinQqLink" class="mini-btn" href="#" target="_blank" rel="noopener noreferrer" hidden>加入 QQ 群 ↗</a>
+          </div>
+          <div class="community-contact" id="communityContact" hidden></div>
+        </div>
+        <div class="community-qr-wrap">
+          <div id="communityQrBox" class="community-qr-box">
+            <span>QQ 群二维码</span>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="versions" class="section">
@@ -320,72 +319,6 @@
     <span>Lirio · 精听 · 词卡 · 雅思考官</span>
     <span id="footerVersion">Version 0.5.2</span>
   </footer>
-
-  <!-- Checkout Modal -->
-  <div id="checkoutModal" class="modal-backdrop" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
-      <div class="modal-head">
-        <div>
-          <span class="tag">卡密收银台</span>
-          <h3 id="checkoutTitle">购买卡密</h3>
-        </div>
-        <button type="button" id="closeCheckoutBtn" class="modal-close" aria-label="关闭">×</button>
-      </div>
-
-      <div id="checkoutPlanBar" class="checkout-plan-bar"></div>
-
-      <!-- Step 1: Confirm account & payment method -->
-      <form id="checkoutStepForm" class="checkout-step">
-        <label class="field-label" for="checkoutEmail">已注册的 Lirio 账号</label>
-        <input id="checkoutEmail" type="text" placeholder="请输入已在 Lirio 客户端注册的账号" required />
-        <p class="checkout-hint">需先在 Lirio 客户端完成注册，未注册账号无法提交订单。</p>
-
-        <div class="field-label">选择付款方式</div>
-        <div class="channel-grid">
-          <label class="channel-opt active">
-            <input type="radio" name="payChannel" value="wechat" checked />
-            <span>微信支付</span>
-          </label>
-          <label class="channel-opt">
-            <input type="radio" name="payChannel" value="alipay" />
-            <span>支付宝</span>
-          </label>
-        </div>
-
-        <div id="checkoutFormErr" class="checkout-err" hidden></div>
-        <button type="submit" id="createOrderBtn" class="btn-primary full-width">提交订单并获取收款码</button>
-      </form>
-
-      <!-- Step 2: Pay QR & wait confirmation -->
-      <div id="checkoutStepPay" class="checkout-step" hidden>
-        <div class="order-no-row">
-          <span>订单号：<strong id="payOrderNo">-</strong></span>
-          <button type="button" id="copyOrderNoBtn" class="mini-btn">复制订单号</button>
-        </div>
-
-        <div id="payQrBox" class="pay-qr-box"></div>
-        <p id="payNoticeText" class="pay-notice"></p>
-        <div id="payWaitingBanner" class="waiting-banner">等待核实收款，核实后页面将自动弹出卡密兑换码…</div>
-
-        <div class="pay-actions-stack">
-          <a id="payExternalShopBtn" class="btn-ghost full-width" href="#" target="_blank" rel="noopener noreferrer" hidden>前往官方发卡店铺付款 ↗</a>
-          <button type="button" id="sandboxPayBtn" class="sandbox-btn" hidden>本地演示：一键模拟支付成功并生成卡密</button>
-          <button type="button" id="backToFormBtn" class="mini-btn">返回修改账号或换个套餐</button>
-        </div>
-        <div id="checkoutPayErr" class="checkout-err" hidden></div>
-      </div>
-
-      <!-- Step 3: Code issued -->
-      <div id="checkoutStepSuccess" class="checkout-step" hidden>
-        <div class="success-banner">付款已确认 · 唯一卡密已生成</div>
-        <div id="issuedCodeBox" class="issued-code-box">LIRIO-XXXX-XXXX-XXXX</div>
-        <button type="button" id="copyIssuedCodeBtn" class="btn-primary full-width">复制卡密兑换码</button>
-        <p class="issued-guide">
-          打开 Lirio App → 右上角「设置」→「AI 与账号」→ 登录后粘贴卡密并点击「兑换」，积分与永久版身份立即到账。
-        </p>
-      </div>
-    </div>
-  </div>
 
   <script src="./app.js"></script>
 </body>

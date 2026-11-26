@@ -25,17 +25,13 @@ import {
   type UpdateState,
 } from './services/updaterService';
 import {
-  evaluateLocalAccess,
-  formatPoints,
   getAccountState,
   getDeviceIdentity,
   refreshAccountMe,
   subscribeAccount,
-  subscribeLastCharge,
   type AccountState,
-  type LastChargeEvent,
 } from './services/accountService';
-import { hydrateStateFromDisk } from './services/stateSync';
+import { hydrateStateFromDisk, restoreStateFromCloudIfLocalEmpty } from './services/stateSync';
 import {
   importAudioFilesToLibrary,
   type ImportProgress,
@@ -53,7 +49,6 @@ import { CorpusDictation, type CorpusLaunchRequest } from './components/Corpus/C
 import { CustomSelect } from './components/Corpus/CustomSelect';
 import { SpeakCompanion } from './components/Speak/SpeakCompanion';
 import { GlobalSettingsModal, type GlobalSettingsTab } from './components/Settings/GlobalSettingsModal';
-import { LicenseGateModal } from './components/LicenseGate/LicenseGateModal';
 import { Transport } from './components/Player/Transport';
 import { GlobalTooltip } from './components/GlobalTooltip';
 import { SelectionTools } from './components/SelectionTools';
@@ -83,8 +78,6 @@ export default function App() {
   const { setDuration, setCurrentTime } = usePlayerStore();
   const [settingsTab, setSettingsTab] = useState<GlobalSettingsTab>('ai');
   const [accountState, setAccountState] = useState<AccountState>(() => getAccountState());
-  const [recentCharge, setRecentCharge] = useState<LastChargeEvent | null>(null);
-  const access = useMemo(() => evaluateLocalAccess(accountState), [accountState]);
 
   const [hub, setHub] = useState<HubSection>('home');
   const [listeningMode, setListeningMode] = useState<ListeningMode>('library');
@@ -123,16 +116,13 @@ export default function App() {
           setAccountState(getAccountState());
           setStateTick((t) => t + 1);
         }
-        return refreshAccountMe().catch(() => null);
+        return restoreStateFromCloudIfLocalEmpty().then((cloudRestored) => {
+          if (cloudRestored) setStateTick((t) => t + 1);
+          return refreshAccountMe().catch(() => null);
+        });
       })
       .catch(() => {});
     const unsubAcct = subscribeAccount((next) => setAccountState(next));
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const unsubCharge = subscribeLastCharge((evt) => {
-      setRecentCharge(evt);
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => setRecentCharge(null), 4500);
-    });
     const onOnline = () => {
       void refreshAccountMe().catch(() => {});
     };
@@ -143,10 +133,8 @@ export default function App() {
     window.addEventListener('focus', onWindowFocus);
     return () => {
       unsubAcct();
-      unsubCharge();
       window.removeEventListener('online', onOnline);
       window.removeEventListener('focus', onWindowFocus);
-      if (timer) clearTimeout(timer);
     };
   }, []);
 
@@ -673,11 +661,11 @@ export default function App() {
           </span>
         )}
 
-        {accountState.aiMode === 'pro_balance' && accountState.user ? (
+        {accountState.user ? (
           <button
             type="button"
-            className={`account-topbar-pill${accountState.user.balanceUnits < 10000 ? ' low' : ''}`}
-            title="个人账号、终身通行证与积分"
+            className="account-topbar-pill"
+            title="账号与云同步"
             aria-label="个人账号与设置"
             onClick={() => {
               setSettingsTab('ai');
@@ -685,38 +673,19 @@ export default function App() {
             }}
           >
             <IconUser size={15} />
-            <span>{formatPoints(accountState.user.balanceUnits)}</span>
-            {recentCharge && (
-              <span className="account-charge-delta" title={recentCharge.feature}>
-                -{formatPoints(recentCharge.amountUnits)}
-              </span>
-            )}
+            <span>{accountState.user.name}</span>
           </button>
         ) : (
           <button
             className={`icon-btn${settingsOpen && settingsTab === 'ai' ? ' active' : ''}`}
-            title="账号、终身通行证与 AI 引擎"
-            aria-label="账号与 AI 设置"
+            title="账号、云同步与设置"
+            aria-label="账号与设置"
             onClick={() => {
               setSettingsTab('ai');
               setSettingsOpen(true);
             }}
           >
             <IconUser size={17} />
-          </button>
-        )}
-
-        {access.allowed && access.mode === 'trial' && (
-          <button
-            type="button"
-            className="trial-topbar-pill"
-            title="点击激活 Lirio Pro · 永久版"
-            onClick={() => {
-              setSettingsTab('ai');
-              setSettingsOpen(true);
-            }}
-          >
-            体验剩 {Math.max(1, Math.ceil((access.trialRemainingHours || 1) / 24))} 天 · 升永久版
           </button>
         )}
 
@@ -883,8 +852,6 @@ export default function App() {
         onThemeChange={setTheme}
       />
 
-      {!access.allowed && <LicenseGateModal access={access} account={accountState} />}
-
       {/* Automated Audio Import & Segmentation Agent Modal */}
       {showImportModal && (
         <div
@@ -996,7 +963,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {access.allowed && mistakeReminder.shouldRemind && hub !== 'words' && (
+      {mistakeReminder.shouldRemind && hub !== 'words' && (
         <div
           className={`mistake-reminder-toast${
             !updateState.dismissed &&

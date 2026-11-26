@@ -18,7 +18,7 @@ import {
 import { FUNCTION_WORDS, record } from '../../services/submissions';
 import { addMistakeToWordBook, loadCorpusState } from '../../services/corpusService';
 import { simplifyMaterialTitle } from '../../services/materialTitle';
-import { formatPoints, getAccountState, subscribeAccount, type AccountState } from '../../services/accountService';
+import { getAccountState, subscribeAccount, type AccountState } from '../../services/accountService';
 import { loadSpeakState, proofreadDictationSentences } from '../../services/speakService';
 import { handleDictationKeySound } from '../../services/typingSound';
 import type { Sentence } from '../../types/project';
@@ -852,7 +852,7 @@ export function Dictation({
         const speakCfg = loadSpeakState().config;
         const usingOfficial = accountState.aiMode === 'pro_balance';
         const channelLabel = usingOfficial
-          ? `Lirio 云端服务 · 剩余 ${formatPoints(accountState.user?.balanceUnits ?? 0)}`
+          ? (accountState.user ? 'Lirio 云端服务' : '请先登录账号启用云端精校')
           : `自填 API Key · ${speakCfg.textModel || 'deepseek-chat'}`;
         const hasBackups = (project.dictationBackups?.length ?? 0) > 0;
         const translatedInDoc = items.filter((s) => Boolean(s.translation?.trim())).length;

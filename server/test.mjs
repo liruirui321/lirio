@@ -73,7 +73,7 @@ try {
   assert.equal(rech.json.entry.kind, 'recharge');
   assert.equal(rech.json.entry.amountUnits, 330000);
 
-  // 5. Metered /api/ai/chat, /api/ai/tts, /api/ai/transcribe deduct balance accurately
+  // 5. /api/ai/chat, /api/ai/tts, /api/ai/transcribe work without charging fees (costUnits = 0)
   const chat = await req(
     'POST',
     '/api/ai/chat',
@@ -88,9 +88,8 @@ try {
   );
   assert.equal(chat.status, 200);
   assert.ok(chat.json.content.length > 0);
-  assert.ok(chat.json.costUnits >= 100);
-  assert.equal(chat.json.costUnits % 100, 0);
-  assert.equal(chat.json.balanceUnits, 335000 - chat.json.costUnits);
+  assert.equal(chat.json.costUnits, 0);
+  assert.equal(chat.json.balanceUnits, 335000);
 
   const tts = await req(
     'POST',
@@ -100,9 +99,8 @@ try {
   );
   assert.equal(tts.status, 200);
   assert.ok(tts.json.audioBase64.length > 5);
-  assert.ok(tts.json.costUnits >= 100);
-  assert.equal(tts.json.costUnits % 100, 0);
-  assert.equal(tts.json.balanceUnits, chat.json.balanceUnits - tts.json.costUnits);
+  assert.equal(tts.json.costUnits, 0);
+  assert.equal(tts.json.balanceUnits, 335000);
 
   const fakeWav = Buffer.alloc(1600, 1).toString('base64');
   const asr = await req(
@@ -113,14 +111,14 @@ try {
   );
   assert.equal(asr.status, 200);
   assert.ok(asr.json.text.length > 5);
-  assert.equal(asr.json.balanceUnits, tts.json.balanceUnits - asr.json.costUnits);
+  assert.equal(asr.json.costUnits, 0);
 
-  // Verify ledger contains all entries (bonus + recharge + 3 usages = 5)
+  // Verify ledger contains bonus + recharge (2)
   const ledgerRes = await req('GET', '/api/billing/ledger', null, token);
   assert.equal(ledgerRes.status, 200);
-  assert.equal(ledgerRes.json.ledger.length, 5);
+  assert.equal(ledgerRes.json.ledger.length, 2);
 
-  // 6. When balance reaches 0, /api/ai/chat returns 402 Insufficient Balance
+  // 6. When balance reaches 0, /api/ai/chat & /api/ai/tts STILL succeed (zero paywall)
   const balNow = ledgerRes.json.user.balanceUnits;
   deductUserBalance(db, {
     userId,
@@ -134,7 +132,17 @@ try {
     { messages: [{ role: 'user', content: 'Hi' }] },
     token,
   );
-  assert.equal(emptyChat.status, 402);
+  assert.equal(emptyChat.status, 200);
+  assert.equal(emptyChat.json.costUnits, 0);
+
+  const emptyTts = await req(
+    'POST',
+    '/api/ai/tts',
+    { text: 'Hello world', accent: 'us' },
+    token,
+  );
+  assert.equal(emptyTts.status, 200);
+  assert.equal(emptyTts.json.costUnits, 0);
 
   // Confirm creditUserBalance still works after zero balance
   const refilled = creditUserBalance(db, {
@@ -175,7 +183,7 @@ try {
   assert.equal(dashHtml.status, 200);
   assert.ok((dashHtml.headers.get('content-type') || '').includes('text/html'));
   const htmlBody = await dashHtml.text();
-  assert.ok(htmlBody.includes('Lirio Pro 运营管理台'));
+  assert.ok(htmlBody.includes('Lirio 管理后台'));
 
   const dashJson = await fetch(`${base}/admin`, { headers: { Accept: 'application/json' } });
   assert.equal(dashJson.status, 200);
@@ -668,8 +676,45 @@ try {
   assert.equal(proofParsed.items[0].i, 1);
   assert.ok(proofParsed.items[0].t.startsWith('Dr brown'));
   assert.ok(proofParsed.items[0].zh.includes('（测试译文）'));
-  const proofLedgerRes = await req('GET', '/api/billing/ledger', null, token);
-  assert.ok(proofLedgerRes.json.ledger.some((e) => e.feature === '字幕 AI 精校'));
+  assert.equal(proofRes.json.costUnits, 0);
+
+  // 17b. Verify Cloud Sync round-trip (/api/sync/state) & Community QQ config (/api/community/config)
+  const emptySync = await req('GET', '/api/sync/state', null, token);
+  assert.equal(emptySync.status, 200);
+  assert.equal(emptySync.json.snapshot, null);
+
+  const sampleSyncPayload = JSON.stringify({
+    app: 'Lirio',
+    version: 1,
+    entries: { 'aboboo-corpus-state-v1': { activeBookId: 'ielts_807', stats: {} } },
+  });
+  const putSync = await req(
+    'PUT',
+    '/api/sync/state',
+    { payload: sampleSyncPayload, deviceName: 'MacBook Pro' },
+    token,
+  );
+  assert.equal(putSync.status, 200);
+  assert.ok(putSync.json.snapshot.byteSize > 20);
+  assert.equal(putSync.json.snapshot.deviceName, 'MacBook Pro');
+
+  const getSync = await req('GET', '/api/sync/state', null, token);
+  assert.equal(getSync.status, 200);
+  assert.equal(getSync.json.snapshot.payload, sampleSyncPayload);
+
+  const saveComm = await req('POST', '/api/admin/settings', {
+    qqGroupNumber: '987654321',
+    qqGroupName: 'Lirio 英语学习群',
+    qqGroupQr: 'data:image/png;base64,iVBORw0KGgo=',
+    communityNote: '欢迎加入交流英语与产品建议',
+  });
+  assert.equal(saveComm.status, 200);
+
+  const commCfg = await req('GET', '/api/community/config');
+  assert.equal(commCfg.status, 200);
+  assert.equal(commCfg.json.community.qqGroupNumber, '987654321');
+  assert.equal(commCfg.json.community.qqGroupName, 'Lirio 英语学习群');
+  assert.equal(commCfg.json.community.qqGroupQr, 'data:image/png;base64,iVBORw0KGgo=');
 
   // 18. Verify plain unique username auth (without @), length/char rules, and order checkout/lookup
   assert.equal((await req('POST', '/api/auth/register', { email: 'ab', password: 'password123' })).status, 400);
