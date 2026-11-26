@@ -29,17 +29,18 @@ async function req(method, path, body, token) {
 }
 
 try {
-  // 1. Register creates user + ¥5.00 (50000 units) welcome credit + 1 bonus ledger row
+  // 1. Register creates user + ¥0.50 (5000 units) welcome credit + 1 bonus ledger row
   const reg = await req('POST', '/api/auth/register', {
     email: 'learner@lirio.app',
     password: 'password123',
     name: 'Cherry',
   });
   assert.equal(reg.status, 201);
-  assert.equal(reg.json.user.balanceUnits, 50000);
+  assert.equal(reg.json.user.balanceUnits, 5000);
   assert.equal(reg.json.user.tier, 'pro_trial');
   assert.equal(reg.json.ledger.length, 1);
   assert.equal(reg.json.ledger[0].kind, 'bonus');
+  assert.ok(reg.json.ledger[0].note.includes('¥0.50'));
   const userId = reg.json.user.id;
 
   // 2. Duplicate email returns 409
@@ -68,7 +69,7 @@ try {
   const rech = await req('POST', '/api/billing/recharge', { packageId: 'pack_30' }, token);
   assert.equal(rech.status, 200);
   assert.equal(rech.json.user.tier, 'pro');
-  assert.equal(rech.json.user.balanceUnits, 380000);
+  assert.equal(rech.json.user.balanceUnits, 335000);
   assert.equal(rech.json.entry.kind, 'recharge');
   assert.equal(rech.json.entry.amountUnits, 330000);
 
@@ -88,7 +89,7 @@ try {
   assert.equal(chat.status, 200);
   assert.ok(chat.json.content.length > 0);
   assert.ok(chat.json.costUnits >= 1);
-  assert.equal(chat.json.balanceUnits, 380000 - chat.json.costUnits);
+  assert.equal(chat.json.balanceUnits, 335000 - chat.json.costUnits);
 
   const tts = await req(
     'POST',

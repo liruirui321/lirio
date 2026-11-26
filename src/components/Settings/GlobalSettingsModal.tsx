@@ -666,7 +666,7 @@ export function GlobalSettingsModal({
                         className={authMode === 'register' ? 'active' : ''}
                         onClick={() => setAuthMode('register')}
                       >
-                        注册（赠 ¥5）
+                        注册（赠 ¥0.5）
                       </button>
                     </div>
                     <button

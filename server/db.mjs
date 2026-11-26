@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const DEFAULT_TRIAL_UNITS = 50000; // ¥5.00 welcome trial credit
+export const DEFAULT_TRIAL_UNITS = 5000; // ¥0.50 welcome trial credit
 
 export function openDatabase(dbPath = process.env.LIRIO_DB_PATH || path.join(__dirname, 'lirio.db')) {
   const db = new DatabaseSync(dbPath);
@@ -216,10 +216,11 @@ export function createUserWithTrial(db, { email, name, passwordHash, trialUnits 
     ).run(userId, normalizedEmail, cleanName, passwordHash, trialUnits, now);
 
     if (trialUnits > 0) {
+      const trialNote = `注册即赠 ¥${(trialUnits / 10000).toFixed(2)} AI 体验金`;
       db.prepare(
         `INSERT INTO ledger (id, user_id, kind, feature, provider, model, input_units, output_units, amount_units, balance_after_units, note, created_at)
-         VALUES (?, ?, 'bonus', '新用户注册赠金', 'lirio', 'trial', 0, 0, ?, ?, '注册即赠 ¥5.00 AI 体验金', ?)`,
-      ).run(ledgerId, userId, trialUnits, trialUnits, now);
+         VALUES (?, ?, 'bonus', '新用户注册赠金', 'lirio', 'trial', 0, 0, ?, ?, ?, ?)`,
+      ).run(ledgerId, userId, trialUnits, trialUnits, trialNote, now);
     }
 
     db.exec('COMMIT');
