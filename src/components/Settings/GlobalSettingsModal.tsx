@@ -12,7 +12,7 @@ import {
   fetchMyFeedbacks,
   fetchStoreConfig,
   fetchStoreOrder,
-  formatYuan,
+  formatPoints,
   getAccountState,
   getDeviceIdentity,
   getStoreWebsiteUrl,
@@ -129,25 +129,9 @@ const ACCENT_OPTS: SelectOption[] = [
   { value: 'in', label: '印音 IN' },
 ];
 
-function isDeepSeekPeakNow(now = new Date()): boolean {
-  const bj = new Date(now.getTime() + 8 * 3600_000);
-  const day = bj.getUTCDay();
-  if (day === 0 || day === 6) return false;
-  const hour = bj.getUTCHours();
-  return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
-}
-
 function formatLedgerUsage(entry: LedgerEntry): string {
   if (entry.kind !== 'usage') return entry.note || '';
-  const period = entry.note?.includes('高峰价')
-    ? ' · 高峰价'
-    : entry.note?.includes('空闲价')
-      ? ' · 空闲价'
-      : '';
-  if (entry.outputUnits > 0 && entry.model !== 'whisper-1') {
-    return `${entry.inputUnits + entry.outputUnits} tok${period}`;
-  }
-  return `${entry.inputUnits} 字`;
+  return '';
 }
 
 export function GlobalSettingsModal({
@@ -339,7 +323,7 @@ export function GlobalSettingsModal({
           : await loginAccount({ email: email.trim(), password });
       setLedger(res.ledger || []);
       setPassword('');
-      setStatusMsg(authMode === 'register' ? `已赠 ${formatYuan(res.user.balanceUnits, 2)}` : '已登录');
+      setStatusMsg(authMode === 'register' ? `已赠 ${formatPoints(res.user.balanceUnits)}` : '已登录');
     } catch (e) {
       setErrorMsg(String(e));
     } finally {
@@ -362,7 +346,7 @@ export function GlobalSettingsModal({
       if (!overrideCode) setRedeemInput('');
       setActiveOrder(null);
       setShowBuyPanel(false);
-      setStatusMsg(`兑换成功 +${formatYuan(res.entry.amountUnits, 2)}`);
+      setStatusMsg(`兑换成功 +${formatPoints(res.entry.amountUnits)}`);
     } catch (e) {
       setErrorMsg(String(e));
     } finally {
@@ -846,7 +830,7 @@ export function GlobalSettingsModal({
                     </button>
                   </div>
                   <div className="settings-rate-tip" style={{ textAlign: 'center' }}>
-                    新用户赠 ¥0.5 · 按量扣费 · 本地免费
+                    新用户赠 50 积分 · ¥1 = 100 积分 · 本地免费
                   </div>
                   <button
                     type="button"
@@ -928,8 +912,8 @@ export function GlobalSettingsModal({
 
                     <div className="account-balance-strip">
                       <div className="account-balance-main">
-                        <span>余额</span>
-                        <strong>{formatYuan(account.user.balanceUnits, 4)}</strong>
+                        <span>当前积分</span>
+                        <strong>{formatPoints(account.user.balanceUnits)}</strong>
                       </div>
                       <div
                         className="account-balance-stats"
@@ -944,25 +928,18 @@ export function GlobalSettingsModal({
                             {showBuyPanel ? '收起' : '充值'}
                           </button>
                         )}
-                        <span>已充 {formatYuan(account.user.totalRechargedUnits, 2)} · 已用 {formatYuan(account.user.totalSpentUnits, 4)}</span>
+                        <span>已获 {formatPoints(account.user.totalRechargedUnits)} · 已用 {formatPoints(account.user.totalSpentUnits)}</span>
                       </div>
                     </div>
 
                     <div className="settings-pricing-mini">
                       <div className="pricing-mini-row">
-                        <span>
-                          文本 <span className="pricing-period-tag">{isDeepSeekPeakNow() ? '高峰' : '空闲'}</span>
-                        </span>
-                        <span>
-                          {isDeepSeekPeakNow()
-                            ? '输入 ¥6 / 缓存 ¥0.12 / 输出 ¥24'
-                            : '输入 ¥3 / 缓存 ¥0.06 / 输出 ¥12'}{' '}
-                          /百万
-                        </span>
+                        <span>对话 / 精校</span>
+                        <span>约 1–2 积分 / 次（¥1 = 100 积分）</span>
                       </div>
                       <div className="pricing-mini-row">
-                        <span>语音</span>
-                        <span>{account.proCloudSpeech ? '云端极速 · 播音 ¥0.06 / 千字节（转写免费）' : '本地免费（速度较慢）'}</span>
+                        <span>语音与转写</span>
+                        <span>{account.proCloudSpeech ? '云端极速 · 播音约 1–3 积分/句（转写 0 积分）' : '本地免费 · 0 积分（速度较慢）'}</span>
                       </div>
                     </div>
 
@@ -981,7 +958,7 @@ export function GlobalSettingsModal({
                             }}
                             placeholder={
                               account.user.tier === 'pro'
-                                ? '输入加油包兑换码'
+                                ? '输入积分卡密兑换码'
                                 : '输入卡密兑换码（LIRIO-XXXX-XXXX-XXXX）'
                             }
                             spellCheck={false}
@@ -1165,7 +1142,7 @@ export function GlobalSettingsModal({
                     </div>
                     <label
                       className="settings-check-line"
-                      title="开启后使用云端语音播音与转写，响应更快（播音 ¥0.06 / 千字节，转写免费）；关闭后使用本地语音与转写，免费但速度较慢"
+                      title="开启后使用云端语音播音与转写，响应更快（播音约 1–3 积分/句，转写 0 积分）；关闭后使用本地语音与转写，0 积分免费但速度较慢"
                     >
                       <input
                         type="checkbox"
@@ -1176,7 +1153,7 @@ export function GlobalSettingsModal({
                     </label>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -4, lineHeight: 1.5 }}>
-                    云端语音与转写响应更快（播音 ¥0.06 / 千字节，转写免费）；关闭后使用本地转写与播音，免费但速度会慢一些。
+                    开启后使用云端语音播音与转写，响应更快（播音约 1–3 积分/句，转写 0 积分）；关闭后使用本地转写与播音，0 积分免费但速度会慢一些。
                   </div>
 
                   <div className="ledger-section">
@@ -1220,9 +1197,9 @@ export function GlobalSettingsModal({
                               <div className="ledger-col-amt">
                                 <strong className={isPlus ? 'plus' : 'minus'}>
                                   {isPlus ? '+' : '-'}
-                                  {formatYuan(Math.abs(row.amountUnits), isPlus ? 2 : 4)}
+                                  {formatPoints(Math.abs(row.amountUnits))}
                                 </strong>
-                                <small>余 {formatYuan(row.balanceAfterUnits, 2)}</small>
+                                <small>余 {formatPoints(row.balanceAfterUnits)}</small>
                               </div>
                             </div>
                           );
@@ -1585,18 +1562,18 @@ export function GlobalSettingsModal({
             {showGuide && (
               <div className="settings-guide-card">
                 <div className="guide-block">
-                  <strong>免费本地功能</strong>
+                  <strong>免费本地功能（0 积分）</strong>
                   <p>
-                    导入音频、自动断句、本地语音与转写、单词听写与错词本均本地运行，免费不限次（本地转写与播音速度会慢一些）。
+                    导入音频、自动断句、本地语音与转写、单词听写与错词本均本地运行，0 积分免费不限次（本地转写与播音速度会慢一些）。
                   </p>
                 </div>
                 <div className="guide-block">
-                  <strong>费用参考（¥10 约可用 80–270 场）</strong>
+                  <strong>积分消耗参考（¥1 = 100 积分，1,000 积分约可用 60–200 场）</strong>
                   <ul>
-                    <li>雅思模考 + 复盘：约 ¥0.04–¥0.12 / 场</li>
-                    <li>双语陪练 + 复盘：约 ¥0.03–¥0.10 / 次</li>
-                    <li>听力诊断 / 字幕精校：约 ¥0.005–¥0.01 / 次</li>
-                    <li>云端极速语音：播音 ¥0.06 / 千字节，云端转写免费（比本地响应更快）</li>
+                    <li>单句对话 / 听力诊断 / 字幕精校：约 1–2 积分 / 次</li>
+                    <li>双语陪练 + 复盘：约 5–20 积分 / 场</li>
+                    <li>雅思模考 + 评分报告：约 10–30 积分 / 场</li>
+                    <li>云端极速语音：播音约 1–3 积分 / 句，云端转写 0 积分（比本地响应更快）</li>
                   </ul>
                 </div>
               </div>

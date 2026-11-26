@@ -53,6 +53,7 @@ import {
   calculateAsrCostUnits,
   calculateChatCostUnits,
   calculateTtsCostUnits,
+  formatPoints,
   formatYuan,
   getDeepSeekPeriodLabel,
   getDeepSeekRatesPer1M,
@@ -76,35 +77,35 @@ export const CODE_PRESETS = [
   {
     id: 'pro_99',
     payYuan: 99,
-    label: '¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）',
+    label: '¥99 Lirio Pro · 永久版（含 1,000 积分）',
     shortTitle: 'Lirio Pro',
     badge: 'Pro 授权',
-    subtitle: '支持 3 台设备 · 含 ¥10 对话余额',
-    amountUnits: 100000, // ¥10.00
+    subtitle: '支持 3 台设备 · 含 1,000 积分',
+    amountUnits: 100000, // 1,000 积分
     upgradeToPro: true,
-    note: '开通 Lirio Pro · 永久版 + 赠 ¥10.00 初始对话余额',
+    note: '开通 Lirio Pro · 永久版 + 赠 1,000 积分',
   },
   {
     id: 'topup_10',
     payYuan: 10,
-    label: '¥10 AI 对话加油包',
-    shortTitle: '¥10 对话加油包',
-    badge: '按量充值',
-    subtitle: '按实际用量扣费 · 余额长期有效',
-    amountUnits: 100000, // ¥10.00
+    label: '¥10 积分加油包（1,000 积分）',
+    shortTitle: '1,000 积分加油包',
+    badge: '按量消耗',
+    subtitle: '¥1 = 100 积分 · 长期有效',
+    amountUnits: 100000, // 1,000 积分
     upgradeToPro: false,
-    note: 'AI 对话加油包 ¥10.00',
+    note: '积分加油包 1,000 积分',
   },
   {
     id: 'topup_30',
     payYuan: 30,
-    label: '¥30 AI 对话加油包（赠 ¥5）',
-    shortTitle: '¥30 对话加油包',
-    badge: '赠 ¥5',
-    subtitle: '实付 ¥30 到账 ¥35 · 余额长期有效',
-    amountUnits: 350000, // ¥35.00
+    label: '¥30 积分加油包（3,500 积分）',
+    shortTitle: '3,500 积分加油包',
+    badge: '赠 500 积分',
+    subtitle: '实付 ¥30 得 3,500 积分 · 长期有效',
+    amountUnits: 350000, // 3,500 积分
     upgradeToPro: false,
-    note: 'AI 对话加油包 ¥30.00 + 赠送 ¥5.00',
+    note: '积分加油包 3,000 积分 + 赠 500 积分',
   },
 ];
 
@@ -219,7 +220,7 @@ function renderAdminLoginHtml() {
 <body>
 <div class="box">
   <h1>Lirio Pro 管理后台</h1>
-  <p>请输入管理员口令（LIRIO_ADMIN_TOKEN）以查看余额流水与生成卡密。</p>
+  <p>请输入管理员口令（LIRIO_ADMIN_TOKEN）以查看积分流水与生成卡密。</p>
   <form id="loginForm">
     <input id="tokenInput" type="password" placeholder="输入 LIRIO_ADMIN_TOKEN" autocomplete="current-password" required />
     <button type="submit">进入看板</button>
@@ -251,18 +252,18 @@ export function seedDemoUser(db) {
   if (!existingCodes.length) {
     createRedeemCodes(db, {
       planId: 'pro_99',
-      label: '¥99 买断卡密（含 ¥10 余额）',
+      label: '¥99 Lirio Pro · 永久版（含 1,000 积分）',
       amountUnits: 100000,
       upgradeToPro: true,
-      note: '演示 ¥99 买断卡密',
+      note: '演示 ¥99 买断卡密（含 1,000 积分）',
       exactCodes: ['LIRIO-DEMO-9900-PRO1'],
     });
     createRedeemCodes(db, {
       planId: 'topup_30',
-      label: '¥30 余额充值码（赠 ¥5）',
+      label: '¥30 积分加油包（3,500 积分）',
       amountUnits: 350000,
       upgradeToPro: false,
-      note: '演示 ¥30 充值卡密（含 ¥35 额度）',
+      note: '演示 ¥30 充值卡密（含 3,500 积分）',
       exactCodes: ['LIRIO-DEMO-3000-TOP1'],
     });
   }
@@ -366,8 +367,10 @@ function buildOverview(db) {
     isPeak,
     period: getDeepSeekPeriodLabel(),
     rates: {
+      pointsPerYuan: 100,
       deepseek: getDeepSeekRatesPer1M(),
-      ttsPer1kCharsYuan: 0.06,
+      ttsPer1kCharsYuan: 0.15,
+      ttsPointsPer1kBytes: 15,
     },
     stats,
     users,
@@ -478,7 +481,7 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
   <div class="kpi-grid" id="kpiGrid">
     <div class="kpi"><span class="kpi-label">累计已收款</span><span class="kpi-val" id="kpiRev">¥${overview.stats.totalRevenueYuan.toFixed(2)}</span><span class="kpi-sub" id="kpiPaidSub">${overview.stats.paidOrders} 笔已发卡</span></div>
     <div class="kpi${overview.stats.pendingOrders > 0 ? ' alert' : ''}" id="kpiPendingCard"><span class="kpi-label">待核单付款</span><span class="kpi-val" id="kpiPending">${overview.stats.pendingOrders}</span><span class="kpi-sub">点击前往审核发卡</span></div>
-    <div class="kpi"><span class="kpi-label">注册用户 / PRO</span><span class="kpi-val" id="kpiUsers">${overview.stats.totalUsers} / ${overview.stats.proUsers}</span><span class="kpi-sub" id="kpiBalSub">总余额 ${escapeHtml(formatYuan(overview.stats.totalBalanceUnits, 2))}</span></div>
+    <div class="kpi"><span class="kpi-label">注册用户 / PRO</span><span class="kpi-val" id="kpiUsers">${overview.stats.totalUsers} / ${overview.stats.proUsers}</span><span class="kpi-sub" id="kpiBalSub">总剩余 ${escapeHtml(formatPoints(overview.stats.totalBalanceUnits))}</span></div>
     <div class="kpi"><span class="kpi-label">卡密库存（可用/已用）</span><span class="kpi-val" id="kpiCodes">${overview.stats.unusedCodes} / ${overview.stats.usedCodes}</span><span class="kpi-sub">支持单码与批量导出</span></div>
   </div>
 
@@ -537,9 +540,9 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
       <div class="toolbar-row">
         <div class="filter-group">
           <select id="codePreset">
-            <option value="pro_99">¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）</option>
-            <option value="topup_10">¥10 AI 对话加油包</option>
-            <option value="topup_30">¥30 AI 对话加油包（赠 ¥5）</option>
+            <option value="pro_99">¥99 Lirio Pro · 永久版（含 1,000 积分）</option>
+            <option value="topup_10">¥10 积分加油包（1,000 积分）</option>
+            <option value="topup_30">¥30 积分加油包（3,500 积分）</option>
           </select>
           <label class="sub">数量 <input id="codeCount" type="number" min="1" max="100" value="5" style="width:68px;text-align:center;" /></label>
           <button class="btn primary" id="genCodeBtn" type="button">生成卡密</button>
@@ -621,24 +624,24 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
 
   <section class="panel" id="panel-users">
     <div class="rates">
-      <span>文本：输入 ¥3~6 / 缓存 ¥0.06~0.12 / 输出 ¥12~24（每百万 tok）</span>
-      <span>本地语音、转写与音频切分：¥0（免费，速度较慢）</span>
-      <span>可选云端语音（更快）：播音 ¥0.06 / 千字节 · 语音转写免费</span>
+      <span>积分汇率：¥1 = 100 积分（按实际用量扣除整数积分）</span>
+      <span>本地语音、转写与音频切分：0 积分（免费，速度较慢）</span>
+      <span>云端语音（更快）：播音约 1–3 积分/句（15 积分/千字节）· 语音转写 0 积分</span>
     </div>
     <div class="card">
       <div class="toolbar-row">
-        <h2 style="margin:0;">账号与余额</h2>
+        <h2 style="margin:0;">账号与积分</h2>
         <input id="userSearch" class="search-input" type="search" placeholder="搜索昵称或邮箱" />
       </div>
       <table>
-        <thead><tr><th>账号</th><th>身份</th><th class="num">当前余额</th><th class="num">累计充值</th><th class="num">累计消费</th></tr></thead>
+        <thead><tr><th>账号</th><th>身份</th><th class="num">当前积分</th><th class="num">累计获得</th><th class="num">累计消耗</th></tr></thead>
         <tbody id="usersBody"></tbody>
       </table>
     </div>
     <div class="card">
-      <h2>最近计费流水</h2>
+      <h2>最近积分流水</h2>
       <table>
-        <thead><tr><th>时间</th><th>账号</th><th>项目</th><th>明细</th><th class="num">金额</th><th class="num">余额</th></tr></thead>
+        <thead><tr><th>时间</th><th>账号</th><th>项目</th><th>明细</th><th class="num">积分变动</th><th class="num">剩余积分</th></tr></thead>
         <tbody id="ledgerBody"></tbody>
       </table>
     </div>
@@ -647,6 +650,7 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
 <script>
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const yuan = (u, d = 2) => '¥' + ((Number(u) || 0) / 10000).toFixed(d);
+const pts = (u) => Math.round((Number(u) || 0) / 100).toLocaleString('en-US') + ' 积分';
 const fmtTime = (ms) => new Date(ms).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 let state = ${initialJson};
 let orderFilter = 'all';
@@ -677,7 +681,7 @@ function renderKpis() {
   document.getElementById('pendingTabBadge').textContent = String(st.pendingOrders || 0);
   document.getElementById('kpiPendingCard').className = 'kpi' + ((st.pendingOrders || 0) > 0 ? ' alert' : '');
   document.getElementById('kpiUsers').textContent = (st.totalUsers || 0) + ' / ' + (st.proUsers || 0);
-  document.getElementById('kpiBalSub').textContent = '总余额 ' + yuan(st.totalBalanceUnits || 0, 2);
+  document.getElementById('kpiBalSub').textContent = '总剩余 ' + pts(st.totalBalanceUnits || 0);
   document.getElementById('kpiCodes').textContent = (st.unusedCodes || 0) + ' / ' + (st.usedCodes || 0);
 }
 
@@ -721,7 +725,7 @@ function renderCodes() {
       ? '<span class="tag used">已用 (' + esc(c.redeemedByEmail || '-') + ')</span>'
       : '<span class="tag">可用</span>';
     return '<tr><td class="code-mono">' + esc(c.code) + '</td><td>' + esc(c.label) + (c.note ? '<div class="sub">' + esc(c.note) + '</div>' : '') + '</td>' +
-      '<td class="num strong">' + yuan(c.amountUnits, 2) + '</td><td>' + status + '</td>' +
+      '<td class="num strong">' + pts(c.amountUnits) + '</td><td>' + status + '</td>' +
       '<td class="num"><button class="copy-btn" type="button" data-copy="' + esc(c.code) + '">复制</button></td></tr>';
   }).join('') : '<tr><td colspan="5" class="empty">暂无符合条件的卡密</td></tr>';
 }
@@ -732,17 +736,17 @@ function renderUsersAndLedger() {
   document.getElementById('usersBody').innerHTML = users.length ? users.map((u) =>
     '<tr><td><strong>' + esc(u.name) + '</strong><div class="sub">' + esc(u.email) + '</div></td>' +
     '<td><span class="tag">' + (u.tier === 'pro' ? 'PRO' : 'TRIAL') + '</span></td>' +
-    '<td class="num strong">' + yuan(u.balanceUnits, 4) + '</td>' +
-    '<td class="num">' + yuan(u.totalRechargedUnits, 2) + '</td>' +
-    '<td class="num">' + yuan(u.totalSpentUnits, 4) + '</td></tr>'
+    '<td class="num strong">' + pts(u.balanceUnits) + '</td>' +
+    '<td class="num">' + pts(u.totalRechargedUnits) + '</td>' +
+    '<td class="num">' + pts(u.totalSpentUnits) + '</td></tr>'
   ).join('') : '<tr><td colspan="5" class="empty">暂无账号</td></tr>';
   document.getElementById('ledgerBody').innerHTML = (state.ledger || []).length ? state.ledger.map((r) => {
     const plus = r.amountUnits >= 0;
     return '<tr><td class="sub">' + esc(fmtTime(r.createdAt)) + '</td><td class="sub">' + esc(r.userEmail || r.userName || '-') + '</td>' +
-      '<td>' + esc(r.feature) + '</td><td class="sub">' + esc(r.note || r.model || '-') + '</td>' +
-      '<td class="num ' + (plus ? 'plus' : 'minus') + '">' + (plus ? '+' : '-') + yuan(Math.abs(r.amountUnits), plus ? 2 : 4) + '</td>' +
-      '<td class="num">' + yuan(r.balanceAfterUnits, 4) + '</td></tr>';
-  }).join('') : '<tr><td colspan="6" class="empty">暂无计费流水</td></tr>';
+      '<td>' + esc(r.feature) + '</td><td class="sub">' + esc(r.note || '-') + '</td>' +
+      '<td class="num ' + (plus ? 'plus' : 'minus') + '">' + (plus ? '+' : '-') + pts(Math.abs(r.amountUnits)) + '</td>' +
+      '<td class="num">' + pts(r.balanceAfterUnits) + '</td></tr>';
+  }).join('') : '<tr><td colspan="6" class="empty">暂无积分流水</td></tr>';
 }
 
 function syncQrPreview(previewId, val) {
@@ -2011,7 +2015,7 @@ export function createLirioServer({ dbPath } = {}) {
         if (!authState) return;
         const user = authState.user;
         if (user.balanceUnits <= 0) {
-          sendJson(res, 402, { error: '当前余额不足，请在「用户设置 → 账户与余额」中充值后继续。' });
+          sendJson(res, 402, { error: '当前积分不足，请在「设置 → AI 与账号」中充值积分后继续。' });
           return;
         }
         const body = await readJsonBody(req);
@@ -2033,13 +2037,7 @@ export function createLirioServer({ dbPath } = {}) {
             cacheMissTokens: aiRes.usage.cacheMissTokens,
           },
         );
-        const periodLabel = aiRes.model.toLowerCase().includes('deepseek')
-          ? ` · ${getDeepSeekPeriodLabel()}`
-          : '';
-        const note =
-          aiRes.usage.cacheHitTokens !== undefined
-            ? `命中 ${aiRes.usage.cacheHitTokens} + 未命中 ${aiRes.usage.cacheMissTokens} / 输出 ${aiRes.usage.completionTokens} tok${periodLabel}`
-            : `${aiRes.usage.promptTokens} in / ${aiRes.usage.completionTokens} out tok${periodLabel}`;
+        const note = '云端对话消耗';
         const settled = deductUserBalance(db, {
           userId: user.id,
           costUnits,
@@ -2068,7 +2066,7 @@ export function createLirioServer({ dbPath } = {}) {
         if (!authState) return;
         const user = authState.user;
         if (user.balanceUnits <= 0) {
-          sendJson(res, 402, { error: '当前余额不足，请充值或关闭云端语音以使用免费本地语音。' });
+          sendJson(res, 402, { error: '当前积分不足，请充值积分或关闭云端语音以使用免费本地语音。' });
           return;
         }
         const body = await readJsonBody(req);
@@ -2086,7 +2084,7 @@ export function createLirioServer({ dbPath } = {}) {
           model: ttsRes.model,
           inputUnits: ttsRes.chars,
           outputUnits: 0,
-          note: `${ttsRes.chars} 字符 · ${ttsRes.voice}`,
+          note: '云端极速语音播报',
         });
         sendJson(res, 200, {
           audioBase64: ttsRes.audioBase64,
@@ -2109,7 +2107,7 @@ export function createLirioServer({ dbPath } = {}) {
         const asrModelEnv = (process.env.LIRIO_ASR_MODEL || 'whisper-1').trim();
         const isFreeAsrModel = asrModelEnv.includes('SenseVoiceSmall');
         if (!isFreeAsrModel && user.balanceUnits <= 0) {
-          sendJson(res, 402, { error: '当前余额不足，请充值或切换免费本地转写。' });
+          sendJson(res, 402, { error: '当前积分不足，请充值积分或切换免费本地转写。' });
           return;
         }
         const body = await readJsonBody(req);
@@ -2157,7 +2155,7 @@ export function createLirioServer({ dbPath } = {}) {
     } catch (err) {
       const msg = err?.message || String(err);
       if (msg === 'INSUFFICIENT_BALANCE') {
-        sendJson(res, 402, { error: '当前余额不足，请充值后继续。' });
+        sendJson(res, 402, { error: '当前积分不足，请充值积分后继续。' });
         return;
       }
       sendJson(res, 500, { error: msg });

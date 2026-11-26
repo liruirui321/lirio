@@ -26,8 +26,7 @@ import {
 } from './services/updaterService';
 import {
   evaluateLocalAccess,
-  formatSmartYuan,
-  formatYuan,
+  formatPoints,
   getAccountState,
   getDeviceIdentity,
   refreshAccountMe,
@@ -678,7 +677,7 @@ export default function App() {
           <button
             type="button"
             className={`account-topbar-pill${accountState.user.balanceUnits < 10000 ? ' low' : ''}`}
-            title="个人账号、终身通行证与余额"
+            title="个人账号、终身通行证与积分"
             aria-label="个人账号与设置"
             onClick={() => {
               setSettingsTab('ai');
@@ -686,10 +685,10 @@ export default function App() {
             }}
           >
             <IconUser size={15} />
-            <span>{formatSmartYuan(accountState.user.balanceUnits)}</span>
+            <span>{formatPoints(accountState.user.balanceUnits)}</span>
             {recentCharge && (
               <span className="account-charge-delta" title={recentCharge.feature}>
-                -{formatYuan(recentCharge.amountUnits, 4)}
+                -{formatPoints(recentCharge.amountUnits)}
               </span>
             )}
           </button>

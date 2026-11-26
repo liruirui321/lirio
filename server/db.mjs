@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const DEFAULT_TRIAL_UNITS = 5000; // ¥0.50 welcome trial credit
+export const DEFAULT_TRIAL_UNITS = 5000; // 50 积分 welcome trial credit
 
 export function openDatabase(dbPath = process.env.LIRIO_DB_PATH || path.join(__dirname, 'lirio.db')) {
   const db = new DatabaseSync(dbPath);
@@ -216,10 +216,10 @@ export function createUserWithTrial(db, { email, name, passwordHash, trialUnits 
     ).run(userId, normalizedEmail, cleanName, passwordHash, trialUnits, now);
 
     if (trialUnits > 0) {
-      const trialNote = `注册即赠 ¥${(trialUnits / 10000).toFixed(2)} AI 体验金`;
+      const trialNote = `注册即赠 ${Math.round(trialUnits / 100)} 积分体验额度`;
       db.prepare(
         `INSERT INTO ledger (id, user_id, kind, feature, provider, model, input_units, output_units, amount_units, balance_after_units, note, created_at)
-         VALUES (?, ?, 'bonus', '新用户注册赠金', 'lirio', 'trial', 0, 0, ?, ?, ?, ?)`,
+         VALUES (?, ?, 'bonus', '新用户注册赠积分', 'lirio', 'trial', 0, 0, ?, ?, ?, ?)`,
       ).run(ledgerId, userId, trialUnits, trialUnits, trialNote, now);
     }
 
@@ -236,7 +236,7 @@ export function createUserWithTrial(db, { email, name, passwordHash, trialUnits 
 
 export function creditUserBalance(
   db,
-  { userId, amountUnits, kind = 'recharge', feature = '余额充值', note = '', upgradeToPro = true },
+  { userId, amountUnits, kind = 'recharge', feature = '积分充值', note = '', upgradeToPro = true },
 ) {
   const credit = Math.max(1, Math.round(Number(amountUnits) || 0));
   const now = Date.now();
@@ -375,7 +375,7 @@ export function createRedeemCodes(
   {
     count = 1,
     planId = 'pro_99',
-    label = '¥99 买断卡密（含 ¥10 余额）',
+    label = '¥99 Lirio Pro · 永久版（含 1,000 积分）',
     amountUnits = 100000,
     upgradeToPro = true,
     note = '',

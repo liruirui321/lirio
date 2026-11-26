@@ -3,30 +3,30 @@ const FALLBACK_STORE = {
     {
       id: 'pro_99',
       payYuan: 99,
-      label: '¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）',
+      label: '¥99 Lirio Pro · 永久版（含 1,000 积分）',
       shortTitle: 'Lirio Pro',
       badge: 'Pro 授权',
-      subtitle: '支持 3 台设备 · 含 ¥10 对话余额',
+      subtitle: '支持 3 台设备 · 含 1,000 积分',
       amountUnits: 100000,
       upgradeToPro: true,
     },
     {
       id: 'topup_10',
       payYuan: 10,
-      label: '¥10 AI 对话加油包',
-      shortTitle: '¥10 对话加油包',
-      badge: '按量充值',
-      subtitle: '按实际用量扣费 · 余额长期有效',
+      label: '¥10 积分加油包（1,000 积分）',
+      shortTitle: '1,000 积分加油包',
+      badge: '按量消耗',
+      subtitle: '¥1 = 100 积分 · 长期有效',
       amountUnits: 100000,
       upgradeToPro: false,
     },
     {
       id: 'topup_30',
       payYuan: 30,
-      label: '¥30 AI 对话加油包（赠 ¥5）',
-      shortTitle: '¥30 对话加油包',
-      badge: '赠 ¥5',
-      subtitle: '实付 ¥30 到账 ¥35 · 余额长期有效',
+      label: '¥30 积分加油包（3,500 积分）',
+      shortTitle: '3,500 积分加油包',
+      badge: '赠 500 积分',
+      subtitle: '实付 ¥30 得 3,500 积分 · 长期有效',
       amountUnits: 350000,
       upgradeToPro: false,
     },
@@ -79,16 +79,16 @@ function getShopUrlForPlan(planId) {
 function getPackBullets(preset) {
   if (preset.id === 'pro_99') {
     return [
-      '解锁精听、词卡与本地离线语音/转写（3 台设备，免费但速度较慢）',
-      '含 ¥10 余额，开启云端语音与转写响应更快，按实际用量扣费',
+      '解锁精听、词卡与本地离线语音/转写（3 台设备，0 积分免费但速度较慢）',
+      '含 1,000 积分，开启云端语音与转写响应更快，按实际用量扣除整数积分',
       '应用内支持问题与功能反馈',
     ];
   }
-  const creditYuan = ((Number(preset.amountUnits) || 0) / 10000).toFixed(0);
+  const creditPoints = Math.round((Number(preset.amountUnits) || 0) / 100).toLocaleString('en-US');
   return [
-    `到账 ¥${creditYuan} 对话余额`,
+    `到账 ${creditPoints} 积分（¥1 = 100 积分）`,
     '可用于口语陪练、雅思考官、云端极速语音与字幕精校',
-    '按实际用量计费，余额长期有效（云端更快，本地免费）',
+    '按实际用量扣除整数积分，长期有效（云端更快，本地 0 积分免费）',
   ];
 }
 
@@ -759,7 +759,7 @@ function renderStorefront() {
     .map((p) => {
       const shopUrl = getShopUrlForPlan(p.id);
       const isFeatured = p.id === 'pro_99';
-      const creditYuan = ((Number(p.amountUnits) || 0) / 10000).toFixed(0);
+      const creditPoints = Math.round((Number(p.amountUnits) || 0) / 100).toLocaleString('en-US');
       const bullets = getPackBullets(p)
         .map((line) => `<li>${esc(line)}</li>`)
         .join('');
@@ -767,9 +767,9 @@ function renderStorefront() {
         <article class="pack-card${isFeatured ? ' featured' : ''}">
           <div class="pack-top">
             <strong>${esc(p.shortTitle || p.label)}</strong>
-            <span class="tag">${esc(p.badge || (p.upgradeToPro ? 'Pro 授权' : '余额充值'))}</span>
+            <span class="tag">${esc(p.badge || (p.upgradeToPro ? 'Pro 授权' : '积分充值'))}</span>
           </div>
-          <div class="pack-price">¥${esc(p.payYuan)}<span>到账 ¥${esc(creditYuan)} 余额</span></div>
+          <div class="pack-price">¥${esc(p.payYuan)}<span>到账 ${esc(creditPoints)} 积分</span></div>
           <p class="pack-sub">${esc(p.subtitle || p.note || '')}</p>
           <ul class="pack-list">${bullets}</ul>
           <div class="pack-actions">

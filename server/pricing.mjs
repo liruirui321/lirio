@@ -1,30 +1,45 @@
-// Monetary unit: 10,000 units = ¥1.00 CNY (1 unit = ¥0.0001)
+// Monetary unit: 10,000 units = ¥1.00 CNY = 100 积分 (1 积分 = 100 units = ¥0.01)
 export const UNITS_PER_YUAN = 10000;
+export const POINTS_PER_YUAN = 100;
+export const UNITS_PER_POINT = 100;
+
+export function roundUpToPointUnits(rawUnits) {
+  return Math.max(1, Math.ceil((Number(rawUnits) || 0) / UNITS_PER_POINT)) * UNITS_PER_POINT;
+}
+
+export function unitsToPoints(units) {
+  return Math.round((Number(units) || 0) / UNITS_PER_POINT);
+}
+
+export function formatPoints(units, withUnit = true) {
+  const num = unitsToPoints(units).toLocaleString('en-US');
+  return withUnit ? `${num} 积分` : num;
+}
 
 export const RECHARGE_PACKS = [
   {
     id: 'pack_10',
-    label: '轻享包 ¥10',
+    label: '¥10 积分包（1,000 积分）',
     payYuan: 10,
     bonusYuan: 0,
     creditUnits: 100000,
-    note: '基础按量充值 ¥10.00',
+    note: '基础积分包 1,000 积分',
   },
   {
     id: 'pack_30',
-    label: '备考包 ¥30（送¥3）',
+    label: '¥30 积分包（3,300 积分）',
     payYuan: 30,
     bonusYuan: 3,
     creditUnits: 330000,
-    note: '备考充值 ¥30.00（含赠送 ¥3.00）',
+    note: '备考积分包 3,000 + 赠 300 积分',
   },
   {
     id: 'pack_100',
-    label: '冲刺 Pro 包 ¥100（送¥15）',
+    label: '¥100 Pro 积分包（11,500 积分）',
     payYuan: 100,
     bonusYuan: 15,
     creditUnits: 1150000,
-    note: '冲刺 Pro 充值 ¥100.00（含赠送 ¥15.00）',
+    note: '冲刺 Pro 积分包 10,000 + 赠 1,500 积分',
   },
 ];
 
@@ -80,7 +95,7 @@ export function calculateChatCostUnits(
         outTokens * rates.outputUnits) *
         mult) /
       1_000_000;
-    return Math.max(1, Math.ceil(raw));
+    return roundUpToPointUnits(raw);
   }
 
   const rate =
@@ -89,19 +104,19 @@ export function calculateChatCostUnits(
   const raw =
     (Math.max(0, promptTokens) * rate.inputUnits) / 1_000_000 +
     (Math.max(0, completionTokens) * rate.outputUnits) / 1_000_000;
-  return Math.max(1, Math.ceil(raw));
+  return roundUpToPointUnits(raw);
 }
 
-// SiliconFlow CosyVoice2 rate: ¥0.05 / 1,000 UTF-8 bytes upstream -> billed at ¥0.06 / 1,000 UTF-8 bytes (0.6 units/byte)
+// Cloud TTS rate: 3x upstream (¥0.15 / 1,000 UTF-8 bytes = 15 points / 1,000 bytes, 1.5 units/byte), rounded up to whole points
 export function calculateTtsCostUnits(chars = 0) {
   const n = Math.max(1, Number(chars) || 0);
-  return Math.max(1, Math.ceil(n * 0.6));
+  return roundUpToPointUnits(n * 1.5);
 }
 
-// whisper-1: ¥0.05 / minute = 500 units / 60s
+// Paid fallback ASR rate (rounded up to whole points)
 export function calculateAsrCostUnits(seconds = 0) {
   const s = Math.max(1, Number(seconds) || 0);
-  return Math.max(2, Math.ceil((s / 60) * 500));
+  return roundUpToPointUnits((s / 60) * 500);
 }
 
 export function formatYuan(units, decimals = 2) {

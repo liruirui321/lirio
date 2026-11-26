@@ -40,7 +40,7 @@ try {
   assert.equal(reg.json.user.tier, 'pro_trial');
   assert.equal(reg.json.ledger.length, 1);
   assert.equal(reg.json.ledger[0].kind, 'bonus');
-  assert.ok(reg.json.ledger[0].note.includes('¥0.50'));
+  assert.ok(reg.json.ledger[0].note.includes('50 积分'));
   const userId = reg.json.user.id;
 
   // 2. Duplicate email returns 409
@@ -88,7 +88,8 @@ try {
   );
   assert.equal(chat.status, 200);
   assert.ok(chat.json.content.length > 0);
-  assert.ok(chat.json.costUnits >= 1);
+  assert.ok(chat.json.costUnits >= 100);
+  assert.equal(chat.json.costUnits % 100, 0);
   assert.equal(chat.json.balanceUnits, 335000 - chat.json.costUnits);
 
   const tts = await req(
@@ -99,6 +100,8 @@ try {
   );
   assert.equal(tts.status, 200);
   assert.ok(tts.json.audioBase64.length > 5);
+  assert.ok(tts.json.costUnits >= 100);
+  assert.equal(tts.json.costUnits % 100, 0);
   assert.equal(tts.json.balanceUnits, chat.json.balanceUnits - tts.json.costUnits);
 
   const fakeWav = Buffer.alloc(1600, 1).toString('base64');
@@ -157,8 +160,10 @@ try {
   // Peak (3x): 0.5*1200 + 0.5*60000 + 240000 = 270600 units (¥27.06); Off-peak is exact half = 135300 units (¥13.53)
   assert.equal(peakCost, 270600);
   assert.equal(offPeakCost, 135300);
-  // TTS: 1000 UTF-8 bytes = ¥0.06 = 600 units
-  assert.equal(calculateTtsCostUnits(1000), 600);
+  // TTS (3x upstream): 1000 UTF-8 bytes = ¥0.15 = 15 points = 1500 units, quantized up to 100 units (1 point)
+  assert.equal(calculateTtsCostUnits(50), 100);
+  assert.equal(calculateTtsCostUnits(100), 200);
+  assert.equal(calculateTtsCostUnits(1000), 1500);
 
   const demo = seedDemoUser(db);
   assert.equal(demo.email, 'tester@lirio.app');

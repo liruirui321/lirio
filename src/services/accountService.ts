@@ -348,6 +348,18 @@ export function validatePassword(raw: string): string | null {
   return null;
 }
 
+export const POINTS_PER_YUAN = 100;
+export const UNITS_PER_POINT = 100;
+
+export function unitsToPoints(units: number | undefined | null): number {
+  return Math.round((Number(units) || 0) / UNITS_PER_POINT);
+}
+
+export function formatPoints(units: number | undefined | null, withUnit = true): string {
+  const num = unitsToPoints(units).toLocaleString('en-US');
+  return withUnit ? `${num} 积分` : num;
+}
+
 export function formatYuan(units: number | undefined | null, decimals = 2): string {
   const v = (Number(units) || 0) / 10000;
   return `¥${v.toFixed(decimals)}`;
@@ -587,7 +599,7 @@ export async function proxyChat(opts: {
 }): Promise<string> {
   const st = getAccountState();
   if (!st.token) {
-    throw new Error('当前处于「Lirio Pro 余额托管」模式，请先点击右上角头像或设置登录账号。');
+    throw new Error('当前处于「Lirio 云端账号」模式，请先点击右上角头像或设置登录账号。');
   }
   const res = await apiFetch<{ content: string; costUnits?: number; user: AccountUser }>('/api/ai/chat', {
     method: 'POST',
