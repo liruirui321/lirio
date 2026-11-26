@@ -183,6 +183,7 @@ export function GlobalSettingsModal({
   const [showTextKey, setShowTextKey] = useState(false);
   const [showSpeechKey, setShowSpeechKey] = useState(false);
   const [testingConn, setTestingConn] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [busyData, setBusyData] = useState(false);
@@ -221,6 +222,7 @@ export function GlobalSettingsModal({
     setAccount(acct);
     setStatusMsg('');
     setErrorMsg('');
+    setTestResult(null);
     if (acct.token) {
       setLedgerBusy(true);
       refreshAccountMe()
@@ -300,6 +302,7 @@ export function GlobalSettingsModal({
   const handleSelectMode = (mode: 'pro_balance' | 'byok') => {
     setStatusMsg('');
     setErrorMsg('');
+    setTestResult(null);
     updateAccountState({ aiMode: mode });
   };
 
@@ -437,13 +440,13 @@ export function GlobalSettingsModal({
   const handleTestConn = async () => {
     setTestingConn(true);
     setErrorMsg('');
-    setStatusMsg('测试中…');
+    setStatusMsg('');
+    setTestResult(null);
     try {
       await testProviderConnection(config);
-      setStatusMsg('已连接');
+      setTestResult({ ok: true, msg: '连接正常 ✓' });
     } catch (e) {
-      setStatusMsg('');
-      setErrorMsg(String(e));
+      setTestResult({ ok: false, msg: String(e) });
     } finally {
       setTestingConn(false);
     }
@@ -1188,9 +1191,6 @@ export function GlobalSettingsModal({
                   </div>
 
                   <div className="import-modal-actions">
-                    <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
-                      {testingConn ? '测试中…' : '测试'}
-                    </button>
                     <button type="button" className="primary" onClick={onClose}>
                       完成
                     </button>
@@ -1333,10 +1333,27 @@ export function GlobalSettingsModal({
                   )}
                 </div>
 
-                <div className="import-modal-actions">
-                  <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
-                    {testingConn ? '测试中…' : '测试'}
-                  </button>
+                <div className="import-modal-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                    <button type="button" disabled={testingConn} onClick={() => void handleTestConn()}>
+                      {testingConn ? '测试中…' : '测试连接'}
+                    </button>
+                    {testResult && (
+                      <span
+                        title={testResult.msg}
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: testResult.ok ? 'var(--accent-bright)' : 'var(--danger)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {testResult.msg}
+                      </span>
+                    )}
+                  </div>
                   <button type="button" className="primary" onClick={onClose}>
                     完成
                   </button>
