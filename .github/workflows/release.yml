@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   macos:
-    if: ${{ !endsWith(inputs.tag || '', '-win-android') && !endsWith(inputs.tag || '', '-android') }}
+    if: ${{ !endsWith(inputs.tag || '', '-win-android') && !endsWith(inputs.tag || '', '-android') && !endsWith(inputs.tag || '', '-win') }}
     runs-on: macos-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
@@ -55,7 +55,7 @@ jobs:
           path: out/*
 
   windows:
-    if: ${{ !endsWith(inputs.tag || '', '-android') }}
+    if: ${{ endsWith(inputs.tag || '', '-win-android') || !endsWith(inputs.tag || '', '-android') }}
     runs-on: windows-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
@@ -102,6 +102,7 @@ jobs:
           path: out/*
 
   android:
+    if: ${{ !endsWith(inputs.tag || '', '-win') }}
     runs-on: ubuntu-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
@@ -169,7 +170,7 @@ jobs:
           path: out/*
 
   ios:
-    if: ${{ !endsWith(inputs.tag || '', '-win-android') && !endsWith(inputs.tag || '', '-android') }}
+    if: ${{ !endsWith(inputs.tag || '', '-win-android') && !endsWith(inputs.tag || '', '-android') && !endsWith(inputs.tag || '', '-win') }}
     runs-on: macos-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
