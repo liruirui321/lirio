@@ -84,6 +84,20 @@ export function openDatabase(dbPath = process.env.LIRIO_DB_PATH || path.join(__d
       value TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS user_devices (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      device_id TEXT NOT NULL,
+      device_name TEXT NOT NULL DEFAULT '',
+      platform TEXT NOT NULL DEFAULT '',
+      last_seen_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE(user_id, device_id),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id, last_seen_at DESC);
   `);
 
   return db;
@@ -704,4 +718,117 @@ export function listUnusedRedeemCodes(db, planId = '') {
         .all(cleanPlan)
     : db.prepare('SELECT * FROM redeem_codes WHERE redeemed_by IS NULL ORDER BY created_at DESC').all();
   return rows.map(serializeRedeemCode);
+}
+
+export function serializeDevice(row) {
+  if (!row) return null;
+  return {
+    deviceId: row.device_id,
+    deviceName: row.device_name || row.device_id,
+    platform: row.platform || '',
+    lastSeenAt: Number(row.last_seen_at),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function listUserDevices(db, userId) {
+  const nonLegacy = db
+    .prepare(
+      `SELECT * FROM user_devices
+       WHERE user_id = ? AND device_id != 'legacy-web'
+       ORDER BY last_seen_at DESC, created_at DESC`,
+    )
+    .all(userId);
+  if (nonLegacy.length > 0) {
+    return nonLegacy.map(serializeDevice);
+  }
+  const allRows = db
+    .prepare(
+      `SELECT * FROM user_devices
+       WHERE user_id = ?
+       ORDER BY last_seen_at DESC, created_at DESC`,
+    )
+    .all(userId);
+  return allRows.map(serializeDevice);
+}
+
+export function registerUserDevice(
+  db,
+  { userId, deviceId, deviceName = '', platform = '', maxDevices = 3 } = {},
+) {
+  const cleanDid = String(deviceId || '').trim() || 'legacy-web';
+  const cleanName = String(deviceName || cleanDid).trim().slice(0, 80);
+  const cleanPlatform = String(platform || '').trim().slice(0, 40);
+  const cap = Math.max(1, Math.round(Number(maxDevices) || 3));
+  const now = Date.now();
+  const id = randomUUID();
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.prepare(
+      `INSERT INTO user_devices (id, user_id, device_id, device_name, platform, last_seen_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, device_id) DO UPDATE SET
+         device_name = CASE WHEN excluded.device_name != '' THEN excluded.device_name ELSE user_devices.device_name END,
+         platform = CASE WHEN excluded.platform != '' THEN excluded.platform ELSE user_devices.platform END,
+         last_seen_at = excluded.last_seen_at`,
+    ).run(id, userId, cleanDid, cleanName, cleanPlatform, now, now);
+
+    let evictedCount = 0;
+    if (cleanDid !== 'legacy-web') {
+      const rows = db
+        .prepare(
+          `SELECT id, device_id FROM user_devices
+           WHERE user_id = ? AND device_id != 'legacy-web'
+           ORDER BY last_seen_at DESC, created_at DESC`,
+        )
+        .all(userId);
+      if (rows.length > cap) {
+        const delStmt = db.prepare('DELETE FROM user_devices WHERE id = ?');
+        for (const extra of rows.slice(cap)) {
+          delStmt.run(extra.id);
+          evictedCount++;
+        }
+      }
+    }
+
+    db.exec('COMMIT');
+    return {
+      devices: listUserDevices(db, userId),
+      evictedCount,
+    };
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {}
+    throw err;
+  }
+}
+
+export function isUserDeviceActive(db, userId, deviceId) {
+  const cleanDid = String(deviceId || '').trim();
+  if (!cleanDid || cleanDid === 'legacy-web') return true;
+  const row = db
+    .prepare('SELECT 1 FROM user_devices WHERE user_id = ? AND device_id = ?')
+    .get(userId, cleanDid);
+  return Boolean(row);
+}
+
+export function touchUserDevice(db, userId, deviceId) {
+  const cleanDid = String(deviceId || '').trim();
+  if (!cleanDid || cleanDid === 'legacy-web') return;
+  db.prepare('UPDATE user_devices SET last_seen_at = ? WHERE user_id = ? AND device_id = ?').run(
+    Date.now(),
+    userId,
+    cleanDid,
+  );
+}
+
+export function removeUserDevice(db, userId, deviceId) {
+  const cleanDid = String(deviceId || '').trim();
+  if (!cleanDid) return false;
+  const res = db
+    .prepare('DELETE FROM user_devices WHERE user_id = ? AND device_id = ?')
+    .run(userId, cleanDid);
+  return Boolean(res && res.changes > 0);
 }

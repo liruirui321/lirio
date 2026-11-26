@@ -14,6 +14,35 @@ export interface AccountUser {
   createdAt: number;
 }
 
+export interface AccountEntitlement {
+  status: 'lifetime' | 'trial' | 'expired';
+  hasAccess: boolean;
+  isLifetime: boolean;
+  trialEndsAt: number;
+  offlineValidUntil: number;
+  maxDevices: number;
+  verifiedAt: number;
+  signedProof?: string;
+}
+
+export interface BoundDevice {
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  lastSeenAt: number;
+  createdAt: number;
+}
+
+export interface LocalAccessResult {
+  allowed: boolean;
+  mode?: 'lifetime' | 'trial';
+  reason?: 'unauthenticated' | 'trial_expired' | 'offline_expired';
+  message?: string;
+  trialEndsAt?: number;
+  trialRemainingHours?: number;
+  offlineValidUntil?: number;
+}
+
 export interface LedgerEntry {
   id: string;
   userId: string;
@@ -87,6 +116,9 @@ export interface AccountState {
   serverUrl: string;
   token: string | null;
   user: AccountUser | null;
+  entitlement?: AccountEntitlement | null;
+  devices?: BoundDevice[];
+  lastAuthNotice?: string | null;
   aiMode: AiMode;
   proCloudSpeech: boolean;
 }
@@ -119,9 +151,103 @@ const DEFAULT_STATE: AccountState = {
   serverUrl: BUILD_DEFAULT_SERVER_URL || 'http://127.0.0.1:8787',
   token: null,
   user: null,
+  entitlement: null,
+  devices: [],
+  lastAuthNotice: null,
   aiMode: 'byok',
   proCloudSpeech: false,
 };
+
+const DEVICE_STORAGE_KEY = 'lirio-device-id-v1';
+
+export function getDeviceIdentity(): { deviceId: string; deviceName: string; platform: string } {
+  let deviceId = '';
+  try {
+    const raw = localStorage.getItem(DEVICE_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.deviceId === 'string' && parsed.deviceId.trim()) {
+        deviceId = parsed.deviceId.trim();
+      }
+    }
+  } catch {}
+  if (!deviceId) {
+    deviceId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    try {
+      const serialized = JSON.stringify({ deviceId });
+      localStorage.setItem(DEVICE_STORAGE_KEY, serialized);
+      saveStateBackup('lirio_device_v1', serialized);
+    } catch {}
+  }
+
+  const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '').toLowerCase();
+  let platform = 'desktop';
+  let deviceName = 'Lirio 桌面设备';
+  if (/iphone|ipad|ipod/.test(ua)) {
+    platform = 'ios';
+    deviceName = /ipad/.test(ua) ? 'iPad' : 'iPhone';
+  } else if (/android/.test(ua)) {
+    platform = 'android';
+    deviceName = 'Android 设备';
+  } else if (/mac/.test(ua)) {
+    platform = 'macos';
+    deviceName = 'Mac 电脑';
+  } else if (/win/.test(ua)) {
+    platform = 'windows';
+    deviceName = 'Windows 电脑';
+  } else if (/linux/.test(ua)) {
+    platform = 'linux';
+    deviceName = 'Linux 设备';
+  }
+  return { deviceId, deviceName, platform };
+}
+
+export function evaluateLocalAccess(st: AccountState = getAccountState()): LocalAccessResult {
+  if (!st.token || !st.user) {
+    return {
+      allowed: false,
+      reason: 'unauthenticated',
+      message: st.lastAuthNotice || '',
+    };
+  }
+  const now = Date.now();
+  const ent = st.entitlement;
+  if (st.user.tier === 'pro') {
+    const graceUntil = ent?.offlineValidUntil ?? st.user.createdAt + 14 * 86400 * 1000;
+    if (now <= graceUntil) {
+      return {
+        allowed: true,
+        mode: 'lifetime',
+        offlineValidUntil: graceUntil,
+      };
+    }
+    return {
+      allowed: false,
+      reason: 'offline_expired',
+      offlineValidUntil: graceUntil,
+      message: '当前设备离线使用已超过 14 天，请联网验证一次终身通行证授权。',
+    };
+  }
+
+  const trialEndsAt = ent?.trialEndsAt ?? st.user.createdAt + 3 * 86400 * 1000;
+  if (now < trialEndsAt) {
+    return {
+      allowed: true,
+      mode: 'trial',
+      trialEndsAt,
+      trialRemainingHours: Math.max(1, Math.ceil((trialEndsAt - now) / 3600000)),
+    };
+  }
+  return {
+    allowed: false,
+    reason: 'trial_expired',
+    trialEndsAt,
+    message: '3 天全功能免费体验已结束，请输入 Lirio 终身通行证激活码永久解锁。',
+  };
+}
 
 const listeners = new Set<(state: AccountState) => void>();
 const lastChargeListeners = new Set<(event: LastChargeEvent) => void>();
@@ -219,7 +345,14 @@ async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     if (resp.status === 401 && st.token && !path.startsWith('/api/auth/login')) {
-      updateAccountState({ token: null, user: null, aiMode: 'byok' });
+      updateAccountState({
+        token: null,
+        user: null,
+        entitlement: null,
+        devices: [],
+        aiMode: 'byok',
+        lastAuthNotice: data?.error || '登录状态已失效，请重新登录。',
+      });
     }
     throw new Error(data?.error || `请求失败 (${resp.status})`);
   }
@@ -227,32 +360,87 @@ async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
 }
 
 export async function registerAccount(opts: { email: string; password: string; name?: string }) {
-  const res = await apiFetch<{ token: string; user: AccountUser; ledger: LedgerEntry[] }>(
-    '/api/auth/register',
-    { method: 'POST', body: JSON.stringify(opts) },
-  );
-  updateAccountState({ token: res.token, user: res.user, aiMode: 'pro_balance', proCloudSpeech: false });
+  const dev = getDeviceIdentity();
+  const res = await apiFetch<{
+    token: string;
+    user: AccountUser;
+    ledger: LedgerEntry[];
+    entitlement?: AccountEntitlement;
+    devices?: BoundDevice[];
+  }>('/api/auth/register', { method: 'POST', body: JSON.stringify({ ...opts, ...dev }) });
+  updateAccountState({
+    token: res.token,
+    user: res.user,
+    entitlement: res.entitlement || null,
+    devices: res.devices || [],
+    lastAuthNotice: null,
+    aiMode: 'pro_balance',
+    proCloudSpeech: false,
+  });
   return res;
 }
 
 export async function loginAccount(opts: { email: string; password: string }) {
-  const res = await apiFetch<{ token: string; user: AccountUser; ledger: LedgerEntry[] }>(
-    '/api/auth/login',
-    { method: 'POST', body: JSON.stringify(opts) },
-  );
-  updateAccountState({ token: res.token, user: res.user, aiMode: 'pro_balance', proCloudSpeech: false });
+  const dev = getDeviceIdentity();
+  const res = await apiFetch<{
+    token: string;
+    user: AccountUser;
+    ledger: LedgerEntry[];
+    entitlement?: AccountEntitlement;
+    devices?: BoundDevice[];
+  }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ ...opts, ...dev }) });
+  updateAccountState({
+    token: res.token,
+    user: res.user,
+    entitlement: res.entitlement || null,
+    devices: res.devices || [],
+    lastAuthNotice: null,
+    aiMode: 'pro_balance',
+    proCloudSpeech: false,
+  });
   return res;
 }
 
 export function logoutAccount() {
-  updateAccountState({ token: null, user: null, aiMode: 'byok' });
+  updateAccountState({
+    token: null,
+    user: null,
+    entitlement: null,
+    devices: [],
+    lastAuthNotice: null,
+    aiMode: 'byok',
+  });
 }
 
-export async function refreshAccountMe(): Promise<{ user: AccountUser; ledger: LedgerEntry[] } | null> {
+export async function refreshAccountMe(): Promise<{
+  user: AccountUser;
+  ledger: LedgerEntry[];
+  entitlement?: AccountEntitlement;
+  devices?: BoundDevice[];
+} | null> {
   const st = getAccountState();
   if (!st.token) return null;
-  const res = await apiFetch<{ user: AccountUser; ledger: LedgerEntry[] }>('/api/auth/me');
-  updateAccountState({ user: res.user });
+  const res = await apiFetch<{
+    user: AccountUser;
+    ledger: LedgerEntry[];
+    entitlement?: AccountEntitlement;
+    devices?: BoundDevice[];
+  }>('/api/auth/me');
+  updateAccountState({
+    user: res.user,
+    ...(res.entitlement ? { entitlement: res.entitlement } : {}),
+    ...(res.devices ? { devices: res.devices } : {}),
+    lastAuthNotice: null,
+  });
+  return res;
+}
+
+export async function removeBoundDevice(deviceId: string): Promise<{ devices: BoundDevice[] }> {
+  const res = await apiFetch<{ ok: boolean; devices: BoundDevice[] }>('/api/auth/devices/remove', {
+    method: 'POST',
+    body: JSON.stringify({ deviceId }),
+  });
+  updateAccountState({ devices: res.devices || [] });
   return res;
 }
 
@@ -321,12 +509,23 @@ export async function redeemCode(code: string): Promise<{
   user: AccountUser;
   entry: LedgerEntry;
   ledger: LedgerEntry[];
+  entitlement?: AccountEntitlement;
+  devices?: BoundDevice[];
 }> {
-  const res = await apiFetch<{ user: AccountUser; entry: LedgerEntry; ledger: LedgerEntry[] }>(
-    '/api/billing/redeem',
-    { method: 'POST', body: JSON.stringify({ code }) },
-  );
-  updateAccountState({ user: res.user, aiMode: 'pro_balance' });
+  const res = await apiFetch<{
+    user: AccountUser;
+    entry: LedgerEntry;
+    ledger: LedgerEntry[];
+    entitlement?: AccountEntitlement;
+    devices?: BoundDevice[];
+  }>('/api/billing/redeem', { method: 'POST', body: JSON.stringify({ code }) });
+  updateAccountState({
+    user: res.user,
+    ...(res.entitlement ? { entitlement: res.entitlement } : {}),
+    ...(res.devices ? { devices: res.devices } : {}),
+    lastAuthNotice: null,
+    aiMode: 'pro_balance',
+  });
   return res;
 }
 

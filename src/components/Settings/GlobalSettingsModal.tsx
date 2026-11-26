@@ -7,17 +7,20 @@ import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import type { Accent } from '../../services/corpusService';
 import {
   createStoreOrder,
+  evaluateLocalAccess,
   fetchBillingLedger,
   fetchStoreConfig,
   fetchStoreOrder,
   formatYuan,
   getAccountState,
+  getDeviceIdentity,
   getStoreWebsiteUrl,
   loginAccount,
   logoutAccount,
   redeemCode,
   refreshAccountMe,
   registerAccount,
+  removeBoundDevice,
   simulatePayStoreOrder,
   subscribeAccount,
   updateAccountState,
@@ -632,7 +635,7 @@ export function GlobalSettingsModal({
                     className="link-inline-btn"
                     onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
                   >
-                    还没卡密？前往官网购买 ¥99 买断卡密 ↗
+                    还没通行证？前往官网开通 ¥99 Lirio 终身通行证 ↗
                   </button>
                 </div>
               ) : (
@@ -644,7 +647,7 @@ export function GlobalSettingsModal({
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <strong>{account.user.name}</strong>
                           <span className={`tier-badge small${account.user.tier === 'pro' ? ' pro' : ''}`}>
-                            {account.user.tier === 'pro' ? 'PRO' : 'TRIAL'}
+                            {account.user.tier === 'pro' ? '终身通行证' : '3天体验'}
                           </span>
                         </div>
                         <small>{account.user.email}</small>
@@ -653,6 +656,57 @@ export function GlobalSettingsModal({
                         退出
                       </button>
                     </div>
+
+                    {(() => {
+                      const accessInfo = evaluateLocalAccess(account);
+                      const maxDev = account.entitlement?.maxDevices ?? 3;
+                      const devs = account.devices || [];
+                      const curDevId = getDeviceIdentity().deviceId;
+                      return (
+                        <div className="entitlement-strip">
+                          <span>
+                            {accessInfo.mode === 'lifetime' && accessInfo.offlineValidUntil
+                              ? `终身授权生效中 · 离线可用至 ${new Date(accessInfo.offlineValidUntil).toLocaleDateString('zh-CN')}`
+                              : accessInfo.mode === 'trial'
+                                ? `免费体验剩余约 ${accessInfo.trialRemainingHours} 小时`
+                                : '授权待激活'}
+                          </span>
+                          {devs.length > 0 && (
+                            <details className="device-details">
+                              <summary>
+                                已授权设备（{devs.length} / {maxDev}）
+                              </summary>
+                              <div className="device-list-box">
+                                {devs.map((d) => (
+                                  <div key={d.deviceId} className="device-row">
+                                    <span>
+                                      {d.deviceName || d.platform || d.deviceId.slice(0, 8)}
+                                      {d.deviceId === curDevId && <em>（当前设备）</em>}
+                                    </span>
+                                    {d.deviceId !== curDevId && (
+                                      <button
+                                        type="button"
+                                        className="ghost-pill-btn"
+                                        disabled={authBusy}
+                                        onClick={() => {
+                                          setAuthBusy(true);
+                                          void removeBoundDevice(d.deviceId)
+                                            .then(() => setStatusMsg('已移除设备授权'))
+                                            .catch((e) => setErrorMsg(String(e)))
+                                            .finally(() => setAuthBusy(false));
+                                        }}
+                                      >
+                                        下线
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <div className="account-balance-strip">
                       <div className="account-balance-main">
@@ -708,7 +762,7 @@ export function GlobalSettingsModal({
                           兑换
                         </button>
                       </div>
-                      <div className="sub">支持 ¥99 买断激活码与余额充值码，兑换后立即到账</div>
+                      <div className="sub">支持 ¥99 终身通行证激活码与 AI 对话加油包，兑换后立即到账</div>
                     </div>
 
                     <div className="redeem-actions-row">

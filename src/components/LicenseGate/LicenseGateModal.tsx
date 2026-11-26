@@ -1,0 +1,491 @@
+import { useEffect, useState } from 'react';
+import { open as openExternalUrl } from '@tauri-apps/plugin-shell';
+import {
+  createStoreOrder,
+  fetchStoreConfig,
+  fetchStoreOrder,
+  formatYuan,
+  getStoreWebsiteUrl,
+  loginAccount,
+  logoutAccount,
+  redeemCode,
+  refreshAccountMe,
+  registerAccount,
+  simulatePayStoreOrder,
+  updateAccountState,
+  type AccountState,
+  type LocalAccessResult,
+  type StoreConfig,
+  type StoreOrder,
+} from '../../services/accountService';
+import { IconLirioMark } from '../Icons';
+
+export function LicenseGateModal({
+  access,
+  account,
+}: {
+  access: LocalAccessResult;
+  account: AccountState;
+}) {
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState(() => account.user?.email || '');
+  const [password, setPassword] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [showServerUrl, setShowServerUrl] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const [redeemInput, setRedeemInput] = useState('');
+  const [showBuy, setShowBuy] = useState(false);
+  const [storeConfig, setStoreConfig] = useState<StoreConfig | null>(null);
+  const [buyChannel, setBuyChannel] = useState<'wechat' | 'alipay'>('wechat');
+  const [activeOrder, setActiveOrder] = useState<StoreOrder | null>(null);
+
+  useEffect(() => {
+    if (!showBuy || !activeOrder || activeOrder.status !== 'pending') return;
+    const mail = activeOrder.buyerEmail || account.user?.email || '';
+    if (!mail) return;
+    const timer = window.setInterval(() => {
+      fetchStoreOrder(activeOrder.orderNo, mail)
+        .then((res) => {
+          if (res.order) setActiveOrder(res.order);
+        })
+        .catch(() => {});
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [showBuy, activeOrder, account.user?.email]);
+
+  const openUrlSafe = async (url: string) => {
+    try {
+      await openExternalUrl(url);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleAuthSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setBusy(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    try {
+      if (authMode === 'register') {
+        await registerAccount({ email, password, name: nickname });
+        setStatusMsg('注册成功，已开通 3 天全功能免费体验');
+      } else {
+        await loginAccount({ email, password });
+        setStatusMsg('登录成功');
+      }
+      setPassword('');
+    } catch (err) {
+      setErrorMsg(String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRedeem = async (overrideCode?: string) => {
+    const code = (overrideCode ?? redeemInput).trim();
+    if (!code) {
+      setErrorMsg('请输入 Lirio 终身通行证兑换码。');
+      return;
+    }
+    setBusy(true);
+    setErrorMsg('');
+    setStatusMsg('');
+    try {
+      const res = await redeemCode(code);
+      setRedeemInput('');
+      setActiveOrder(null);
+      setShowBuy(false);
+      setStatusMsg(`激活成功 +${formatYuan(res.entry.amountUnits, 2)}`);
+    } catch (err) {
+      setErrorMsg(String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOpenBuyPro = async () => {
+    const next = !showBuy;
+    setShowBuy(next);
+    setErrorMsg('');
+    if (next && !storeConfig) {
+      setBusy(true);
+      try {
+        setStoreConfig(await fetchStoreConfig());
+      } catch (err) {
+        setErrorMsg(String(err));
+      } finally {
+        setBusy(false);
+      }
+    }
+  };
+
+  const handleCreateProOrder = async () => {
+    const buyerEmail = account.user?.email || email.trim();
+    if (!buyerEmail) {
+      setErrorMsg('请先登录账号后再下单。');
+      return;
+    }
+    setBusy(true);
+    setErrorMsg('');
+    try {
+      const res = await createStoreOrder({
+        planId: 'pro_99',
+        buyerEmail,
+        payChannel: buyChannel,
+      });
+      setActiveOrder(res.order);
+      setStoreConfig((prev) => ({
+        presets: prev?.presets || [],
+        settings: res.settings,
+        sandboxPayEnabled: res.sandboxPayEnabled,
+      }));
+    } catch (err) {
+      setErrorMsg(String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSimulatePay = async () => {
+    if (!activeOrder) return;
+    setBusy(true);
+    setErrorMsg('');
+    try {
+      const res = await simulatePayStoreOrder(activeOrder.orderNo, activeOrder.buyerEmail);
+      setActiveOrder(res.order);
+    } catch (err) {
+      setErrorMsg(String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOnlineRefresh = async () => {
+    setBusy(true);
+    setErrorMsg('');
+    try {
+      await refreshAccountMe();
+    } catch (err) {
+      setErrorMsg(String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="license-gate-backdrop" role="dialog" aria-modal="true" aria-label="Lirio 账号授权">
+      <div className="license-gate-card">
+        <div className="license-gate-head">
+          <div className="brand-mark-badge">
+            <IconLirioMark size={28} />
+          </div>
+          <div>
+            <h2>
+              {access.reason === 'trial_expired'
+                ? '3 天免费体验已结束'
+                : access.reason === 'offline_expired'
+                  ? '需要联网续期离线授权'
+                  : '登录 Lirio 账号以启用'}
+            </h2>
+            <p>
+              {access.reason === 'trial_expired'
+                ? '激活「Lirio 终身通行证（¥99）」即可永久使用精听、词卡与本地语音功能（赠 ¥10 对话加油包）。'
+                : access.reason === 'offline_expired'
+                  ? '离线连续使用已超过 14 天，请联网校验一次你的终身通行证身份。'
+                  : '新注册账号享 3 天全功能免费体验 + 赠 ¥5 对话额度 · 单账号支持 3 台个人设备'}
+            </p>
+          </div>
+        </div>
+
+        {(errorMsg || access.message) && (
+          <div className="app-error" style={{ borderRadius: 10 }}>
+            {errorMsg || access.message}
+          </div>
+        )}
+        {statusMsg && <div className="license-gate-ok">{statusMsg}</div>}
+
+        {access.reason === 'unauthenticated' && (
+          <form className="license-gate-form" onSubmit={(e) => void handleAuthSubmit(e)}>
+            <div className="settings-row-between">
+              <div className="seg-pill">
+                <button
+                  type="button"
+                  className={authMode === 'login' ? 'active' : ''}
+                  onClick={() => {
+                    setAuthMode('login');
+                    setErrorMsg('');
+                  }}
+                >
+                  登录已有账号
+                </button>
+                <button
+                  type="button"
+                  className={authMode === 'register' ? 'active' : ''}
+                  onClick={() => {
+                    setAuthMode('register');
+                    setErrorMsg('');
+                  }}
+                >
+                  注册领 3 天体验
+                </button>
+              </div>
+              <button
+                type="button"
+                className="ghost-pill-btn"
+                onClick={() => setShowServerUrl((v) => !v)}
+              >
+                {showServerUrl ? '收起地址' : '服务器地址'}
+              </button>
+            </div>
+
+            {showServerUrl && (
+              <div className="speak-field">
+                <label>服务端地址</label>
+                <input
+                  type="text"
+                  value={account.serverUrl}
+                  placeholder="http://127.0.0.1:8787"
+                  onChange={(e) => updateAccountState({ serverUrl: e.target.value })}
+                />
+              </div>
+            )}
+
+            <div className="speak-field">
+              <label>邮箱</label>
+              <input
+                type="email"
+                value={email}
+                placeholder="you@example.com"
+                required
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="speak-field">
+              <label>密码（至少 6 位）</label>
+              <input
+                type="password"
+                value={password}
+                placeholder="输入登录密码"
+                required
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {authMode === 'register' && (
+              <div className="speak-field">
+                <label>昵称（可选）</label>
+                <input
+                  type="text"
+                  value={nickname}
+                  placeholder="如何称呼你"
+                  onChange={(e) => setNickname(e.target.value)}
+                />
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="primary-btn full-width"
+              disabled={busy || !email.trim() || password.length < 6}
+            >
+              {busy ? '请稍候…' : authMode === 'register' ? '注册并开始 3 天免费体验' : '登录并验证授权'}
+            </button>
+
+            <button
+              type="button"
+              className="link-inline-btn"
+              onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
+            >
+              了解 ¥99 Lirio 终身通行证与兑换码 ↗
+            </button>
+          </form>
+        )}
+
+        {access.reason === 'trial_expired' && (
+          <div className="license-gate-form">
+            <div className="license-account-bar">
+              <span>当前账号：{account.user?.email}</span>
+              <button type="button" className="ghost-pill-btn" onClick={logoutAccount}>
+                切换账号
+              </button>
+            </div>
+
+            <div className="redeem-code-wrap">
+              <div className="redeem-code-row">
+                <input
+                  type="text"
+                  value={redeemInput}
+                  onChange={(e) => setRedeemInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !busy) {
+                      e.preventDefault();
+                      void handleRedeem();
+                    }
+                  }}
+                  placeholder="输入通行证激活码（如 LIRIO-XXXX-XXXX-XXXX）"
+                  spellCheck={false}
+                  autoCapitalize="characters"
+                  disabled={busy}
+                />
+                <button
+                  type="button"
+                  className="primary-btn"
+                  disabled={busy || !redeemInput.trim()}
+                  onClick={() => void handleRedeem()}
+                >
+                  激活解锁
+                </button>
+              </div>
+            </div>
+
+            <div className="redeem-actions-row">
+              <button type="button" className="ghost-pill-btn" onClick={() => void handleOpenBuyPro()}>
+                {showBuy ? '收起下单' : '购买 ¥99 终身通行证'}
+              </button>
+              <button
+                type="button"
+                className="ghost-pill-btn"
+                onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
+              >
+                前往官网购卡页 ↗
+              </button>
+            </div>
+
+            {showBuy && (
+              <div className="buy-code-panel">
+                {!activeOrder ? (
+                  <>
+                    <div className="buy-channel-bar">
+                      <span>付款方式</span>
+                      <div className="buy-channel-pills">
+                        <button
+                          type="button"
+                          className={buyChannel === 'wechat' ? 'active' : ''}
+                          onClick={() => setBuyChannel('wechat')}
+                        >
+                          微信支付
+                        </button>
+                        <button
+                          type="button"
+                          className={buyChannel === 'alipay' ? 'active' : ''}
+                          onClick={() => setBuyChannel('alipay')}
+                        >
+                          支付宝
+                        </button>
+                      </div>
+                    </div>
+                    <div className="buy-pack-card">
+                      <div className="buy-pack-head">
+                        <strong>Lirio 终身通行证（赠 ¥10 对话加油包）</strong>
+                        <span>¥99</span>
+                      </div>
+                      <small>一码永久解锁本人 3 台设备，本地语音与切分永久免费</small>
+                      <div className="buy-pack-btns">
+                        {storeConfig?.settings?.shopUrlPro99 && (
+                          <button
+                            type="button"
+                            className="ghost-pill-btn"
+                            onClick={() => void openUrlSafe(storeConfig.settings.shopUrlPro99)}
+                          >
+                            店铺购卡 ↗
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="primary-btn"
+                          disabled={busy}
+                          onClick={() => void handleCreateProOrder()}
+                        >
+                          立即下单支付
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : activeOrder.status === 'paid' && activeOrder.issuedCode ? (
+                  <div className="buy-order-box">
+                    <div className="sub">收款已确认 · 通行证已生成（{activeOrder.orderNo}）</div>
+                    <div className="buy-issued-code">{activeOrder.issuedCode}</div>
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      disabled={busy}
+                      onClick={() => void handleRedeem(activeOrder.issuedCode!)}
+                    >
+                      一键激活并解锁软件
+                    </button>
+                  </div>
+                ) : (
+                  <div className="buy-order-box">
+                    <div className="buy-pack-head">
+                      <strong>订单 {activeOrder.orderNo}</strong>
+                      <span>实付 ¥{activeOrder.payYuan}</span>
+                    </div>
+                    {(buyChannel === 'alipay' ? storeConfig?.settings?.alipayQr : storeConfig?.settings?.wechatQr) ? (
+                      <img
+                        className="buy-qr-img"
+                        src={
+                          buyChannel === 'alipay'
+                            ? storeConfig!.settings.alipayQr
+                            : storeConfig!.settings.wechatQr
+                        }
+                        alt="收款码"
+                      />
+                    ) : (
+                      <div className="sub">店主尚未上传收款码，可前往官网购卡页或使用测试按钮</div>
+                    )}
+                    <div className="sub">
+                      {storeConfig?.settings?.paymentNotice || '付款后每 2.5 秒自动查询核实并弹出激活码…'}
+                    </div>
+                    <div className="redeem-actions-row">
+                      {storeConfig?.sandboxPayEnabled && (
+                        <button
+                          type="button"
+                          className="ghost-pill-btn"
+                          disabled={busy}
+                          onClick={() => void handleSimulatePay()}
+                        >
+                          本地演示：模拟支付并出码
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="ghost-pill-btn"
+                        onClick={() => setActiveOrder(null)}
+                      >
+                        返回
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {access.reason === 'offline_expired' && (
+          <div className="license-gate-form">
+            <div className="license-account-bar">
+              <span>当前账号：{account.user?.email}</span>
+              <button type="button" className="ghost-pill-btn" onClick={logoutAccount}>
+                切换账号
+              </button>
+            </div>
+            <button
+              type="button"
+              className="primary-btn full-width"
+              disabled={busy}
+              onClick={() => void handleOnlineRefresh()}
+            >
+              {busy ? '正在联网验证…' : '立即联网续期终身通行证授权'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

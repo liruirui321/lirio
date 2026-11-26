@@ -14,6 +14,7 @@ export const STATE_SYNC_KEYS = [
   { localStorageKey: 'aboboo-corpus-state-v1', diskKey: 'corpus_state_v1' },
   { localStorageKey: 'aboboo-speak-state-v2', diskKey: 'speak_state_v2' },
   { localStorageKey: 'lirio-account-v1', diskKey: 'lirio_account_v1' },
+  { localStorageKey: 'lirio-device-id-v1', diskKey: 'lirio_device_v1' },
 ];
 
 export function saveStateBackup(diskKey: string, jsonString: string): void {

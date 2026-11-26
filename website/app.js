@@ -3,18 +3,18 @@ const FALLBACK_STORE = {
     {
       id: 'pro_99',
       payYuan: 99,
-      label: '¥99 买断卡密（含 ¥10 余额）',
-      shortTitle: 'Lirio 永久买断版',
-      badge: '最推荐 · 永久买断',
-      subtitle: '四端软件永久使用 + 本地免费语音与切分 + 赠 ¥10 对话余额',
+      label: '¥99 终身通行证（赠 ¥10 对话加油包）',
+      shortTitle: 'Lirio 终身通行证',
+      badge: '一次开通 · 永久有效',
+      subtitle: '绑定个人账号（支持 3 台设备）+ 本地免费语音与切分 + 赠 ¥10 对话额度',
       amountUnits: 100000,
       upgradeToPro: true,
     },
     {
       id: 'topup_10',
       payYuan: 10,
-      label: '¥10 余额充值码',
-      shortTitle: '¥10 对话充值码',
+      label: '¥10 AI 对话加油包',
+      shortTitle: '¥10 对话加油包',
       badge: '轻度按量',
       subtitle: '约 80–270 场雅思模考 · 余额永不过期',
       amountUnits: 100000,
@@ -23,8 +23,8 @@ const FALLBACK_STORE = {
     {
       id: 'topup_30',
       payYuan: 30,
-      label: '¥30 余额充值码（赠 ¥5）',
-      shortTitle: '¥30 冲刺充值码',
+      label: '¥30 AI 对话加油包（赠 ¥5）',
+      shortTitle: '¥30 冲刺加油包',
       badge: '超值赠 ¥5',
       subtitle: '实付 ¥30 到账 ¥35 · 重度备考首选',
       amountUnits: 350000,
@@ -79,8 +79,8 @@ function getShopUrlForPlan(planId) {
 function getPackBullets(preset) {
   if (preset.id === 'pro_99') {
     return [
-      '激活 Pro 永久买断身份（Mac / Win / Android 通用）',
-      '附赠 ¥10.00 对话与模考初始余额',
+      '绑定个人账号激活终身通行证（支持 3 台常用设备）',
+      '附赠 ¥10.00 AI 对话加油包初始额度',
       '本地 Whisper + 音频切分永久 0 Token',
     ];
   }

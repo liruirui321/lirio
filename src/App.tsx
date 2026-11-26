@@ -19,9 +19,11 @@ import {
   type UpdateState,
 } from './services/updaterService';
 import {
+  evaluateLocalAccess,
   formatSmartYuan,
   formatYuan,
   getAccountState,
+  getDeviceIdentity,
   refreshAccountMe,
   subscribeAccount,
   subscribeLastCharge,
@@ -46,6 +48,7 @@ import { CorpusDictation } from './components/Corpus/CorpusDictation';
 import { CustomSelect } from './components/Corpus/CustomSelect';
 import { SpeakCompanion } from './components/Speak/SpeakCompanion';
 import { GlobalSettingsModal, type GlobalSettingsTab } from './components/Settings/GlobalSettingsModal';
+import { LicenseGateModal } from './components/LicenseGate/LicenseGateModal';
 import { Transport } from './components/Player/Transport';
 import { GlobalTooltip } from './components/GlobalTooltip';
 import { SelectionTools } from './components/SelectionTools';
@@ -61,6 +64,7 @@ import {
   IconLibrary,
   IconLirioMark,
   IconMoon,
+  IconSettings,
   IconSun,
   IconUser,
   IconWave,
@@ -72,6 +76,10 @@ type ListeningMode = 'library' | 'audio' | 'dictation' | 'favorites' | 'analysis
 export default function App() {
   const { project, setProject, setBlobUrl, addRecordingBlob } = useProjectStore();
   const { setDuration, setCurrentTime } = usePlayerStore();
+  const [settingsTab, setSettingsTab] = useState<GlobalSettingsTab>('ai');
+  const [accountState, setAccountState] = useState<AccountState>(() => getAccountState());
+  const [recentCharge, setRecentCharge] = useState<LastChargeEvent | null>(null);
+  const access = useMemo(() => evaluateLocalAccess(accountState), [accountState]);
 
   const [hub, setHub] = useState<HubSection>('home');
   const [listeningMode, setListeningMode] = useState<ListeningMode>('library');
@@ -85,9 +93,6 @@ export default function App() {
   const [importError, setImportError] = useState('');
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<GlobalSettingsTab>('ai');
-  const [accountState, setAccountState] = useState<AccountState>(() => getAccountState());
-  const [recentCharge, setRecentCharge] = useState<LastChargeEvent | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
   const [stateTick, setStateTick] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -103,6 +108,7 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    getDeviceIdentity();
     hydrateStateFromDisk()
       .then((restored) => {
         if (restored) {
@@ -119,9 +125,14 @@ export default function App() {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => setRecentCharge(null), 4500);
     });
+    const onOnline = () => {
+      void refreshAccountMe().catch(() => {});
+    };
+    window.addEventListener('online', onOnline);
     return () => {
       unsubAcct();
       unsubCharge();
+      window.removeEventListener('online', onOnline);
       if (timer) clearTimeout(timer);
     };
   }, []);
@@ -638,7 +649,7 @@ export default function App() {
           <button
             type="button"
             className={`account-topbar-pill${accountState.user.balanceUnits < 10000 ? ' low' : ''}`}
-            title="个人账号、余额与设置"
+            title="个人账号、终身通行证与余额"
             aria-label="个人账号与设置"
             onClick={() => {
               setSettingsTab('ai');
@@ -655,9 +666,9 @@ export default function App() {
           </button>
         ) : (
           <button
-            className={`icon-btn${settingsOpen ? ' active' : ''}`}
-            title="账号与设置"
-            aria-label="账号与设置"
+            className={`icon-btn${settingsOpen && settingsTab === 'ai' ? ' active' : ''}`}
+            title="账号、终身通行证与 AI 引擎"
+            aria-label="账号与 AI 设置"
             onClick={() => {
               setSettingsTab('ai');
               setSettingsOpen(true);
@@ -667,10 +678,36 @@ export default function App() {
           </button>
         )}
 
+        {access.allowed && access.mode === 'trial' && (
+          <button
+            type="button"
+            className="trial-topbar-pill"
+            title="点击激活 Lirio 终身通行证"
+            onClick={() => {
+              setSettingsTab('ai');
+              setSettingsOpen(true);
+            }}
+          >
+            体验剩 {Math.max(1, Math.ceil((access.trialRemainingHours || 1) / 24))} 天 · 激活终身
+          </button>
+        )}
+
+        <button
+          className={`icon-btn${settingsOpen && settingsTab === 'data' ? ' active' : ''}`}
+          title="数据路径、备份与系统设置"
+          aria-label="用户设置"
+          onClick={() => {
+            setSettingsTab('data');
+            setSettingsOpen(true);
+          }}
+        >
+          <IconSettings size={17} />
+        </button>
+
         <button
           className="icon-btn"
-          title={theme === 'light' ? '切换深色' : '切换浅色'}
-          aria-label="切换主题"
+          title={theme === 'light' ? '切换至夜间护眼模式' : '切换至白天暖纸模式'}
+          aria-label="切换日夜主题"
           onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
         >
           {theme === 'light' ? <IconMoon size={17} /> : <IconSun size={17} />}
@@ -808,6 +845,8 @@ export default function App() {
         onThemeChange={setTheme}
       />
 
+      {!access.allowed && <LicenseGateModal access={access} account={accountState} />}
+
       {/* Automated Audio Import & Segmentation Agent Modal */}
       {showImportModal && (
         <div
@@ -854,10 +893,10 @@ export default function App() {
                   disabled={importBusy}
                   options={[
                     { value: 'auto', label: '自动归类' },
-                    { value: 'L1', label: 'L1 基础生活' },
-                    { value: 'L2', label: 'L2 进阶叙事' },
-                    { value: 'L3', label: 'L3 高阶研讨' },
-                    { value: 'L4', label: 'L4 专业讲座' },
+                    { value: 'L1', label: 'L1 初学者（A1–A2）' },
+                    { value: 'L2', label: 'L2 高中生（A2–B1）' },
+                    { value: 'L3', label: 'L3 大学生（B1–B2）' },
+                    { value: 'L4', label: 'L4 高阶进阶（C1–C2）' },
                   ]}
                   minWidth={150}
                   onChange={(v) => setImportTier(v as ImportTierChoice)}

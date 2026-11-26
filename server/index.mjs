@@ -26,17 +26,22 @@ import {
   getStoreSettings,
   getUserByEmail,
   getUserById,
+  isUserDeviceActive,
   listAllUsers,
   listOrders,
   listRecentLedger,
   listRedeemCodes,
   listUnusedRedeemCodes,
+  listUserDevices,
   listUserLedger,
   lookupOrdersByEmail,
   openDatabase,
   redeemCodeForUser,
+  registerUserDevice,
+  removeUserDevice,
   saveStoreSettings,
   serializeUser,
+  touchUserDevice,
 } from './db.mjs';
 import {
   RECHARGE_PACKS,
@@ -54,35 +59,35 @@ export const CODE_PRESETS = [
   {
     id: 'pro_99',
     payYuan: 99,
-    label: '¥99 买断卡密（含 ¥10 余额）',
-    shortTitle: 'Lirio 永久买断版',
-    badge: '最推荐 · 永久买断',
-    subtitle: '四端软件永久使用 + 本地免费语音与切分 + 赠 ¥10 对话余额',
+    label: '¥99 终身通行证（赠 ¥10 对话加油包）',
+    shortTitle: 'Lirio 终身通行证',
+    badge: '一次开通 · 永久有效',
+    subtitle: '绑定个人账号（支持 3 台设备）+ 本地免费语音与切分 + 赠 ¥10 对话额度',
     amountUnits: 100000, // ¥10.00
     upgradeToPro: true,
-    note: '¥99 买断激活 + ¥10 初始对话余额',
+    note: '开通 Lirio 终身通行证 + 赠 ¥10.00 初始对话余额',
   },
   {
     id: 'topup_10',
     payYuan: 10,
-    label: '¥10 余额充值码',
-    shortTitle: '¥10 对话充值码',
+    label: '¥10 AI 对话加油包',
+    shortTitle: '¥10 对话加油包',
     badge: '轻度按量',
     subtitle: '约 80–270 场雅思模考 · 余额永不过期',
     amountUnits: 100000, // ¥10.00
     upgradeToPro: false,
-    note: '余额充值 ¥10.00',
+    note: 'AI 对话加油包 ¥10.00',
   },
   {
     id: 'topup_30',
     payYuan: 30,
-    label: '¥30 余额充值码（赠 ¥5）',
-    shortTitle: '¥30 冲刺充值码',
+    label: '¥30 AI 对话加油包（赠 ¥5）',
+    shortTitle: '¥30 冲刺加油包',
     badge: '超值赠 ¥5',
     subtitle: '实付 ¥30 到账 ¥35 · 重度备考首选',
     amountUnits: 350000, // ¥35.00
     upgradeToPro: false,
-    note: '充值 ¥30.00 + 赠送 ¥5.00',
+    note: 'AI 对话加油包 ¥30.00 + 赠送 ¥5.00',
   },
 ];
 
@@ -488,9 +493,9 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
       <div class="toolbar-row">
         <div class="filter-group">
           <select id="codePreset">
-            <option value="pro_99">¥99 买断卡密（含 ¥10 余额）</option>
-            <option value="topup_10">¥10 余额充值码</option>
-            <option value="topup_30">¥30 余额充值码（赠 ¥5）</option>
+            <option value="pro_99">¥99 终身通行证（赠 ¥10 对话加油包）</option>
+            <option value="topup_10">¥10 AI 对话加油包</option>
+            <option value="topup_30">¥30 AI 对话加油包（赠 ¥5）</option>
           </select>
           <label class="sub">数量 <input id="codeCount" type="number" min="1" max="100" value="5" style="width:68px;text-align:center;" /></label>
           <button class="btn primary" id="genCodeBtn" type="button">生成卡密</button>
@@ -908,14 +913,74 @@ async function readJsonBody(req, maxBytes = 12 * 1024 * 1024) {
   });
 }
 
-function authenticateRequest(req, db) {
+function getMaxDevices() {
+  return Math.max(1, Number(process.env.LIRIO_MAX_DEVICES || 3));
+}
+
+function getTrialDays() {
+  return Math.max(1, Number(process.env.LIRIO_TRIAL_DAYS || 3));
+}
+
+function getOfflineGraceDays() {
+  return Math.max(1, Number(process.env.LIRIO_OFFLINE_GRACE_DAYS || 14));
+}
+
+export function buildEntitlement(user, { deviceId = 'legacy-web' } = {}) {
+  const now = Date.now();
+  const isLifetime = user.tier === 'pro';
+  const trialEndsAt = Number(user.createdAt || now) + getTrialDays() * 86400 * 1000;
+  const trialActive = !isLifetime && now < trialEndsAt;
+  const hasAccess = isLifetime || trialActive;
+  const status = isLifetime ? 'lifetime' : trialActive ? 'trial' : 'expired';
+  const offlineValidUntil = isLifetime ? now + getOfflineGraceDays() * 86400 * 1000 : trialEndsAt;
+  const signedProof = signToken(
+    { sub: user.id, kind: 'entitlement', status, tier: user.tier, did: deviceId, offlineValidUntil },
+    getOfflineGraceDays() * 86400,
+  );
+  return {
+    status,
+    hasAccess,
+    isLifetime,
+    trialEndsAt,
+    offlineValidUntil,
+    maxDevices: getMaxDevices(),
+    verifiedAt: now,
+    signedProof,
+  };
+}
+
+function authenticateRequestDetailed(req, db) {
   const auth = req.headers.authorization || '';
   const match = auth.match(/^Bearer\s+(.+)$/i);
-  if (!match) return null;
+  if (!match) return { user: null, deviceId: 'legacy-web', revoked: false };
   const payload = verifyToken(match[1]);
-  if (!payload) return null;
+  if (!payload) return { user: null, deviceId: 'legacy-web', revoked: false };
+  const deviceId = String(payload.did || 'legacy-web');
   const row = getUserById(db, payload.sub);
-  return row ? serializeUser(row) : null;
+  if (!row) return { user: null, deviceId, revoked: false };
+  if (deviceId !== 'legacy-web' && !isUserDeviceActive(db, row.id, deviceId)) {
+    return { user: null, deviceId, revoked: true };
+  }
+  touchUserDevice(db, row.id, deviceId);
+  return { user: serializeUser(row), deviceId, revoked: false };
+}
+
+function requireAuthenticatedUser(req, res, db, fallbackMsg = '登录已过期或未登录。') {
+  const authState = authenticateRequestDetailed(req, db);
+  if (!authState.user) {
+    sendJson(
+      res,
+      401,
+      authState.revoked
+        ? {
+            error: `该设备登录已失效（账号已在其他设备登录并超出 ${getMaxDevices()} 台设备上限），请重新登录。`,
+            code: 'DEVICE_REVOKED',
+          }
+        : { error: fallbackMsg },
+    );
+    return null;
+  }
+  return authState;
 }
 
 export function createLirioServer({ dbPath } = {}) {
@@ -1166,9 +1231,24 @@ export function createLirioServer({ dbPath } = {}) {
           passwordHash,
           trialUnits: DEFAULT_TRIAL_UNITS,
         });
-        const token = signToken({ sub: user.id, email: user.email });
+        const deviceId = String(body.deviceId || 'legacy-web').trim() || 'legacy-web';
+        const regDev = registerUserDevice(db, {
+          userId: user.id,
+          deviceId,
+          deviceName: body.deviceName,
+          platform: body.platform,
+          maxDevices: getMaxDevices(),
+        });
+        const token = signToken({ sub: user.id, email: user.email, did: deviceId });
         const ledger = listUserLedger(db, user.id, 30);
-        sendJson(res, 201, { token, user, ledger, packs: RECHARGE_PACKS });
+        sendJson(res, 201, {
+          token,
+          user,
+          ledger,
+          packs: RECHARGE_PACKS,
+          entitlement: buildEntitlement(user, { deviceId }),
+          devices: regDev.devices,
+        });
         return;
       }
 
@@ -1182,41 +1262,89 @@ export function createLirioServer({ dbPath } = {}) {
           return;
         }
         const user = serializeUser(row);
-        const token = signToken({ sub: user.id, email: user.email });
+        const deviceId = String(body.deviceId || 'legacy-web').trim() || 'legacy-web';
+        const regDev = registerUserDevice(db, {
+          userId: user.id,
+          deviceId,
+          deviceName: body.deviceName,
+          platform: body.platform,
+          maxDevices: getMaxDevices(),
+        });
+        const token = signToken({ sub: user.id, email: user.email, did: deviceId });
         const ledger = listUserLedger(db, user.id, 30);
-        sendJson(res, 200, { token, user, ledger, packs: RECHARGE_PACKS });
+        sendJson(res, 200, {
+          token,
+          user,
+          ledger,
+          packs: RECHARGE_PACKS,
+          entitlement: buildEntitlement(user, { deviceId }),
+          devices: regDev.devices,
+        });
         return;
       }
 
       if (req.method === 'GET' && pathname === '/api/auth/me') {
-        const user = authenticateRequest(req, db);
-        if (!user) {
-          sendJson(res, 401, { error: '登录已过期或未登录。' });
+        const authState = requireAuthenticatedUser(req, res, db, '登录已过期或未登录。');
+        if (!authState) return;
+        const { user, deviceId } = authState;
+        const ledger = listUserLedger(db, user.id, 30);
+        sendJson(res, 200, {
+          user,
+          ledger,
+          packs: RECHARGE_PACKS,
+          entitlement: buildEntitlement(user, { deviceId }),
+          devices: listUserDevices(db, user.id),
+        });
+        return;
+      }
+
+      if (isRead && pathname === '/api/auth/devices') {
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录。');
+        if (!authState) return;
+        sendJson(
+          res,
+          200,
+          {
+            ok: true,
+            maxDevices: getMaxDevices(),
+            currentDeviceId: authState.deviceId,
+            devices: listUserDevices(db, authState.user.id),
+          },
+          headOnly,
+        );
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/auth/devices/remove') {
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录。');
+        if (!authState) return;
+        const body = await readJsonBody(req);
+        const targetId = String(body.deviceId || '').trim();
+        if (!targetId) {
+          sendJson(res, 400, { error: '缺少设备编号。' });
           return;
         }
-        const ledger = listUserLedger(db, user.id, 30);
-        sendJson(res, 200, { user, ledger, packs: RECHARGE_PACKS });
+        removeUserDevice(db, authState.user.id, targetId);
+        sendJson(res, 200, {
+          ok: true,
+          devices: listUserDevices(db, authState.user.id),
+        });
         return;
       }
 
       if (req.method === 'GET' && pathname === '/api/billing/ledger') {
-        const user = authenticateRequest(req, db);
-        if (!user) {
-          sendJson(res, 401, { error: '请先登录。' });
-          return;
-        }
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录。');
+        if (!authState) return;
         const limit = Number(url.searchParams.get('limit') || 50);
-        const ledger = listUserLedger(db, user.id, limit);
-        sendJson(res, 200, { user, ledger, packs: RECHARGE_PACKS });
+        const ledger = listUserLedger(db, authState.user.id, limit);
+        sendJson(res, 200, { user: authState.user, ledger, packs: RECHARGE_PACKS });
         return;
       }
 
       if (req.method === 'POST' && pathname === '/api/billing/recharge') {
-        const user = authenticateRequest(req, db);
-        if (!user) {
-          sendJson(res, 401, { error: '请先登录再充值。' });
-          return;
-        }
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录再充值。');
+        if (!authState) return;
+        const user = authState.user;
         if (isProductionMode() && process.env.LIRIO_ALLOW_DIRECT_RECHARGE !== '1' && !isAdminAuthorized(req)) {
           sendJson(res, 403, { error: '生产环境已关闭无验签直充接口，请使用卡密兑换码（/api/billing/redeem）。' });
           return;
@@ -1242,11 +1370,9 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (req.method === 'POST' && pathname === '/api/billing/redeem') {
-        const user = authenticateRequest(req, db);
-        if (!user) {
-          sendJson(res, 401, { error: '请先登录再兑换卡密。' });
-          return;
-        }
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录再兑换卡密。');
+        if (!authState) return;
+        const { user, deviceId } = authState;
         const body = await readJsonBody(req);
         try {
           const result = redeemCodeForUser(db, { userId: user.id, rawCode: body.code });
@@ -1256,6 +1382,8 @@ export function createLirioServer({ dbPath } = {}) {
             entry: result.entry,
             redeemCode: result.redeemCode,
             ledger,
+            entitlement: buildEntitlement(result.user, { deviceId }),
+            devices: listUserDevices(db, user.id),
           });
         } catch (err) {
           const codeErr = err?.message || String(err);
@@ -1500,11 +1628,9 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (req.method === 'POST' && pathname === '/api/ai/chat') {
-        const user = authenticateRequest(req, db);
-        if (!user) {
-          sendJson(res, 401, { error: '请先登录 Lirio 账号。' });
-          return;
-        }
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
+        if (!authState) return;
+        const user = authState.user;
         if (user.balanceUnits <= 0) {
           sendJson(res, 402, { error: '当前余额不足，请在「用户设置 → 账户与余额」中充值后继续。' });
           return;
@@ -1559,11 +1685,9 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (req.method === 'POST' && pathname === '/api/ai/tts') {
-        const user = authenticateRequest(req, db);
-        if (!user) {
-          sendJson(res, 401, { error: '请先登录 Lirio 账号。' });
-          return;
-        }
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
+        if (!authState) return;
+        const user = authState.user;
         if (user.balanceUnits <= 0) {
           sendJson(res, 402, { error: '当前余额不足，请充值或切换免费 Edge 语音。' });
           return;
@@ -1600,11 +1724,9 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (req.method === 'POST' && pathname === '/api/ai/transcribe') {
-        const user = authenticateRequest(req, db);
-        if (!user) {
-          sendJson(res, 401, { error: '请先登录 Lirio 账号。' });
-          return;
-        }
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
+        if (!authState) return;
+        const user = authState.user;
         if (user.balanceUnits <= 0) {
           sendJson(res, 402, { error: '当前余额不足，请充值或切换免费本地 Whisper。' });
           return;

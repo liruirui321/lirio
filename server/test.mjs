@@ -461,7 +461,91 @@ try {
     delete process.env.LIRIO_ADMIN_TOKEN;
   }
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (14/14)');
+  // 15. Verify account-bound Lifetime Pass entitlement, 3-day trial expiry, 3-device limit eviction, and device removal
+  const devEmail = 'lifetime-guard@lirio.app';
+  const devReg1 = await req('POST', '/api/auth/register', {
+    email: devEmail,
+    password: 'password123',
+    name: 'Device Tester',
+    deviceId: 'dev-1',
+    deviceName: 'Mac Studio',
+    platform: 'macos',
+  });
+  assert.equal(devReg1.status, 201);
+  assert.equal(devReg1.json.entitlement.status, 'trial');
+  assert.equal(devReg1.json.entitlement.hasAccess, true);
+  assert.equal(devReg1.json.devices.length, 1);
+  const dev1Token = devReg1.json.token;
+  assert.equal((await req('GET', '/api/auth/me', null, dev1Token)).status, 200);
+  await new Promise((r) => setTimeout(r, 5));
+
+  const devLogin2 = await req('POST', '/api/auth/login', {
+    email: devEmail,
+    password: 'password123',
+    deviceId: 'dev-2',
+    deviceName: 'Windows PC',
+    platform: 'windows',
+  });
+  assert.equal(devLogin2.status, 200);
+  const dev2Token = devLogin2.json.token;
+  await new Promise((r) => setTimeout(r, 5));
+
+  const devLogin3 = await req('POST', '/api/auth/login', {
+    email: devEmail,
+    password: 'password123',
+    deviceId: 'dev-3',
+    deviceName: 'Android Phone',
+    platform: 'android',
+  });
+  assert.equal(devLogin3.status, 200);
+  assert.equal(devLogin3.json.devices.length, 3);
+  await new Promise((r) => setTimeout(r, 5));
+
+  // Logging in from dev-4 evicts the oldest inactive device (dev-1)
+  const devLogin4 = await req('POST', '/api/auth/login', {
+    email: devEmail,
+    password: 'password123',
+    deviceId: 'dev-4',
+    deviceName: 'Spare Laptop',
+    platform: 'macos',
+  });
+  assert.equal(devLogin4.status, 200);
+  assert.equal(devLogin4.json.devices.length, 3);
+  const dev4Token = devLogin4.json.token;
+
+  const evictedCheck = await req('GET', '/api/auth/me', null, dev1Token);
+  assert.equal(evictedCheck.status, 401);
+  assert.equal(evictedCheck.json.code, 'DEVICE_REVOKED');
+  assert.equal((await req('GET', '/api/auth/me', null, dev4Token)).status, 200);
+
+  // Manual removal of dev-2 revokes dev-2 immediately
+  const rmDev2 = await req('POST', '/api/auth/devices/remove', { deviceId: 'dev-2' }, dev4Token);
+  assert.equal(rmDev2.status, 200);
+  assert.equal((await req('GET', '/api/auth/me', null, dev2Token)).status, 401);
+
+  // Backdate created_at by 5 days -> trial expires (hasAccess=false), then Lifetime Pass code restores lifetime access
+  const fiveDaysAgo = Date.now() - 5 * 86400 * 1000;
+  db.prepare('UPDATE users SET created_at = ? WHERE email = ?').run(fiveDaysAgo, devEmail);
+  const expiredMe = await req('GET', '/api/auth/me', null, dev4Token);
+  assert.equal(expiredMe.status, 200);
+  assert.equal(expiredMe.json.entitlement.status, 'expired');
+  assert.equal(expiredMe.json.entitlement.hasAccess, false);
+
+  const genPassRes = await req('POST', '/api/admin/codes/generate', { presetId: 'pro_99', count: 1 });
+  assert.equal(genPassRes.status, 201);
+  const activateRes = await req(
+    'POST',
+    '/api/billing/redeem',
+    { code: genPassRes.json.codes[0].code },
+    dev4Token,
+  );
+  assert.equal(activateRes.status, 200);
+  assert.equal(activateRes.json.entitlement.status, 'lifetime');
+  assert.equal(activateRes.json.entitlement.hasAccess, true);
+  assert.ok(activateRes.json.entitlement.offlineValidUntil > Date.now() + 10 * 86400 * 1000);
+  assert.ok(activateRes.json.entitlement.signedProof);
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (15/15)');
 } finally {
   server.close();
 }
