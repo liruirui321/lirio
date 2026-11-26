@@ -1291,18 +1291,19 @@ export function GlobalSettingsModal({
                         </div>
                         <div className="speak-field">
                           <label>Model / Voice</label>
-                          <div style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 84px', gap: 6, width: '100%' }}>
                             <input
                               type="text"
                               value={config.speechModel || ''}
                               placeholder="tts-1"
+                              style={{ minWidth: 0, width: '100%' }}
                               onChange={(e) => updateConfig({ speechModel: e.target.value })}
                             />
                             <input
                               type="text"
                               value={config.speechVoice || ''}
                               placeholder="alloy"
-                              style={{ width: 84 }}
+                              style={{ minWidth: 0, width: '100%' }}
                               onChange={(e) => updateConfig({ speechVoice: e.target.value })}
                             />
                           </div>
