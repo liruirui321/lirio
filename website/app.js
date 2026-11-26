@@ -4,9 +4,9 @@ const FALLBACK_STORE = {
       id: 'pro_99',
       payYuan: 99,
       label: '¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）',
-      shortTitle: 'Lirio Pro · 永久版',
-      badge: '最划算 · 永久买断',
-      subtitle: '一次付费终身用（3 台设备）· 送 ¥10 余额 ≈ 200+ 场模考',
+      shortTitle: 'Lirio Pro',
+      badge: 'Pro 授权',
+      subtitle: '支持 3 台设备 · 含 ¥10 对话余额',
       amountUnits: 100000,
       upgradeToPro: true,
     },
@@ -15,8 +15,8 @@ const FALLBACK_STORE = {
       payYuan: 10,
       label: '¥10 AI 对话加油包',
       shortTitle: '¥10 对话加油包',
-      badge: '一杯奶茶钱',
-      subtitle: '约 200+ 场模考 · 用多少扣多少 · 永不过期',
+      badge: '按量充值',
+      subtitle: '按实际用量扣费 · 余额长期有效',
       amountUnits: 100000,
       upgradeToPro: false,
     },
@@ -24,9 +24,9 @@ const FALLBACK_STORE = {
       id: 'topup_30',
       payYuan: 30,
       label: '¥30 AI 对话加油包（赠 ¥5）',
-      shortTitle: '¥30 冲刺加油包',
-      badge: '冲刺加赠 ¥5',
-      subtitle: '实付 ¥30 到账 ¥35 · 考前刷题刷口语闭眼入',
+      shortTitle: '¥30 对话加油包',
+      badge: '赠 ¥5',
+      subtitle: '实付 ¥30 到账 ¥35 · 余额长期有效',
       amountUnits: 350000,
       upgradeToPro: false,
     },
@@ -79,16 +79,16 @@ function getShopUrlForPlan(planId) {
 function getPackBullets(preset) {
   if (preset.id === 'pro_99') {
     return [
-      '永久解锁精听、词卡、音频自动切分（3 台设备）',
-      '附赠 ¥10 对话余额（约 200+ 场雅思考官模考）',
-      '专属「提需求」通道，你的好点子作者真做',
+      '解锁精听、词卡与本地音频自动切分（3 台设备）',
+      '含 ¥10 对话余额，按实际用量扣费',
+      '应用内支持问题与功能反馈',
     ];
   }
   const creditYuan = ((Number(preset.amountUnits) || 0) / 10000).toFixed(0);
   return [
-    `立即到账 ¥${creditYuan} 对话余额 · 永不过期`,
-    '雅思考官模考低至 4 分/场 · AI 字幕精校低至 5 厘/篇',
-    '用多少扣多少，拒绝高价年卡捆绑',
+    `到账 ¥${creditYuan} 对话余额`,
+    '可用于口语陪练、雅思考官模考与字幕精校',
+    '按实际 Token 用量计费，余额长期有效',
   ];
 }
 
@@ -767,7 +767,7 @@ function renderStorefront() {
         <article class="pack-card${isFeatured ? ' featured' : ''}">
           <div class="pack-top">
             <strong>${esc(p.shortTitle || p.label)}</strong>
-            <span class="tag">${esc(p.badge || (p.upgradeToPro ? '永久买断' : '余额充值'))}</span>
+            <span class="tag">${esc(p.badge || (p.upgradeToPro ? 'Pro 授权' : '余额充值'))}</span>
           </div>
           <div class="pack-price">¥${esc(p.payYuan)}<span>到账 ¥${esc(creditYuan)} 余额</span></div>
           <p class="pack-sub">${esc(p.subtitle || p.note || '')}</p>
