@@ -44,7 +44,7 @@ fs.writeFileSync(cargoPath, cargoUpdated);
 const versionsPath = path.join(ROOT, 'website', 'versions.json');
 if (fs.existsSync(versionsPath)) {
   const vJson = JSON.parse(fs.readFileSync(versionsPath, 'utf8'));
-  const base = (vJson.releaseBaseUrl || 'https://github.com/liruirui321/lirio/releases/latest/download').replace(/\/+$/, '');
+  const base = (vJson.releaseBaseUrl || 'https://lirio.deltae.tech/releases').replace(/\/+$/, '');
   vJson.latestVersion = nextVersion;
   vJson.releaseDate = today;
   vJson.platforms = {
@@ -70,8 +70,9 @@ if (fs.existsSync(versionsPath)) {
     ios: {
       ...vJson.platforms.ios,
       version: nextVersion,
-      filename: `Lirio-${nextVersion}-ios.ipa`,
-      downloadUrl: `${base}/Lirio-${nextVersion}-ios.ipa`,
+      comingSoon: true,
+      filename: '',
+      downloadUrl: '',
     },
   };
   const existing = Array.isArray(vJson.history) ? vJson.history : [];

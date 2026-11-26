@@ -2,7 +2,7 @@
   "appName": "Lirio",
   "latestVersion": "0.5.2",
   "releaseDate": "2026-11-26",
-  "releaseBaseUrl": "https://github.com/liruirui321/lirio/releases/latest/download",
+  "releaseBaseUrl": "https://lirio.deltae.tech/releases",
   "priceYuan": 99,
   "platforms": {
     "macos": {
@@ -12,7 +12,7 @@
       "format": ".dmg",
       "version": "0.5.2",
       "filename": "Lirio-0.5.2-macos.dmg",
-      "downloadUrl": "https://github.com/liruirui321/lirio/releases/latest/download/Lirio-0.5.2-macos.dmg",
+      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.2-macos.dmg",
       "autoUpdate": true
     },
     "windows": {
@@ -22,7 +22,7 @@
       "format": ".exe",
       "version": "0.5.2",
       "filename": "Lirio-0.5.2-windows-x64-setup.exe",
-      "downloadUrl": "https://github.com/liruirui321/lirio/releases/latest/download/Lirio-0.5.2-windows-x64-setup.exe",
+      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.2-windows-x64-setup.exe",
       "autoUpdate": true
     },
     "android": {
@@ -32,7 +32,7 @@
       "format": ".apk",
       "version": "0.5.2",
       "filename": "Lirio-0.5.2-android.apk",
-      "downloadUrl": "https://github.com/liruirui321/lirio/releases/latest/download/Lirio-0.5.2-android.apk",
+      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.2-android.apk",
       "autoUpdate": false
     },
     "ios": {

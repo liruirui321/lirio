@@ -27,9 +27,25 @@ if (!process.env.TAURI_SIGNING_PRIVATE_KEY && !fs.existsSync(keyPath)) {
 const baseUrl = (
   parseArg('--base-url') ||
   process.env.LIRIO_UPDATE_BASE_URL ||
-  'https://github.com/liruirui321/lirio/releases/latest/download'
+  'https://lirio.deltae.tech/releases'
 ).replace(/\/+$/, '');
 const notes = parseArg('--notes') || `Lirio v${version}`;
+const shouldUpload = process.argv.includes('--upload');
+const remoteHost = process.env.LIRIO_DEPLOY_HOST || 'annealingtech';
+
+const keyPassPath =
+  process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD_PATH || `${keyPath}.pass`;
+const signingPassword =
+  process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ??
+  (fs.existsSync(keyPassPath) ? fs.readFileSync(keyPassPath, 'utf8').trim() : '');
+
+const buildEnv = {
+  ...process.env,
+  VITE_LIRIO_SERVER_URL: process.env.VITE_LIRIO_SERVER_URL || 'https://lirio.deltae.tech',
+  TAURI_SIGNING_PRIVATE_KEY:
+    process.env.TAURI_SIGNING_PRIVATE_KEY || fs.readFileSync(keyPath, 'utf8').trim(),
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: signingPassword,
+};
 
 console.log(`[release-update] Building signed macOS updater artifacts for v${version}...`);
 execFileSync(
@@ -38,10 +54,7 @@ execFileSync(
   {
     cwd: ROOT,
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      ...(process.env.TAURI_SIGNING_PRIVATE_KEY ? {} : { TAURI_SIGNING_PRIVATE_KEY_PATH: keyPath }),
-    },
+    env: buildEnv,
   },
 );
 
@@ -49,6 +62,7 @@ const macosBundleDir = path.join(ROOT, 'target', 'release', 'bundle', 'macos');
 const tarName = 'Lirio.app.tar.gz';
 const tarPath = path.join(macosBundleDir, tarName);
 const sigPath = path.join(macosBundleDir, `${tarName}.sig`);
+const appPath = path.join(macosBundleDir, 'Lirio.app');
 
 if (!fs.existsSync(tarPath) || !fs.existsSync(sigPath)) {
   console.error(`Expected signed updater artifacts not found under ${macosBundleDir}`);
@@ -61,6 +75,19 @@ const outTarPath = path.join(DIST_DIR, outTarName);
 const outSigPath = path.join(DIST_DIR, `${outTarName}.sig`);
 fs.copyFileSync(tarPath, outTarPath);
 fs.copyFileSync(sigPath, outSigPath);
+
+const outDmgName = `Lirio-${version}-macos.dmg`;
+const outDmgPath = path.join(DIST_DIR, outDmgName);
+let copiedDmg = false;
+if (fs.existsSync(appPath)) {
+  console.log(`[release-update] Creating ${outDmgName} via hdiutil...`);
+  execFileSync(
+    'hdiutil',
+    ['create', '-volname', 'Lirio', '-srcfolder', appPath, '-ov', '-format', 'UDZO', outDmgPath],
+    { stdio: 'inherit' },
+  );
+  copiedDmg = true;
+}
 
 const signature = fs.readFileSync(sigPath, 'utf8').trim();
 const platformKey = process.arch === 'arm64' ? 'darwin-aarch64' : 'darwin-x86_64';
@@ -80,4 +107,13 @@ fs.writeFileSync(path.join(DIST_DIR, 'latest.json'), JSON.stringify(manifest, nu
 console.log(`[release-update] Ready in ${DIST_DIR}:`);
 console.log(`  - ${outTarName}`);
 console.log(`  - ${outTarName}.sig`);
+if (copiedDmg) console.log(`  - ${outDmgName}`);
 console.log(`  - latest.json (url: ${manifest.platforms[platformKey].url})`);
+
+if (shouldUpload) {
+  console.log(`[release-update] Uploading ${DIST_DIR}/ to ${remoteHost}:/opt/lirio/releases/ ...`);
+  execFileSync('rsync', ['-avz', `${DIST_DIR}/`, `${remoteHost}:/opt/lirio/releases/`], {
+    stdio: 'inherit',
+  });
+  console.log(`[release-update] Live update check URL: https://lirio.deltae.tech/api/updates/${platformKey.replace('-', '/')}/0.0.1`);
+}

@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "release:build": "node scripts/release-update.mjs",
+    "release:publish": "node scripts/release-update.mjs --upload",
     "version:bump": "node scripts/bump-version.mjs",
     "test": "node tests/smoke.cjs",
     "test:learning": "node tests/learning.cjs"
