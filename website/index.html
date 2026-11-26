@@ -59,7 +59,7 @@
         </div>
       </div>
 
-      <div class="preview-shell" aria-label="产品界面预览">
+      <div class="preview-shell" aria-label="产品实机动态演示">
         <div class="preview-topbar">
           <div class="preview-dots"><span></span><span></span><span></span></div>
           <div class="preview-tabs" role="tablist">
@@ -67,47 +67,114 @@
             <button type="button" class="preview-tab" data-preview="vocab">单词成瘾</button>
             <button type="button" class="preview-tab" data-preview="speak">2026 雅思考官</button>
           </div>
-          <span class="preview-badge">离线 0 元引擎 · 按需 AI 精校</span>
+          <span id="previewLiveBadge" class="preview-badge">● 自动轮播演示中 · 离线 0 元引擎</span>
+        </div>
+        <div class="preview-progress-track" aria-hidden="true">
+          <div id="previewProgressBar" class="preview-progress-bar"></div>
         </div>
 
         <div class="preview-body">
+          <!-- 1. Dictation Live Demo -->
           <div class="preview-pane active" data-pane="dictation">
-            <div class="mock-sentence">
-              <span class="mock-chip ok">The</span>
-              <span class="mock-chip ok">coastal</span>
-              <span class="mock-chip focus">ecosystem</span>
-              <span class="mock-chip blank">_______</span>
-              <span class="mock-chip ok">rapidly</span>
+            <div class="demo-stage-head">
+              <div class="demo-title-meta">
+                <span class="demo-tier-pill">L3</span>
+                <strong>BBC 6 Minute English · 第 14 / 42 句</strong>
+              </div>
+              <div class="demo-stage-actions">
+                <span class="demo-speed-pill">0.85× 慢速精听</span>
+                <span id="demoAiBtn" class="demo-ai-pill">AI 精校</span>
+              </div>
             </div>
-            <div class="mock-meta-row">
-              <span>第 14 / 42 句 · 丢进音频 3 秒切句（¥0）· 支持一键 AI 精校 + 中文译文</span>
-              <span class="mock-accent-pill">错因秒抓：弱读连读漏听</span>
+
+            <div class="demo-wave-box">
+              <div id="demoPlayLabel" class="demo-play-state"><i></i><span>本句播音中…</span></div>
+              <div id="demoWaveform" class="demo-wave-bars"></div>
+              <div id="demoPlayhead" class="demo-playhead"></div>
+            </div>
+
+            <div id="demoDictSlots" class="demo-slots-row" aria-live="polite"></div>
+
+            <div class="demo-feedback-row">
+              <div id="demoMistakeToast" class="demo-mistake-pop" hidden></div>
+              <div id="demoZhLine" class="demo-zh-line" hidden>沿海生态系统正在迅速变化。</div>
             </div>
           </div>
 
+          <!-- 2. Vocab Live Typing & Rhythm Demo -->
           <div class="preview-pane" data-pane="vocab">
-            <div class="mock-vocab-card">
-              <div>
-                <div class="mock-word">sustainable <small>/səˈsteɪnəbl/</small></div>
-                <div class="mock-word-sub">adj. 可持续的 · 错词自动专杀</div>
+            <div class="demo-stage-head">
+              <div class="demo-vocab-top">
+                <button type="button" id="demoVocabAudio" class="demo-speaker-btn" aria-label="发音">
+                  <span class="demo-speaker-ring"></span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                </button>
+                <div>
+                  <div id="demoVocabWord" class="demo-vocab-meaning">adj. 可持续的</div>
+                  <div id="demoVocabMeta" class="demo-vocab-phonetic">/səˈsteɪnəbl/ · 雅思 807 高频词</div>
+                </div>
               </div>
-              <div class="mock-sound-pill">机械键音上瘾 · 错词一键追杀</div>
+              <div class="demo-stage-actions">
+                <span class="demo-sound-tag">清脆机械键音</span>
+                <span id="demoVocabStreak" class="demo-streak-pill">连对 12 🔥</span>
+              </div>
+            </div>
+
+            <div id="demoVocabLetters" class="demo-letter-row"></div>
+
+            <div id="demoKeycaps" class="demo-keycaps" aria-hidden="true">
+              <span data-key="S">S</span>
+              <span data-key="U">U</span>
+              <span data-key="T">T</span>
+              <span data-key="A">A</span>
+              <span data-key="I">I</span>
+              <span data-key="N">N</span>
+              <span data-key="B">B</span>
+              <span data-key="L">L</span>
+              <span data-key="E">E</span>
+              <span data-key="O">O</span>
+              <span data-key="D">D</span>
+              <span data-key="V">V</span>
+              <span data-key="R">R</span>
+              <span data-key="Y">Y</span>
             </div>
           </div>
 
+          <!-- 3. IELTS Examiner Voice Call & Review Demo -->
           <div class="preview-pane" data-pane="speak">
-            <div class="mock-chat">
-              <div class="mock-bubble ai">
-                <strong>Examiner · Part 2</strong>
-                Tell me about a quiet place where you unwind.
+            <div class="demo-speak-stage">
+              <div id="demoSpeakAi" class="demo-bubble ai">
+                <div class="demo-bubble-head">
+                  <strong>Examiner · Part 2</strong>
+                  <span class="demo-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                </div>
+                <p>Tell me about a quiet place where you unwind.</p>
               </div>
-              <div class="mock-bubble user">
-                <strong>你</strong>
-                我常去河边那个 old botanical garden, helps me unwind after work.
+
+              <div id="demoSpeakMic" class="demo-mic-bar">
+                <span class="demo-mic-orb"><i></i></span>
+                <span>正在聆听你的中英混说…</span>
               </div>
-              <div class="mock-polish">
-                <span>AI 降维复盘 · 本场仅 ¥0.04</span>
-                <em>“unwind after work” → 秒升 8 分：“recharge away from the hustle and bustle”</em>
+
+              <div id="demoSpeakUser" class="demo-bubble user">
+                <strong>你（中英混说实时识别）</strong>
+                <p id="demoSpeakUserText"></p>
+              </div>
+
+              <div id="demoSpeakReview" class="demo-review-drawer">
+                <div class="demo-review-head">
+                  <div class="demo-band-row">
+                    <span class="demo-band-pill main">Overall 7.0</span>
+                    <span class="demo-band-pill">LR 7.5</span>
+                    <span class="demo-band-pill">FC 7.0</span>
+                  </div>
+                  <span class="demo-cost-pill">本场仅 ¥0.04</span>
+                </div>
+                <div class="demo-upgrade-line">
+                  <del>“unwind after work”</del>
+                  <em>→</em>
+                  <strong>“recharge away from the hustle and bustle”</strong>
+                </div>
               </div>
             </div>
           </div>
@@ -121,15 +188,15 @@
         <p class="section-sub">不是你不努力，是传统工具太贵、太重、太反人类。</p>
       </div>
       <div class="pain-grid">
-        <article class="pain-card">
+        <article class="pain-card" data-reveal>
           <div class="pain-bad"><em>✕</em>订阅 App 动辄 ¥398/年，停充资料直接锁死</div>
           <div class="pain-good"><em>✓</em><span>¥99 永久版 · 3 台设备终身用</span></div>
         </article>
-        <article class="pain-card">
+        <article class="pain-card" data-reveal style="--reveal-delay:80ms">
           <div class="pain-bad"><em>✕</em>传个音频要开会员，精听全耗在手动拖进度条</div>
           <div class="pain-good"><em>✓</em><span>音频丢进去自动断句，想精校再一键补译文</span></div>
         </article>
-        <article class="pain-card">
+        <article class="pain-card" data-reveal style="--reveal-delay:160ms">
           <div class="pain-bad"><em>✕</em>外教 ¥200/小时，开口紧张不敢说错词</div>
           <div class="pain-good"><em>✓</em><span>24h 私人考官 · 中英混说也能无缝接话</span></div>
         </article>
@@ -141,27 +208,47 @@
         <h2>少废话，看它怎么让你上瘾。</h2>
       </div>
       <div class="bento-grid">
-        <article class="bento-card bento-span-7 bento-featured">
+        <article class="bento-card bento-span-7 bento-featured" data-reveal>
           <span class="tag">精听开挂</span>
           <h3>任何音频丢进去，3 秒变精听课</h3>
           <p>离线自动切句 ¥0，难句可按需一键 AI 精校 + 中文译文，错词点一下进词本。</p>
+          <div class="mini-slice-viz" aria-hidden="true">
+            <div class="mini-slice-scan"></div>
+            <div class="mini-slice-seg" style="--seg-delay:0s"><span>0:00</span><i></i></div>
+            <div class="mini-slice-seg" style="--seg-delay:0.45s"><span>0:04</span><i></i></div>
+            <div class="mini-slice-seg" style="--seg-delay:0.9s"><span>0:09</span><i></i></div>
+            <div class="mini-slice-seg" style="--seg-delay:1.35s"><span>0:14</span><i></i></div>
+          </div>
           <div class="bento-chips">
             <span>0 元自动断句</span>
             <span>0.75× 慢听</span>
             <span>AI 精校 + 译文</span>
           </div>
         </article>
-        <article class="bento-card bento-span-5">
+        <article class="bento-card bento-span-5" data-reveal style="--reveal-delay:80ms">
           <span class="tag">单词成瘾</span>
           <h3>敲单词像打节奏音游</h3>
           <p>清脆机械键音 + 雅思 807 高频词，顽固错词自动拉出来反复专杀。</p>
+          <div class="mini-keys-viz" aria-hidden="true">
+            <span style="--k:0">S</span>
+            <span style="--k:1">P</span>
+            <span style="--k:2">E</span>
+            <span style="--k:3">L</span>
+            <span style="--k:4">L</span>
+          </div>
         </article>
-        <article class="bento-card bento-span-5">
+        <article class="bento-card bento-span-5" data-reveal>
           <span class="tag">开口提分</span>
           <h3>2026 真题考官，4 分钱陪练</h3>
           <p>Part 1 → 2 → 3 全真追问，讲完秒出四维评分与 8 分地道改写。</p>
+          <div class="mini-voice-viz" aria-hidden="true">
+            <div class="mini-eq-bars">
+              <i style="--b:0"></i><i style="--b:1"></i><i style="--b:2"></i><i style="--b:3"></i><i style="--b:4"></i><i style="--b:5"></i><i style="--b:6"></i><i style="--b:7"></i>
+            </div>
+            <span class="mini-band-tag">Band 8.0 示范实时生成</span>
+          </div>
         </article>
-        <article class="bento-card bento-span-7">
+        <article class="bento-card bento-span-7" data-reveal style="--reveal-delay:80ms">
           <span class="tag">不绑架用户</span>
           <h3>数据存你硬盘，需求直达作者</h3>
           <p>音频与进度完全存在你自选的本地文件夹；永久版支持 App 内直接提功能需求。</p>
@@ -176,7 +263,7 @@
       </div>
 
       <div class="vs-grid">
-        <div class="vs-card old">
+        <div class="vs-card old" data-reveal>
           <span class="vs-label">传统外教 / AI 订阅年卡</span>
           <div class="vs-price">¥398–1,980<span>/年</span></div>
           <ul>
@@ -185,7 +272,7 @@
             <li>一节外教课就够买 2 套 Lirio</li>
           </ul>
         </div>
-        <div class="vs-card win">
+        <div class="vs-card win" data-reveal style="--reveal-delay:90ms">
           <span class="vs-label">Lirio Pro · 永久版</span>
           <div class="vs-price">¥99<span>一次性买断</span></div>
           <ul>
@@ -197,10 +284,10 @@
       </div>
 
       <div class="cost-strip">
-        <div class="cost-tile"><span>传音频自动断句</span><strong class="free">¥0 无限次</strong></div>
-        <div class="cost-tile"><span>AI 字幕精校 + 译文</span><strong>约 5 厘 / 篇</strong></div>
-        <div class="cost-tile"><span>双语口语陪练</span><strong>约 3 分 / 次</strong></div>
-        <div class="cost-tile"><span>雅思全真模考 + 复盘</span><strong>约 4 分 / 场</strong></div>
+        <div class="cost-tile" data-reveal><span>传音频自动断句</span><strong class="free">¥0 无限次</strong></div>
+        <div class="cost-tile" data-reveal style="--reveal-delay:60ms"><span>AI 字幕精校 + 译文</span><strong>约 5 厘 / 篇</strong></div>
+        <div class="cost-tile" data-reveal style="--reveal-delay:120ms"><span>双语口语陪练</span><strong>约 3 分 / 次</strong></div>
+        <div class="cost-tile" data-reveal style="--reveal-delay:180ms"><span>雅思全真模考 + 复盘</span><strong>约 4 分 / 场</strong></div>
       </div>
     </section>
 
@@ -280,7 +367,7 @@
       </details>
     </section>
 
-    <section class="closing-cta">
+    <section class="closing-cta" data-reveal>
       <h2>别等下次考试前一周才后悔。</h2>
       <p>今天花一杯星巴克的钱，买断未来几年的精听与口语自由。</p>
       <div class="hero-actions">

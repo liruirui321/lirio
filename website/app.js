@@ -101,16 +101,362 @@ themeBtn.addEventListener('click', () => {
   themeBtn.textContent = next === 'light' ? '深色' : '浅色';
 });
 
-// Product preview tabs
-document.querySelectorAll('.preview-tab').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const key = btn.getAttribute('data-preview');
-    document.querySelectorAll('.preview-tab').forEach((b) => b.classList.toggle('active', b === btn));
-    document.querySelectorAll('.preview-pane').forEach((pane) => {
-      pane.classList.toggle('active', pane.getAttribute('data-pane') === key);
+// Interactive Live Product Usage Demos & Scroll Reveal
+const DEMO_ORDER = ['dictation', 'vocab', 'speak'];
+const DEMO_WAVE_HEIGHTS = [24, 48, 72, 38, 86, 62, 34, 78, 92, 54, 40, 68, 84, 30, 58, 90, 74, 42, 64, 88, 52, 36, 70, 82, 46, 60, 32, 22];
+
+const demoController = (() => {
+  const tabBtns = Array.from(document.querySelectorAll('.preview-tab'));
+  const panes = Array.from(document.querySelectorAll('.preview-pane'));
+  const progressBar = document.getElementById('previewProgressBar');
+  const liveBadge = document.getElementById('previewLiveBadge');
+
+  let currentKey = 'dictation';
+  let autoRotate = true;
+  let timers = [];
+  let rafId = null;
+
+  function clearAllTimers() {
+    for (const id of timers) clearTimeout(id);
+    timers = [];
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  }
+
+  function later(ms, fn) {
+    const id = setTimeout(fn, ms);
+    timers.push(id);
+    return id;
+  }
+
+  function setProgressDuration(ms) {
+    if (!progressBar) return;
+    progressBar.style.transition = 'none';
+    progressBar.style.width = '0%';
+    void progressBar.offsetWidth;
+    progressBar.style.transition = `width ${ms}ms linear`;
+    progressBar.style.width = '100%';
+  }
+
+  function ensureWaveformBars() {
+    const waveEl = document.getElementById('demoWaveform');
+    if (!waveEl || waveEl.childElementCount > 0) return waveEl;
+    waveEl.innerHTML = DEMO_WAVE_HEIGHTS.map(
+      (h, idx) => `<span class="demo-wave-bar" style="--h:${h}%;--d:${(idx % 6) * 0.08}s"></span>`,
+    ).join('');
+    return waveEl;
+  }
+
+  function runDictationDemo(onDone) {
+    const DURATION = 8800;
+    setProgressDuration(DURATION);
+    const waveEl = ensureWaveformBars();
+    const waveBox = waveEl?.closest('.demo-wave-box');
+    const playhead = document.getElementById('demoPlayhead');
+    const playLabel = document.getElementById('demoPlayLabel');
+    const slotsEl = document.getElementById('demoDictSlots');
+    const aiBtn = document.getElementById('demoAiBtn');
+    const toastEl = document.getElementById('demoMistakeToast');
+    const zhEl = document.getElementById('demoZhLine');
+    if (!slotsEl || !waveEl) return later(DURATION, onDone);
+
+    const words = [
+      { raw: 'The', fixed: 'The', err: false },
+      { raw: 'coastal', fixed: 'coastal', err: false },
+      { raw: 'ecosystem', fixed: 'ecosystem', err: false },
+      { raw: 'is', fixed: 'is', err: false },
+      { raw: 'chaing', fixed: 'changing', err: true },
+      { raw: 'rapidly.', fixed: 'rapidly.', err: false },
+    ];
+
+    slotsEl.innerHTML = words.map(() => '<span class="demo-slot">_</span>').join('');
+    const slotNodes = Array.from(slotsEl.children);
+    const barNodes = Array.from(waveEl.children);
+    if (aiBtn) {
+      aiBtn.className = 'demo-ai-pill';
+      aiBtn.textContent = 'AI 精校';
+    }
+    if (toastEl) {
+      toastEl.hidden = true;
+      toastEl.className = 'demo-mistake-pop';
+    }
+    if (zhEl) zhEl.hidden = true;
+    waveBox?.classList.add('is-playing');
+    if (playLabel) {
+      const span = playLabel.querySelector('span');
+      if (span) span.textContent = '本句播音中…';
+    }
+    barNodes.forEach((b) => b.classList.remove('played'));
+
+    // Smooth playhead sweep over 4.2s
+    const startTs = performance.now();
+    const waveWidth = Math.max(120, waveEl.clientWidth - 4);
+    if (playhead && waveEl) {
+      playhead.style.left = `${waveEl.offsetLeft}px`;
+    }
+    function tickWave(now) {
+      const ratio = Math.min(1, (now - startTs) / 4200);
+      if (playhead) playhead.style.transform = `translateX(${ratio * waveWidth}px)`;
+      const litCount = Math.floor(ratio * barNodes.length);
+      barNodes.forEach((b, i) => b.classList.toggle('played', i <= litCount));
+      if (ratio < 1) {
+        rafId = requestAnimationFrame(tickWave);
+      } else {
+        waveBox?.classList.remove('is-playing');
+        if (playLabel) {
+          const span = playLabel.querySelector('span');
+          if (span) span.textContent = '已自动断句 · 提交批改';
+        }
+      }
+    }
+    rafId = requestAnimationFrame(tickWave);
+
+    // Character-by-character typing timeline
+    let t = 420;
+    words.forEach((w, wIdx) => {
+      const node = slotNodes[wIdx];
+      later(t, () => {
+        slotNodes.forEach((n) => n.classList.remove('typing'));
+        node.classList.add('typing');
+        node.textContent = '';
+      });
+      for (let c = 1; c <= w.raw.length; c++) {
+        const sub = w.raw.slice(0, c);
+        later(t + c * 62, () => {
+          node.textContent = sub;
+        });
+      }
+      t += w.raw.length * 62 + 95;
+    });
+
+    // Grade + highlight typo
+    later(t + 160, () => {
+      slotNodes.forEach((node, idx) => {
+        node.classList.remove('typing');
+        node.classList.add(words[idx].err ? 'err' : 'ok');
+      });
+      if (toastEl) {
+        toastEl.hidden = false;
+        toastEl.textContent = 'chaing → changing ＋加入错词本';
+      }
+    });
+
+    // Capture mistake + trigger optional AI polish pulse
+    later(t + 1250, () => {
+      if (toastEl) {
+        toastEl.classList.add('saved');
+        toastEl.textContent = 'changing 已收进错词本 ✓';
+      }
+      if (aiBtn) {
+        aiBtn.classList.add('pulsing');
+        aiBtn.textContent = 'AI 精校中…';
+      }
+    });
+
+    // Finish AI polish & glide in Chinese reference
+    later(t + 2250, () => {
+      if (aiBtn) {
+        aiBtn.classList.remove('pulsing');
+        aiBtn.classList.add('done');
+        aiBtn.textContent = 'AI 已精校 ✓';
+      }
+      const errSlot = slotNodes[4];
+      if (errSlot) {
+        errSlot.classList.remove('err');
+        errSlot.classList.add('ok');
+        errSlot.textContent = words[4].fixed;
+      }
+      if (zhEl) zhEl.hidden = false;
+    });
+
+    later(DURATION, onDone);
+  }
+
+  function runVocabDemo(onDone) {
+    const DURATION = 8200;
+    setProgressDuration(DURATION);
+    const audioBtn = document.getElementById('demoVocabAudio');
+    const wordEl = document.getElementById('demoVocabWord');
+    const metaEl = document.getElementById('demoVocabMeta');
+    const streakEl = document.getElementById('demoVocabStreak');
+    const lettersEl = document.getElementById('demoVocabLetters');
+    const keycapMap = new Map(
+      Array.from(document.querySelectorAll('#demoKeycaps span')).map((el) => [
+        el.getAttribute('data-key'),
+        el,
+      ]),
+    );
+    if (!lettersEl) return later(DURATION, onDone);
+
+    const deck = [
+      { word: 'SUSTAINABLE', meaning: 'adj. 可持续的', meta: '/səˈsteɪnəbl/ · 雅思 807 高频词', streak: 13 },
+      { word: 'BIODIVERSITY', meaning: 'n. 生物多样性', meta: '/ˌbaɪəʊdaɪˈvɜːsəti/ · 错词专练', streak: 14 },
+    ];
+    if (streakEl) streakEl.textContent = '连对 12 🔥';
+
+    let offset = 0;
+    deck.forEach((card) => {
+      later(offset, () => {
+        if (wordEl) wordEl.textContent = card.meaning;
+        if (metaEl) metaEl.textContent = card.meta;
+        audioBtn?.classList.add('is-speaking');
+        lettersEl.innerHTML = Array.from(card.word)
+          .map((_, idx) => `<span class="demo-letter-tile${idx === 0 ? ' active' : ''}"></span>`)
+          .join('');
+      });
+
+      const tiles = () => Array.from(lettersEl.children);
+      let cursor = offset + 520;
+      Array.from(card.word).forEach((ch, idx) => {
+        later(cursor, () => {
+          const list = tiles();
+          const tile = list[idx];
+          if (tile) {
+            tile.classList.remove('active');
+            tile.classList.add('filled');
+            tile.textContent = ch.toLowerCase();
+          }
+          if (list[idx + 1]) list[idx + 1].classList.add('active');
+          const keyEl = keycapMap.get(ch);
+          if (keyEl) {
+            keyEl.classList.add('hit');
+            later(120, () => keyEl.classList.remove('hit'));
+          }
+        });
+        cursor += 155;
+      });
+
+      later(cursor + 120, () => {
+        audioBtn?.classList.remove('is-speaking');
+        tiles().forEach((t) => t.classList.add('complete'));
+        if (streakEl) {
+          streakEl.textContent = `连对 ${card.streak} 🔥`;
+          streakEl.classList.add('bump');
+          later(260, () => streakEl.classList.remove('bump'));
+        }
+      });
+
+      offset += 4000;
+    });
+
+    later(DURATION, onDone);
+  }
+
+  function runSpeakDemo(onDone) {
+    const DURATION = 8600;
+    setProgressDuration(DURATION);
+    const aiEl = document.getElementById('demoSpeakAi');
+    const micEl = document.getElementById('demoSpeakMic');
+    const userEl = document.getElementById('demoSpeakUser');
+    const userTextEl = document.getElementById('demoSpeakUserText');
+    const reviewEl = document.getElementById('demoSpeakReview');
+    if (!aiEl || !userEl || !userTextEl || !reviewEl) return later(DURATION, onDone);
+
+    aiEl.classList.remove('visible');
+    userEl.classList.remove('visible');
+    reviewEl.classList.remove('visible');
+    micEl?.classList.remove('is-live');
+    userTextEl.textContent = '';
+
+    later(120, () => aiEl.classList.add('visible'));
+    later(1200, () => {
+      micEl?.classList.add('is-live');
+      userEl.classList.add('visible');
+    });
+
+    const chunks = [
+      '我常去河边那个 ',
+      'old botanical garden, ',
+      'because it helps me ',
+      'unwind after work.',
+    ];
+    let t = 1550;
+    let acc = '';
+    chunks.forEach((part) => {
+      acc += part;
+      const snap = acc;
+      later(t, () => {
+        userTextEl.textContent = snap;
+      });
+      t += 680;
+    });
+
+    later(t + 350, () => {
+      micEl?.classList.remove('is-live');
+      reviewEl.classList.add('visible');
+    });
+
+    later(DURATION, onDone);
+  }
+
+  function startTab(key) {
+    clearAllTimers();
+    currentKey = DEMO_ORDER.includes(key) ? key : 'dictation';
+    tabBtns.forEach((b) => b.classList.toggle('active', b.getAttribute('data-preview') === currentKey));
+    panes.forEach((p) => p.classList.toggle('active', p.getAttribute('data-pane') === currentKey));
+
+    if (liveBadge) {
+      liveBadge.textContent = autoRotate
+        ? '● 自动轮播演示中 · 离线 0 元引擎'
+        : '● 已锁定当前演示 · 点标签可切换';
+    }
+
+    const onDone = () => {
+      if (document.hidden) return;
+      const nextKey = autoRotate
+        ? DEMO_ORDER[(DEMO_ORDER.indexOf(currentKey) + 1) % DEMO_ORDER.length]
+        : currentKey;
+      startTab(nextKey);
+    };
+
+    if (currentKey === 'dictation') runDictationDemo(onDone);
+    else if (currentKey === 'vocab') runVocabDemo(onDone);
+    else runSpeakDemo(onDone);
+  }
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      autoRotate = false;
+      startTab(btn.getAttribute('data-preview'));
     });
   });
-});
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearAllTimers();
+    } else {
+      startTab(currentKey);
+    }
+  });
+
+  if (tabBtns.length && panes.length) {
+    startTab('dictation');
+  }
+})();
+
+// Scroll-reveal observer for pain cards, bento grid, VS cards & closing CTA
+(() => {
+  const targets = Array.from(document.querySelectorAll('[data-reveal]'));
+  if (!targets.length) return;
+  if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    targets.forEach((el) => el.classList.add('is-visible'));
+    return;
+  }
+  const obs = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          obs.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.14 },
+  );
+  targets.forEach((el) => obs.observe(el));
+})();
 
 function renderStorefront() {
   const grid = document.getElementById('packGrid');
