@@ -66,8 +66,8 @@ export const CODE_PRESETS = [
     payYuan: 99,
     label: '¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）',
     shortTitle: 'Lirio Pro · 永久版',
-    badge: '永久有效 · 支持提需求',
-    subtitle: '绑定个人账号（3 台设备）+ 本地免费语音切分 + 赠 ¥10 对话额度 + 专属提需求通道',
+    badge: '最划算 · 永久买断',
+    subtitle: '一次付费终身用（3 台设备）· 送 ¥10 余额 ≈ 200+ 场模考',
     amountUnits: 100000, // ¥10.00
     upgradeToPro: true,
     note: '开通 Lirio Pro · 永久版 + 赠 ¥10.00 初始对话余额',
@@ -77,8 +77,8 @@ export const CODE_PRESETS = [
     payYuan: 10,
     label: '¥10 AI 对话加油包',
     shortTitle: '¥10 对话加油包',
-    badge: '轻度按量',
-    subtitle: '约 80–270 场雅思模考 · 余额永不过期',
+    badge: '一杯奶茶钱',
+    subtitle: '约 200+ 场模考 · 用多少扣多少 · 永不过期',
     amountUnits: 100000, // ¥10.00
     upgradeToPro: false,
     note: 'AI 对话加油包 ¥10.00',
@@ -88,8 +88,8 @@ export const CODE_PRESETS = [
     payYuan: 30,
     label: '¥30 AI 对话加油包（赠 ¥5）',
     shortTitle: '¥30 冲刺加油包',
-    badge: '超值赠 ¥5',
-    subtitle: '实付 ¥30 到账 ¥35 · 重度备考首选',
+    badge: '冲刺加赠 ¥5',
+    subtitle: '实付 ¥30 到账 ¥35 · 考前刷题刷口语闭眼入',
     amountUnits: 350000, // ¥35.00
     upgradeToPro: false,
     note: 'AI 对话加油包 ¥30.00 + 赠送 ¥5.00',

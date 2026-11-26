@@ -5,8 +5,8 @@ const FALLBACK_STORE = {
       payYuan: 99,
       label: '¥99 Lirio Pro · 永久版（赠 ¥10 对话加油包）',
       shortTitle: 'Lirio Pro · 永久版',
-      badge: '永久有效 · 支持提需求',
-      subtitle: '绑定个人账号（3 台设备）+ 本地免费语音切分 + 赠 ¥10 对话额度 + 专属提需求通道',
+      badge: '最划算 · 永久买断',
+      subtitle: '一次付费终身用（3 台设备）· 送 ¥10 余额 ≈ 200+ 场模考',
       amountUnits: 100000,
       upgradeToPro: true,
     },
@@ -15,8 +15,8 @@ const FALLBACK_STORE = {
       payYuan: 10,
       label: '¥10 AI 对话加油包',
       shortTitle: '¥10 对话加油包',
-      badge: '轻度按量',
-      subtitle: '约 80–270 场雅思模考 · 余额永不过期',
+      badge: '一杯奶茶钱',
+      subtitle: '约 200+ 场模考 · 用多少扣多少 · 永不过期',
       amountUnits: 100000,
       upgradeToPro: false,
     },
@@ -25,8 +25,8 @@ const FALLBACK_STORE = {
       payYuan: 30,
       label: '¥30 AI 对话加油包（赠 ¥5）',
       shortTitle: '¥30 冲刺加油包',
-      badge: '超值赠 ¥5',
-      subtitle: '实付 ¥30 到账 ¥35 · 重度备考首选',
+      badge: '冲刺加赠 ¥5',
+      subtitle: '实付 ¥30 到账 ¥35 · 考前刷题刷口语闭眼入',
       amountUnits: 350000,
       upgradeToPro: false,
     },
@@ -79,16 +79,16 @@ function getShopUrlForPlan(planId) {
 function getPackBullets(preset) {
   if (preset.id === 'pro_99') {
     return [
-      '绑定个人账号激活 Lirio Pro · 永久版（3 台常用设备）',
-      '应用内直接提交功能优化建议与文本词表需求',
-      '附赠 ¥10.00 加油包 · 本地 Whisper 切分永久 0 Token',
+      '永久解锁精听、词卡、音频自动切分（3 台设备）',
+      '附赠 ¥10 对话余额（约 200+ 场雅思考官模考）',
+      '专属「提需求」通道，你的好点子作者真做',
     ];
   }
   const creditYuan = ((Number(preset.amountUnits) || 0) / 10000).toFixed(0);
   return [
-    `兑换立即到账 ¥${creditYuan}.00 对话余额`,
-    '支持雅思考官全真模考、双语闲聊与错因诊断',
-    '按 3 倍 DeepSeek 原生费率按量扣费 · 永不过期',
+    `立即到账 ¥${creditYuan} 对话余额 · 永不过期`,
+    '雅思考官模考低至 4 分/场 · AI 字幕精校低至 5 厘/篇',
+    '用多少扣多少，拒绝高价年卡捆绑',
   ];
 }
 
