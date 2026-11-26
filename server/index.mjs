@@ -1649,11 +1649,11 @@ export function createLirioServer({ dbPath } = {}) {
           {
             ok: true,
             community: {
-              qqGroupNumber: st.qqGroupNumber || '',
-              qqGroupName: st.qqGroupName || 'Lirio 学习交流群',
-              qqGroupQr: st.qqGroupQr || '',
+              qqGroupNumber: st.qqGroupNumber || '966587892',
+              qqGroupName: st.qqGroupName || 'Lirio 使用交流群',
+              qqGroupQr: st.qqGroupQr || 'https://lirio.deltae.tech/assets/qq-group-qr.png',
               qqGroupLink: st.qqGroupLink || '',
-              communityNote: st.communityNote || '交流英语学习方法、分享精听素材与使用建议。',
+              communityNote: st.communityNote || '交流英语学习方法、分享精听素材、反馈建议与第一时间获取更新。',
               supportContact: st.supportContact || '',
             },
           },

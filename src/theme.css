@@ -381,6 +381,38 @@ textarea:focus { outline: none; }
   background: var(--accent-bright);
 }
 @media (max-width: 760px) { .home-grid { grid-template-columns: 1fr; max-width: 340px; } }
+.home-community-pill {
+  margin-top: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card-bg);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: var(--shadow);
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.home-community-pill:hover {
+  border-color: var(--accent-border);
+  color: var(--text-strong);
+  transform: translateY(-1px);
+}
+.home-community-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.home-community-arrow {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.7;
+}
 
 /* ==========================================================================
    Custom Styled Dropdown (Borderless Pill Trigger + Soft Floating Menu)
@@ -4241,7 +4273,7 @@ textarea:focus { outline: none; }
   border: 1px solid var(--line);
   background: var(--card-bg);
   border-radius: 14px;
-  padding: 14px 16px;
+  padding: 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4252,10 +4284,10 @@ textarea:focus { outline: none; }
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 .community-modal-info strong {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-strong);
 }
 .community-modal-info p {
@@ -4264,42 +4296,128 @@ textarea:focus { outline: none; }
   line-height: 1.5;
   color: var(--muted);
 }
+.community-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.community-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+}
 .community-modal-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .community-modal-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   font-weight: 600;
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: var(--bg);
   border: 1px solid var(--line);
   color: var(--text-strong);
 }
-.community-modal-qr {
-  width: 96px;
-  height: 96px;
+.community-modal-qr-wrap {
   flex-shrink: 0;
-  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.community-modal-qr {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: #fff;
   display: grid;
   place-items: center;
   overflow: hidden;
-  padding: 4px;
+  padding: 6px;
   font-size: 11px;
   color: var(--muted);
   text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.community-modal-qr:hover {
+  border-color: var(--accent-border);
+  transform: translateY(-1px);
 }
 .community-modal-qr img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  display: block;
+}
+.community-modal-qr-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.community-qr-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  background: rgba(18, 16, 12, 0.56);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.community-qr-lightbox-card {
+  width: min(320px, 100%);
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px 18px 18px;
+  box-shadow: var(--menu-shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.community-qr-lightbox-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.community-qr-lightbox-head strong {
+  font-size: 15px;
+  color: var(--text-strong);
+}
+.community-qr-lightbox-img {
+  width: 240px;
+  height: 240px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 10px;
+  display: grid;
+  place-items: center;
+}
+.community-qr-lightbox-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.community-qr-lightbox-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .mic-permission-modal {
   width: min(410px, 100%);

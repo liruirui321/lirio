@@ -278,6 +278,13 @@
         <span id="releaseDateBadge" class="ver-pill">2026-11-26</span>
       </div>
       <div id="platformGrid" class="platform-grid"></div>
+      <div class="download-community-bar">
+        <span>安装或使用遇到问题？欢迎加入 QQ 交流群 <strong class="download-qq-code" id="downloadQqNumber">966587892</strong></span>
+        <div class="download-community-actions">
+          <button type="button" class="mini-btn" id="downloadCopyQqBtn">复制群号</button>
+          <a class="mini-btn" href="#community">扫码入群</a>
+        </div>
+      </div>
     </section>
 
     <section id="community" class="section">
@@ -290,19 +297,25 @@
       </div>
       <div class="community-card">
         <div class="community-info">
-          <strong id="communityGroupName">Lirio 学习交流群</strong>
-          <p id="communityNote">交流英语学习方法、分享精听素材与使用建议。</p>
+          <strong id="communityGroupName">Lirio 使用交流群</strong>
+          <p id="communityNote">交流英语学习方法、分享精听素材、反馈建议与第一时间获取更新。</p>
+          <div class="community-tags" aria-label="交流群内容">
+            <span class="community-tag">精听素材共享</span>
+            <span class="community-tag">问题反馈直达</span>
+            <span class="community-tag">新版本优先体验</span>
+          </div>
           <div class="community-meta-row" id="communityGroupRow">
-            <span class="community-code" id="communityGroupNumber">群号待补充</span>
-            <button type="button" class="mini-btn" id="copyQqBtn" hidden>复制群号</button>
+            <span class="community-code" id="communityGroupNumber">QQ 群号：966587892</span>
+            <button type="button" class="mini-btn" id="copyQqBtn">复制群号</button>
             <a id="joinQqLink" class="mini-btn" href="#" target="_blank" rel="noopener noreferrer" hidden>加入 QQ 群 ↗</a>
           </div>
           <div class="community-contact" id="communityContact" hidden></div>
         </div>
         <div class="community-qr-wrap">
-          <div id="communityQrBox" class="community-qr-box">
-            <span>QQ 群二维码</span>
-          </div>
+          <button type="button" id="communityQrBox" class="community-qr-box" aria-label="点击放大 QQ 群二维码">
+            <img src="./assets/qq-group-qr.png" alt="Lirio 使用交流群 QQ 二维码" />
+          </button>
+          <div class="community-qr-caption">QQ 扫一扫加入 · 点击放大</div>
         </div>
       </div>
     </section>
@@ -317,8 +330,29 @@
 
   <footer class="site-footer">
     <span>Lirio · 精听 · 词卡 · 雅思考官</span>
+    <a class="footer-community-link" href="#community">QQ 交流群：<span id="footerQqNumber">966587892</span></a>
     <span id="footerVersion">Version 0.5.2</span>
   </footer>
+
+  <div id="qrLightboxModal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="qrLightboxTitle">
+    <div class="modal-card qr-lightbox-card">
+      <div class="modal-head">
+        <div>
+          <span class="ver-pill">QQ 交流群</span>
+          <h3 id="qrLightboxTitle">Lirio 使用交流群</h3>
+        </div>
+        <button type="button" id="closeQrLightboxBtn" class="modal-close" aria-label="关闭">×</button>
+      </div>
+      <div class="qr-lightbox-img-wrap">
+        <img id="qrLightboxImg" src="./assets/qq-group-qr.png" alt="Lirio 使用交流群 QQ 二维码" />
+      </div>
+      <div class="qr-lightbox-foot">
+        <span class="community-code" id="qrLightboxNumber">QQ 群号：966587892</span>
+        <button type="button" class="mini-btn" id="qrLightboxCopyBtn">复制群号</button>
+      </div>
+      <p class="qr-lightbox-hint">打开手机 QQ 扫一扫二维码，或搜索群号直接加入。</p>
+    </div>
+  </div>
 
   <script src="./app.js"></script>
 </body>

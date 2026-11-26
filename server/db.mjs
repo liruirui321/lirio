@@ -529,11 +529,11 @@ export const DEFAULT_STORE_SETTINGS = {
   shopUrlTopup30: '',
   supportContact: '',
   paymentNotice: '',
-  qqGroupNumber: '',
-  qqGroupName: 'Lirio 学习交流群',
-  qqGroupQr: '',
+  qqGroupNumber: '966587892',
+  qqGroupName: 'Lirio 使用交流群',
+  qqGroupQr: 'https://lirio.deltae.tech/assets/qq-group-qr.png',
   qqGroupLink: '',
-  communityNote: '交流英语学习方法、分享精听素材与使用建议。',
+  communityNote: '交流英语学习方法、分享精听素材、反馈建议与第一时间获取更新。',
 };
 
 export function getStoreSettings(db) {

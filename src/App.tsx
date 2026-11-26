@@ -981,6 +981,18 @@ export default function App() {
               </div>
             </button>
           </div>
+          <button
+            type="button"
+            className="home-community-pill"
+            onClick={() => {
+              setSettingsTab('feedback');
+              setSettingsOpen(true);
+            }}
+          >
+            <span className="home-community-dot" aria-hidden="true" />
+            <span>QQ 交流群 966587892 · 扫码入群与反馈</span>
+            <span className="home-community-arrow" aria-hidden="true">›</span>
+          </button>
         </div>
       )}
 

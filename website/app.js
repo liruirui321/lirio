@@ -676,57 +676,146 @@ const demoController = (() => {
   targets.forEach((el) => obs.observe(el));
 })();
 
+const DEFAULT_COMMUNITY = {
+  qqGroupNumber: '966587892',
+  qqGroupName: 'Lirio 使用交流群',
+  qqGroupQr: './assets/qq-group-qr.png',
+  communityNote: '交流英语学习方法、分享精听素材、反馈建议与第一时间获取更新。',
+};
+
+let activeCommunity = { ...DEFAULT_COMMUNITY };
+
+async function copyTextWithFallback(text) {
+  const value = String(text || '').trim();
+  if (!value) return false;
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function bindCopyButton(btn, getText) {
+  if (!btn || btn.dataset.copyBound === '1') return;
+  btn.dataset.copyBound = '1';
+  const defaultLabel = btn.textContent || '复制群号';
+  btn.addEventListener('click', async () => {
+    const ok = await copyTextWithFallback(getText());
+    if (!ok) return;
+    btn.textContent = '已复制 ✓';
+    setTimeout(() => {
+      btn.textContent = defaultLabel;
+    }, 1600);
+  });
+}
+
+function bindQrLightbox() {
+  const trigger = document.getElementById('communityQrBox');
+  const modal = document.getElementById('qrLightboxModal');
+  const closeBtn = document.getElementById('closeQrLightboxBtn');
+  if (!trigger || !modal || trigger.dataset.lbBound === '1') return;
+  trigger.dataset.lbBound = '1';
+
+  const openModal = () => {
+    if (!activeCommunity.qqGroupQr) return;
+    modal.hidden = false;
+  };
+  const closeModal = () => {
+    modal.hidden = true;
+  };
+
+  trigger.addEventListener('click', openModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+  });
+}
+
 function renderCommunity(c) {
-  if (!c) return;
+  const merged = {
+    qqGroupNumber: (c?.qqGroupNumber || '').trim() || DEFAULT_COMMUNITY.qqGroupNumber,
+    qqGroupName: (c?.qqGroupName || '').trim() || DEFAULT_COMMUNITY.qqGroupName,
+    qqGroupQr: (c?.qqGroupQr || '').trim() || DEFAULT_COMMUNITY.qqGroupQr,
+    qqGroupLink: (c?.qqGroupLink || '').trim(),
+    communityNote: (c?.communityNote || '').trim() || DEFAULT_COMMUNITY.communityNote,
+    supportContact: (c?.supportContact || '').trim(),
+  };
+  activeCommunity = merged;
+
   const nameEl = document.getElementById('communityGroupName');
   const noteEl = document.getElementById('communityNote');
   const numEl = document.getElementById('communityGroupNumber');
+  const dlNumEl = document.getElementById('downloadQqNumber');
+  const footerNumEl = document.getElementById('footerQqNumber');
   const copyBtn = document.getElementById('copyQqBtn');
+  const dlCopyBtn = document.getElementById('downloadCopyQqBtn');
   const joinLink = document.getElementById('joinQqLink');
   const contactEl = document.getElementById('communityContact');
   const qrBox = document.getElementById('communityQrBox');
+  const lbTitle = document.getElementById('qrLightboxTitle');
+  const lbImg = document.getElementById('qrLightboxImg');
+  const lbNum = document.getElementById('qrLightboxNumber');
+  const lbCopyBtn = document.getElementById('qrLightboxCopyBtn');
 
-  if (nameEl && c.qqGroupName) nameEl.textContent = c.qqGroupName;
-  if (noteEl && c.communityNote) noteEl.textContent = c.communityNote;
+  if (nameEl) nameEl.textContent = merged.qqGroupName;
+  if (noteEl) noteEl.textContent = merged.communityNote;
+  if (numEl) numEl.textContent = `QQ 群号：${merged.qqGroupNumber}`;
+  if (dlNumEl) dlNumEl.textContent = merged.qqGroupNumber;
+  if (footerNumEl) footerNumEl.textContent = merged.qqGroupNumber;
+  if (lbTitle) lbTitle.textContent = merged.qqGroupName;
+  if (lbNum) lbNum.textContent = `QQ 群号：${merged.qqGroupNumber}`;
 
-  const num = (c.qqGroupNumber || '').trim();
-  if (numEl) {
-    numEl.textContent = num ? `QQ 群号：${num}` : '群号待管理员在后台补充';
-  }
-  if (copyBtn) {
-    copyBtn.hidden = !num;
-    copyBtn.onclick = async () => {
-      if (!num) return;
-      await navigator.clipboard.writeText(num);
-      copyBtn.textContent = '已复制';
-      setTimeout(() => { copyBtn.textContent = '复制群号'; }, 1600);
-    };
-  }
+  [copyBtn, dlCopyBtn, lbCopyBtn].forEach((btn) => {
+    if (!btn) return;
+    btn.hidden = !merged.qqGroupNumber;
+    bindCopyButton(btn, () => activeCommunity.qqGroupNumber);
+  });
+
   if (joinLink) {
-    const link = (c.qqGroupLink || '').trim();
-    if (link) {
-      joinLink.href = link;
+    if (merged.qqGroupLink) {
+      joinLink.href = merged.qqGroupLink;
       joinLink.hidden = false;
     } else {
       joinLink.hidden = true;
     }
   }
   if (contactEl) {
-    const contact = (c.supportContact || '').trim();
-    if (contact) {
-      contactEl.textContent = `联系：${contact}`;
+    if (merged.supportContact) {
+      contactEl.textContent = `联系：${merged.supportContact}`;
       contactEl.hidden = false;
     } else {
       contactEl.hidden = true;
     }
   }
   if (qrBox) {
-    const qr = (c.qqGroupQr || '').trim();
-    qrBox.innerHTML = qr
-      ? `<img src="${esc(qr)}" alt="QQ 交流群二维码" />`
-      : '<span>QQ 群二维码待上传</span>';
+    qrBox.innerHTML = `<img src="${esc(merged.qqGroupQr)}" alt="${esc(merged.qqGroupName)} QQ 二维码" />`;
+  }
+  if (lbImg) {
+    lbImg.src = merged.qqGroupQr;
+    lbImg.alt = `${merged.qqGroupName} QQ 二维码`;
   }
 }
+
+bindQrLightbox();
+renderCommunity(DEFAULT_COMMUNITY);
 
 async function initSite() {
   // Fetch live community config (QQ group) from backend

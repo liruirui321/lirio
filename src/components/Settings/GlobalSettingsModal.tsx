@@ -130,6 +130,15 @@ const ACCENT_OPTS: SelectOption[] = [
   { value: 'in', label: '印音 IN' },
 ];
 
+const DEFAULT_COMMUNITY_CONFIG: CommunityConfig = {
+  qqGroupNumber: '966587892',
+  qqGroupName: 'Lirio 使用交流群',
+  qqGroupQr: '/assets/qq-group-qr.png',
+  qqGroupLink: '',
+  communityNote: '交流英语学习方法、分享精听素材、反馈建议与第一时间获取更新。',
+  supportContact: '',
+};
+
 export function GlobalSettingsModal({
   open: isOpen,
   initialTab = 'ai',
@@ -154,7 +163,8 @@ export function GlobalSettingsModal({
   const [authBusy, setAuthBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(() => getLastCloudSyncAt());
-  const [communityCfg, setCommunityCfg] = useState<CommunityConfig | null>(null);
+  const [communityCfg, setCommunityCfg] = useState<CommunityConfig>(DEFAULT_COMMUNITY_CONFIG);
+  const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
   const [copiedQq, setCopiedQq] = useState(false);
 
   const [showTextKey, setShowTextKey] = useState(false);
@@ -186,7 +196,10 @@ export function GlobalSettingsModal({
   const fbFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (isOpen) setTab(initialTab);
+    if (isOpen) {
+      setTab(initialTab);
+      setQrPreviewOpen(false);
+    }
   }, [isOpen, initialTab]);
 
   useEffect(() => {
@@ -239,7 +252,17 @@ export function GlobalSettingsModal({
   useEffect(() => {
     if (!isOpen || tab !== 'feedback') return;
     fetchCommunityConfig()
-      .then((cfg) => setCommunityCfg(cfg))
+      .then((cfg) => {
+        if (!cfg) return;
+        setCommunityCfg({
+          qqGroupNumber: cfg.qqGroupNumber?.trim() || DEFAULT_COMMUNITY_CONFIG.qqGroupNumber,
+          qqGroupName: cfg.qqGroupName?.trim() || DEFAULT_COMMUNITY_CONFIG.qqGroupName,
+          qqGroupQr: cfg.qqGroupQr?.trim() || DEFAULT_COMMUNITY_CONFIG.qqGroupQr,
+          qqGroupLink: cfg.qqGroupLink?.trim() || '',
+          communityNote: cfg.communityNote?.trim() || DEFAULT_COMMUNITY_CONFIG.communityNote,
+          supportContact: cfg.supportContact?.trim() || '',
+        });
+      })
       .catch(() => {});
     if (!account.token) return;
     fetchMyFeedbacks()
@@ -1279,26 +1302,46 @@ export function GlobalSettingsModal({
           <div className="settings-tab-body">
             <div className="community-modal-card">
               <div className="community-modal-info">
-                <strong>{communityCfg?.qqGroupName || 'Lirio 学习交流群'}</strong>
-                <p>{communityCfg?.communityNote || '交流英语学习方法、分享精听素材与改进建议。'}</p>
+                <strong>{communityCfg.qqGroupName || DEFAULT_COMMUNITY_CONFIG.qqGroupName}</strong>
+                <p>{communityCfg.communityNote || DEFAULT_COMMUNITY_CONFIG.communityNote}</p>
+                <div className="community-tags">
+                  <span className="community-tag">素材分享</span>
+                  <span className="community-tag">问题反馈</span>
+                  <span className="community-tag">版本交流</span>
+                </div>
                 <div className="community-modal-actions">
                   <span className="community-modal-code">
-                    {communityCfg?.qqGroupNumber ? `QQ 群号：${communityCfg.qqGroupNumber}` : 'QQ 群号待补充'}
+                    {`QQ 群号：${communityCfg.qqGroupNumber || DEFAULT_COMMUNITY_CONFIG.qqGroupNumber}`}
                   </span>
-                  {communityCfg?.qqGroupNumber && (
-                    <button
-                      type="button"
-                      className="ghost-pill-btn"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(communityCfg.qqGroupNumber);
-                        setCopiedQq(true);
-                        setTimeout(() => setCopiedQq(false), 1600);
-                      }}
-                    >
-                      {copiedQq ? '已复制' : '复制群号'}
-                    </button>
-                  )}
-                  {communityCfg?.qqGroupLink && (
+                  <button
+                    type="button"
+                    className="ghost-pill-btn"
+                    onClick={async () => {
+                      const num = communityCfg.qqGroupNumber || DEFAULT_COMMUNITY_CONFIG.qqGroupNumber;
+                      try {
+                        if (navigator.clipboard?.writeText) {
+                          await navigator.clipboard.writeText(num);
+                        } else {
+                          throw new Error('no clipboard');
+                        }
+                      } catch {
+                        const ta = document.createElement('textarea');
+                        ta.value = num;
+                        ta.setAttribute('readonly', '');
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                      }
+                      setCopiedQq(true);
+                      setTimeout(() => setCopiedQq(false), 1600);
+                    }}
+                  >
+                    {copiedQq ? '已复制 ✓' : '复制群号'}
+                  </button>
+                  {communityCfg.qqGroupLink && (
                     <button
                       type="button"
                       className="ghost-pill-btn"
@@ -1309,14 +1352,94 @@ export function GlobalSettingsModal({
                   )}
                 </div>
               </div>
-              <div className="community-modal-qr">
-                {communityCfg?.qqGroupQr ? (
-                  <img src={communityCfg.qqGroupQr} alt="QQ 群二维码" />
-                ) : (
-                  <span>群二维码待配置</span>
-                )}
+              <div className="community-modal-qr-wrap">
+                <button
+                  type="button"
+                  className="community-modal-qr"
+                  onClick={() => setQrPreviewOpen(true)}
+                  aria-label="点击放大 QQ 群二维码"
+                  title="点击放大扫码"
+                >
+                  <img
+                    src={communityCfg.qqGroupQr || DEFAULT_COMMUNITY_CONFIG.qqGroupQr}
+                    alt="QQ 群二维码"
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      if (!img.dataset.fallbackApplied) {
+                        img.dataset.fallbackApplied = '1';
+                        img.src = DEFAULT_COMMUNITY_CONFIG.qqGroupQr;
+                      }
+                    }}
+                  />
+                </button>
+                <span className="community-modal-qr-hint">点击放大扫码</span>
               </div>
             </div>
+
+            {qrPreviewOpen && (
+              <div
+                className="community-qr-lightbox"
+                role="dialog"
+                aria-modal="true"
+                aria-label="QQ 群二维码大图"
+                onClick={() => setQrPreviewOpen(false)}
+              >
+                <div className="community-qr-lightbox-card" onClick={(e) => e.stopPropagation()}>
+                  <div className="community-qr-lightbox-head">
+                    <strong>{communityCfg.qqGroupName || DEFAULT_COMMUNITY_CONFIG.qqGroupName}</strong>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label="关闭二维码大图"
+                      onClick={() => setQrPreviewOpen(false)}
+                    >
+                      <IconClose size={16} />
+                    </button>
+                  </div>
+                  <div className="community-qr-lightbox-img">
+                    <img
+                      src={communityCfg.qqGroupQr || DEFAULT_COMMUNITY_CONFIG.qqGroupQr}
+                      alt="QQ 群二维码大图"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (!img.dataset.fallbackApplied) {
+                          img.dataset.fallbackApplied = '1';
+                          img.src = DEFAULT_COMMUNITY_CONFIG.qqGroupQr;
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="community-qr-lightbox-foot">
+                    <span className="community-modal-code">
+                      {`QQ 群号：${communityCfg.qqGroupNumber || DEFAULT_COMMUNITY_CONFIG.qqGroupNumber}`}
+                    </span>
+                    <button
+                      type="button"
+                      className="ghost-pill-btn"
+                      onClick={async () => {
+                        const num = communityCfg.qqGroupNumber || DEFAULT_COMMUNITY_CONFIG.qqGroupNumber;
+                        try {
+                          await navigator.clipboard?.writeText(num);
+                        } catch {
+                          const ta = document.createElement('textarea');
+                          ta.value = num;
+                          ta.style.position = 'fixed';
+                          ta.style.opacity = '0';
+                          document.body.appendChild(ta);
+                          ta.select();
+                          document.execCommand('copy');
+                          document.body.removeChild(ta);
+                        }
+                        setCopiedQq(true);
+                        setTimeout(() => setCopiedQq(false), 1600);
+                      }}
+                    >
+                      {copiedQq ? '已复制 ✓' : '复制群号'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {!account.token ? (
               <div className="account-auth-box">

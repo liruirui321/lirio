@@ -227,6 +227,13 @@ html[data-mobile="true"] .home-card-progress {
   padding-top: 10px;
 }
 
+html[data-mobile="true"] .home-community-pill {
+  margin-top: 14px;
+  max-width: 100%;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
 /* Listening: Material Library */
 html[data-mobile="true"] .library-page,
 html[data-mobile="true"] .corpus-workspace,
@@ -489,6 +496,39 @@ html[data-mobile="true"] .import-preview-title-row input {
 
 html[data-mobile="true"] .library-import-btn {
   min-height: 36px;
+}
+
+html[data-mobile="true"] .community-modal-card {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px 14px;
+}
+
+html[data-mobile="true"] .community-modal-info {
+  align-items: center;
+}
+
+html[data-mobile="true"] .community-tags,
+html[data-mobile="true"] .community-modal-actions {
+  justify-content: center;
+}
+
+html[data-mobile="true"] .community-modal-actions .ghost-pill-btn {
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+html[data-mobile="true"] .community-modal-qr {
+  width: 168px;
+  height: 168px;
+  border-radius: 14px;
+  padding: 8px;
+}
+
+html[data-mobile="true"] .community-qr-lightbox-img {
+  width: 220px;
+  height: 220px;
 }
 
 /* Floating Toasts stay safely above MobileBottomNav */
