@@ -25,16 +25,26 @@ import { StudyWaveform } from './StudyWaveform';
 import {
   IconBookmark,
   IconBulb,
+  IconChart,
   IconCheck,
   IconClose,
+  IconEdit,
+  IconExport,
   IconEye,
+  IconFilter,
   IconListView,
+  IconMerge,
   IconNext,
   IconPause,
   IconPrev,
   IconReplay,
   IconSettings,
+  IconSparkle,
+  IconSplit,
+  IconStop,
+  IconUpload,
   IconVolume,
+  IconWave,
 } from '../Icons';
 
 const stamp = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -644,8 +654,9 @@ export function Dictation({
           {wrongIndices.length > 0 && (
             <button
               type="button"
-              className={`dict-slow-btn${wrongOnly ? ' active' : ''}`}
-              title={wrongOnly ? '恢复显示全部句子' : '只看并重练错句'}
+              className={`icon-pill-btn${wrongOnly ? ' active' : ''}`}
+              title={wrongOnly ? '恢复显示全部句子' : `只看并重练错句 (${wrongIndices.length})`}
+              aria-label={`只看错句 (${wrongIndices.length})`}
               onClick={() => {
                 const nextWrongOnly = !wrongOnly;
                 setWrongOnly(nextWrongOnly);
@@ -654,17 +665,19 @@ export function Dictation({
                 }
               }}
             >
-              {wrongOnly ? `错句中 (${wrongIndices.length})` : `只看错句 (${wrongIndices.length})`}
+              <IconFilter size={13} />
+              <span>{wrongIndices.length}</span>
             </button>
           )}
           {items.length > 0 && done === items.length && (
             <button
               type="button"
-              className={`dict-slow-btn${showComplete ? ' active' : ''}`}
-              title="查看本篇精听总结与下一步"
+              className={`icon-btn${showComplete ? ' active' : ''}`}
+              title={showComplete ? '返回单句' : '查看本篇精听总结与下一步'}
+              aria-label={showComplete ? '返回单句' : '本篇复盘'}
               onClick={() => setShowComplete((c) => !c)}
             >
-              {showComplete ? '返回单句' : '本篇复盘'}
+              {showComplete ? <IconPrev size={15} /> : <IconChart size={15} />}
             </button>
           )}
           {items.length > 0 && (
@@ -783,31 +796,98 @@ export function Dictation({
             </label>
           </div>
           <div className="corpus-popover-links">
-            <button disabled={busy} onClick={() => void transcribe()}>
-              {items.length ? '本地重提字幕' : '自动提取字幕'}
+            <button
+              type="button"
+              className="icon-btn"
+              disabled={busy}
+              title={items.length ? '本地重提字幕' : '自动提取字幕'}
+              aria-label={items.length ? '本地重提字幕' : '自动提取字幕'}
+              onClick={() => void transcribe()}
+            >
+              <IconWave size={15} />
             </button>
             {(project.dictationBackups?.length ?? 0) > 0 && (
-              <button disabled={busy} onClick={restorePreviousDictation}>
-                还原上一版
+              <button
+                type="button"
+                className="icon-btn"
+                disabled={busy}
+                title="还原上一版字幕"
+                aria-label="还原上一版"
+                onClick={restorePreviousDictation}
+              >
+                <IconReplay size={15} />
               </button>
             )}
-            {busy && <button onClick={() => invoke('cancel_transcription').catch(failure)}>取消</button>}
+            {busy && (
+              <button
+                type="button"
+                className="icon-btn"
+                title="取消识别"
+                aria-label="取消"
+                onClick={() => invoke('cancel_transcription').catch(failure)}
+              >
+                <IconStop size={15} />
+              </button>
+            )}
             {items.length > 0 && (
-              <button disabled={busy} title="免重识别，1秒内按意群切长句、合并碎句" onClick={resegmentCurrent}>
-                智能重排分句
+              <button
+                type="button"
+                className="icon-btn"
+                disabled={busy}
+                title="智能重排分句（免重识别，按意群切分或合并）"
+                aria-label="智能重排分句"
+                onClick={resegmentCurrent}
+              >
+                <IconSparkle size={15} />
               </button>
             )}
-            <button disabled={busy} onClick={() => importSubs().catch(failure)}>导入 SRT</button>
-            {items.length > 0 && <button onClick={() => exportSubs().catch(failure)}>导出 SRT</button>}
+            <button
+              type="button"
+              className="icon-btn"
+              disabled={busy}
+              title="导入 SRT 字幕"
+              aria-label="导入 SRT"
+              onClick={() => importSubs().catch(failure)}
+            >
+              <IconUpload size={15} />
+            </button>
+            {items.length > 0 && (
+              <button
+                type="button"
+                className="icon-btn"
+                title="导出 SRT 字幕"
+                aria-label="导出 SRT"
+                onClick={() => exportSubs().catch(failure)}
+              >
+                <IconExport size={15} />
+              </button>
+            )}
             {sentence && (
               <>
-                <button disabled={index >= items.length - 1} title="把当前句与下一句合为一体" onClick={mergeNextSentence}>
-                  与下句合并
-                </button>
-                <button title="从当前波形指针或句中停顿处拆成两句" onClick={splitCurrentSentence}>
-                  拆成两句
+                <button
+                  type="button"
+                  className="icon-btn"
+                  disabled={index >= items.length - 1}
+                  title="把当前句与下一句合为一体"
+                  aria-label="与下句合并"
+                  onClick={mergeNextSentence}
+                >
+                  <IconMerge size={15} />
                 </button>
                 <button
+                  type="button"
+                  className="icon-btn"
+                  title="从当前波形指针或句中停顿处拆成两句"
+                  aria-label="拆成两句"
+                  onClick={splitCurrentSentence}
+                >
+                  <IconSplit size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="手动校正本句文本、译文与起止时间"
+                  aria-label="校正本句"
                   onClick={() => {
                     stop();
                     setShowSettings(false);
@@ -818,7 +898,7 @@ export function Dictation({
                     setEnd(sentence.end.toFixed(2));
                   }}
                 >
-                  校正本句
+                  <IconEdit size={15} />
                 </button>
               </>
             )}
@@ -1200,14 +1280,30 @@ export function Dictation({
                 />
                 <label>起点 <input type="number" step="0.01" value={start} onChange={(e) => setStart(e.target.value)} /></label>
                 <label>终点 <input type="number" step="0.01" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
-                <button type="button" disabled={index >= items.length - 1} onClick={mergeNextSentence}>
-                  合并下句
-                </button>
-                <button type="button" onClick={splitCurrentSentence}>
-                  从当前位置拆分
+                <button
+                  type="button"
+                  className="icon-btn"
+                  disabled={index >= items.length - 1}
+                  title="合并下句"
+                  aria-label="合并下句"
+                  onClick={mergeNextSentence}
+                >
+                  <IconMerge size={15} />
                 </button>
                 <button
-                  className="primary"
+                  type="button"
+                  className="icon-btn"
+                  title="从当前位置拆分"
+                  aria-label="从当前位置拆分"
+                  onClick={splitCurrentSentence}
+                >
+                  <IconSplit size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn primary"
+                  title="保存修改"
+                  aria-label="保存"
                   onClick={() => {
                     const a = Number(start);
                     const b = Number(end);
@@ -1227,7 +1323,7 @@ export function Dictation({
                     setError('');
                   }}
                 >
-                  保存
+                  <IconCheck size={15} />
                 </button>
               </div>
             )}

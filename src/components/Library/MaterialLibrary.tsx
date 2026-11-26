@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { simplifyMaterialTitle } from '../../services/materialTitle';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
-import { IconExport, IconFolderAudio, IconHeadphones, IconReplay } from '../Icons';
+import { IconClose, IconExport, IconHeadphones, IconLibrary, IconPlay, IconReplay, IconUpload } from '../Icons';
 import './MaterialLibrary.css';
 
 interface Material {
@@ -330,24 +330,39 @@ export function MaterialLibrary({
           {onOpenImport && (
             <button
               type="button"
-              className="primary library-import-btn"
+              className="icon-btn primary library-import-btn"
               disabled={loading || !!opening}
+              title="导入本地音频，自动制作精听材料"
+              aria-label="导入我的音频"
               onClick={onOpenImport}
             >
-              <IconFolderAudio size={15} />
-              <span>导入我的音频</span>
+              <IconUpload size={16} />
             </button>
           )}
           <div className="corpus-tabs">
-            <button className={subTab === 'local' ? 'active' : ''} onClick={() => setSubTab('local')}>
-              本机阶梯库 ({items.length})
+            <button
+              type="button"
+              className={subTab === 'local' ? 'active' : ''}
+              title={`本机阶梯库 (${items.length})`}
+              aria-label={`本机阶梯库 (${items.length})`}
+              onClick={() => setSubTab('local')}
+            >
+              <IconLibrary size={14} />
+              <span>{items.length}</span>
             </button>
-            <button className={subTab === 'podcasts' ? 'active' : ''} onClick={() => setSubTab('podcasts')}>
-              拓展播客 (awesome-english)
+            <button
+              type="button"
+              className={subTab === 'podcasts' ? 'active' : ''}
+              title="拓展播客 (awesome-english)"
+              aria-label="拓展播客"
+              onClick={() => setSubTab('podcasts')}
+            >
+              <IconHeadphones size={14} />
             </button>
           </div>
           {subTab === 'local' && (
             <button
+              type="button"
               className="icon-btn"
               title="刷新材料库"
               aria-label="刷新材料库"
@@ -372,8 +387,10 @@ export function MaterialLibrary({
           </div>
           <button
             type="button"
-            className="primary"
+            className="icon-btn primary"
             disabled={!!opening}
+            title="继续听写"
+            aria-label="继续听写"
             onClick={() => {
               setError('');
               setOpening(resumeInfo.item.id);
@@ -382,7 +399,7 @@ export function MaterialLibrary({
                 .finally(() => setOpening(''));
             }}
           >
-            {opening === resumeInfo.item.id ? '打开中…' : '继续听写'}
+            {opening === resumeInfo.item.id ? '…' : <IconPlay size={16} />}
           </button>
         </div>
       )}
@@ -451,6 +468,10 @@ export function MaterialLibrary({
             />
             {(tier !== 'all' || kind || group || search) && (
               <button
+                type="button"
+                className="icon-btn"
+                title="清除筛选"
+                aria-label="清除筛选"
                 onClick={() => {
                   setTier('all');
                   setKind('');
@@ -458,7 +479,7 @@ export function MaterialLibrary({
                   setSearch('');
                 }}
               >
-                清除筛选
+                <IconClose size={14} />
               </button>
             )}
           </div>
@@ -498,8 +519,8 @@ export function MaterialLibrary({
                     <span className="material-duration">
                       {Math.floor(m.duration / 60)}:{String(Math.floor(m.duration % 60)).padStart(2, '0')}
                     </span>
-                    <span className="material-action">
-                      {opening === m.id ? '打开中…' : m.completed ? '继续' : '开始'}
+                    <span className="material-action" aria-label={m.completed ? '继续' : '开始'}>
+                      {opening === m.id ? '…' : <IconPlay size={14} />}
                     </span>
                   </button>
                 );

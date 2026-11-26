@@ -70,7 +70,7 @@ import {
   subscribeUpdateState,
   type UpdateState,
 } from '../../services/updaterService';
-import { IconClose, IconEye, IconUpload } from '../Icons';
+import { IconCheck, IconClose, IconCopy, IconEye, IconUpload } from '../Icons';
 
 export type GlobalSettingsTab = 'ai' | 'data' | 'feedback';
 
@@ -1291,8 +1291,14 @@ export function GlobalSettingsModal({
             )}
 
             <div className="import-modal-actions">
-              <button type="button" className="primary" onClick={onClose}>
-                完成
+              <button
+                type="button"
+                className="icon-action-btn primary"
+                title="完成"
+                aria-label="完成"
+                onClick={onClose}
+              >
+                <IconCheck size={18} />
               </button>
             </div>
           </div>
@@ -1315,7 +1321,9 @@ export function GlobalSettingsModal({
                   </span>
                   <button
                     type="button"
-                    className="ghost-pill-btn"
+                    className={`icon-btn${copiedQq ? ' active' : ''}`}
+                    title={copiedQq ? '已复制 QQ 群号' : '复制 QQ 群号'}
+                    aria-label="复制 QQ 群号"
                     onClick={async () => {
                       const num = communityCfg.qqGroupNumber || DEFAULT_COMMUNITY_CONFIG.qqGroupNumber;
                       try {
@@ -1339,7 +1347,7 @@ export function GlobalSettingsModal({
                       setTimeout(() => setCopiedQq(false), 1600);
                     }}
                   >
-                    {copiedQq ? '已复制 ✓' : '复制群号'}
+                    {copiedQq ? <IconCheck size={15} /> : <IconCopy size={15} />}
                   </button>
                   {communityCfg.qqGroupLink && (
                     <button
@@ -1415,7 +1423,9 @@ export function GlobalSettingsModal({
                     </span>
                     <button
                       type="button"
-                      className="ghost-pill-btn"
+                      className={`icon-btn${copiedQq ? ' active' : ''}`}
+                      title={copiedQq ? '已复制 QQ 群号' : '复制 QQ 群号'}
+                      aria-label="复制 QQ 群号"
                       onClick={async () => {
                         const num = communityCfg.qqGroupNumber || DEFAULT_COMMUNITY_CONFIG.qqGroupNumber;
                         try {
@@ -1434,7 +1444,7 @@ export function GlobalSettingsModal({
                         setTimeout(() => setCopiedQq(false), 1600);
                       }}
                     >
-                      {copiedQq ? '已复制 ✓' : '复制群号'}
+                      {copiedQq ? <IconCheck size={15} /> : <IconCopy size={15} />}
                     </button>
                   </div>
                 </div>

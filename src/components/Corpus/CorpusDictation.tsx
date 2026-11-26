@@ -1,15 +1,20 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
+  IconChart,
   IconCheck,
   IconClose,
+  IconExport,
   IconEye,
+  IconFolderAudio,
   IconNext,
   IconPause,
   IconPlay,
   IconPrev,
+  IconRepeat,
   IconReplay,
   IconSettings,
   IconTrash,
+  IconUpload,
   IconVolume,
 } from '../Icons';
 import { CustomSelect, type SelectOption } from './CustomSelect';
@@ -1095,11 +1100,24 @@ export function CorpusDictation({
             )}
           </div>
           <div className="corpus-popover-links">
-            <button onClick={() => { setShowSettings(false); setSubView('history'); }}>
-              正确率历史 ({persisted.history.length})
+            <button
+              type="button"
+              className="icon-pill-btn"
+              title={`正确率历史 (${persisted.history.length})`}
+              aria-label={`正确率历史 (${persisted.history.length})`}
+              onClick={() => { setShowSettings(false); setSubView('history'); }}
+            >
+              <IconChart size={14} />
+              <span>{persisted.history.length}</span>
             </button>
-            <button onClick={() => { setShowSettings(false); setSubView('import'); }}>
-              导入自定义词单
+            <button
+              type="button"
+              className="icon-btn"
+              title="导入自定义词单"
+              aria-label="导入自定义词单"
+              onClick={() => { setShowSettings(false); setSubView('import'); }}
+            >
+              <IconUpload size={15} />
             </button>
           </div>
         </div>
@@ -1127,7 +1145,10 @@ export function CorpusDictation({
                 {currentWrongEntries.length > 0 && (
                   <>
                     <button
-                      className="primary"
+                      type="button"
+                      className="icon-pill-btn primary"
+                      title={`重练错词 (${currentWrongEntries.length})`}
+                      aria-label={`重练错词 (${currentWrongEntries.length})`}
                       onClick={() =>
                         startMistakeDrill(
                           currentWrongEntries.map((e) => ({ w: e.w, t: e.t, uk: e.uk, us: e.us })),
@@ -1135,26 +1156,51 @@ export function CorpusDictation({
                         )
                       }
                     >
-                      重练错词 ({currentWrongEntries.length})
+                      <IconReplay size={14} />
+                      <span>{currentWrongEntries.length}</span>
                     </button>
                     <button
+                      type="button"
+                      className="icon-btn"
                       disabled={!!exporting}
+                      title="导出错词 Excel (CSV)"
+                      aria-label="导出 Excel"
                       onClick={() => handleExportMistakesCsv(currentWrongEntries, `ielts-mistakes-${Date.now()}.csv`)}
                     >
-                      导出 Excel
+                      <IconExport size={15} />
                     </button>
                     <button
+                      type="button"
+                      className="icon-btn"
                       disabled={!!exporting}
+                      title="导出错词朗读音频 (WAV)"
+                      aria-label="导出音频"
                       onClick={() => handleExportMistakesAudio(currentWrongEntries, `ielts-mistakes-${Date.now()}.wav`)}
                     >
-                      导出音频
+                      <IconFolderAudio size={15} />
                     </button>
                   </>
                 )}
                 {!isMistakeDrill && sectionIndex + 1 < totalSections && (
-                  <button onClick={handleNextSection}>下一小节</button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="下一小节"
+                    aria-label="下一小节"
+                    onClick={handleNextSection}
+                  >
+                    <IconNext size={15} />
+                  </button>
                 )}
-                <button onClick={handleRestartSection}>再刷一遍</button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="再刷一遍"
+                  aria-label="再刷一遍"
+                  onClick={handleRestartSection}
+                >
+                  <IconRepeat size={15} />
+                </button>
               </div>
             </div>
           )}
@@ -1472,44 +1518,44 @@ export function CorpusDictation({
                       </button>
                       {!submitted && !isPassed && !isRevealed && (
                         <button
-                          className={isMobileDevice() ? 'corpus-mobile-pill' : 'icon-btn'}
+                          type="button"
+                          className="icon-btn"
                           onClick={handleRevealAnswer}
                           title="显示答案 (Esc)"
                           aria-label="显示答案"
                         >
                           <IconEye size={16} />
-                          {isMobileDevice() && <span>看答案</span>}
                         </button>
                       )}
                       {!submitted ? (
                         <button
-                          className={isMobileDevice() ? 'corpus-mobile-pill primary' : 'icon-btn primary'}
+                          type="button"
+                          className="icon-btn primary"
                           onClick={handleCardCheckOrNext}
                           title={canAdvance ? '下一词 (Enter)' : '验证拼写 (Enter)'}
                           aria-label={canAdvance ? '下一词' : '验证拼写'}
                         >
                           {canAdvance ? <IconNext size={16} /> : <IconCheck size={16} />}
-                          {isMobileDevice() && <span>{canAdvance ? '下一词' : '验证'}</span>}
                         </button>
                       ) : activeIdx + 1 < drillWords.length ? (
                         <button
-                          className={isMobileDevice() ? 'corpus-mobile-pill primary' : 'icon-btn primary'}
+                          type="button"
+                          className="icon-btn primary"
                           onClick={() => focusAndPlay(activeIdx + 1)}
                           title="下一词"
                           aria-label="下一词"
                         >
                           <IconNext size={16} />
-                          {isMobileDevice() && <span>下一词</span>}
                         </button>
                       ) : (
                         <button
-                          className={isMobileDevice() ? 'corpus-mobile-pill primary' : 'icon-btn primary'}
+                          type="button"
+                          className="icon-btn primary"
                           onClick={handleRestartSection}
                           title="再刷一遍"
                           aria-label="再刷一遍"
                         >
                           <IconReplay size={16} />
-                          {isMobileDevice() && <span>再刷一遍</span>}
                         </button>
                       )}
                     </div>

@@ -498,6 +498,16 @@ html[data-mobile="true"] .library-import-btn {
   min-height: 36px;
 }
 
+html[data-mobile="true"] .icon-action-btn {
+  width: 44px;
+  height: 44px;
+}
+
+html[data-mobile="true"] .corpus-card-nav .icon-btn {
+  width: 42px;
+  height: 42px;
+}
+
 html[data-mobile="true"] .community-modal-card {
   flex-direction: column;
   align-items: center;

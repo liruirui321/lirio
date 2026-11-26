@@ -275,6 +275,38 @@ export const IconTranslate = ({ size = 15, ...p }: IconProps) => (
   </svg>
 );
 
+export const IconCopy = ({ size = 15, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+export const IconEdit = ({ size = 15, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M4 20h4.2L19 9.2a1.8 1.8 0 0 0 0-2.5l-1.7-1.7a1.8 1.8 0 0 0-2.5 0L4 15.8V20Z" />
+    <path d="M13.5 6.5 17.5 10.5" />
+  </svg>
+);
+
+export const IconFilter = ({ size = 15, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M4 5.5h16l-6 7.2v5.3l-4 1.5v-6.8L4 5.5Z" />
+  </svg>
+);
+
+export const IconMerge = ({ size = 15, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M4.5 12h6M8 9l3 3-3 3M19.5 12h-6M16 9l-3 3 3 3" />
+  </svg>
+);
+
+export const IconSplit = ({ size = 15, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M12 4.5v15M8.5 12H4M6.5 9.5 4 12l2.5 2.5M15.5 12H20M17.5 9.5 20 12l-2.5 2.5" />
+  </svg>
+);
+
 export const IconLirioMark = ({ size = 24, ...p }: IconProps) => {
   const uid = useId().replace(/:/g, '');
   const bgId = `lirio-bg-${uid}`;

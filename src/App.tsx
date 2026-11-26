@@ -75,15 +75,23 @@ import {
   IconBookmark,
   IconChart,
   IconChat,
+  IconCheck,
   IconClose,
   IconCorpus,
+  IconExport,
   IconFolderAudio,
   IconHeadphones,
   IconLibrary,
   IconLirioMark,
+  IconMic,
   IconMoon,
+  IconNext,
+  IconReplay,
   IconSettings,
+  IconStop,
   IconSun,
+  IconTrash,
+  IconUpload,
   IconUser,
   IconWave,
 } from './components/Icons';
@@ -1115,28 +1123,36 @@ export default function App() {
             <div className="import-modal-actions">
               <button
                 type="button"
+                className="icon-action-btn"
                 disabled={micBusy}
+                title="稍后再说"
+                aria-label="稍后再说"
                 onClick={() => {
                   markFirstRunMicPrompt('later');
                   setMicModalOpen(false);
                 }}
               >
-                稍后再说
+                <IconClose size={17} />
               </button>
               {micStatus === 'denied' && (
                 <button
                   type="button"
+                  className="icon-action-btn"
+                  title="打开系统设置"
+                  aria-label="打开系统设置"
                   onClick={() => {
                     void openSystemMicSettings().catch((e) => setMicError(String(e)));
                   }}
                 >
-                  打开系统设置
+                  <IconSettings size={17} />
                 </button>
               )}
               <button
                 type="button"
-                className="primary"
+                className="icon-action-btn primary"
                 disabled={micBusy}
+                title={micBusy ? '请求中…' : micStatus === 'denied' ? '重试授权' : '立即授权'}
+                aria-label={micStatus === 'denied' ? '重试授权' : '立即授权'}
                 onClick={async () => {
                   setMicBusy(true);
                   setMicError('');
@@ -1153,7 +1169,7 @@ export default function App() {
                   }
                 }}
               >
-                {micBusy ? '请求中…' : micStatus === 'denied' ? '重试授权' : '立即授权'}
+                <IconMic size={18} />
               </button>
             </div>
           </div>
@@ -1357,34 +1373,58 @@ export default function App() {
               {importBusy ? (
                 <button
                   type="button"
+                  className="icon-action-btn danger"
+                  title="取消处理"
+                  aria-label="取消处理"
                   onClick={() => {
                     importCancelRef.current.cancelled = true;
                     void invoke('cancel_transcription').catch(() => {});
                   }}
                 >
-                  取消处理
+                  <IconStop size={17} />
                 </button>
               ) : preparedImports.length > 0 ? (
                 <>
-                  <button type="button" disabled={importSaving} onClick={handleDiscardPreparedImports}>
-                    放弃
+                  <button
+                    type="button"
+                    className="icon-action-btn"
+                    disabled={importSaving}
+                    title="放弃本次导入"
+                    aria-label="放弃"
+                    onClick={handleDiscardPreparedImports}
+                  >
+                    <IconTrash size={17} />
                   </button>
                   <button
                     type="button"
-                    className="primary"
+                    className="icon-action-btn primary"
                     disabled={importSaving}
+                    title={importSaving ? '正在入库…' : '确认入库并开始听写'}
+                    aria-label="确认入库并开始听写"
                     onClick={() => void handleConfirmPreparedImports()}
                   >
-                    {importSaving ? '正在入库…' : '确认入库并开始听写'}
+                    <IconCheck size={19} />
                   </button>
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={handleDiscardPreparedImports}>
-                    关闭
+                  <button
+                    type="button"
+                    className="icon-action-btn"
+                    title="关闭"
+                    aria-label="关闭"
+                    onClick={handleDiscardPreparedImports}
+                  >
+                    <IconClose size={17} />
                   </button>
-                  <button type="button" className="primary" onClick={() => void handleBatchImportAudio()}>
-                    选择音频并自动生成精听材料
+                  <button
+                    type="button"
+                    className="icon-action-btn primary"
+                    title="选择本地音频并自动制作精听材料"
+                    aria-label="选择音频并自动生成精听材料"
+                    onClick={() => void handleBatchImportAudio()}
+                  >
+                    <IconUpload size={19} />
                   </button>
                 </>
               )}
@@ -1412,13 +1452,15 @@ export default function App() {
           </span>
           <button
             type="button"
-            className="primary"
+            className="icon-btn primary"
+            title="去巩固错词"
+            aria-label="去巩固"
             onClick={() => {
               setWordsLaunch({ mode: 'mistakes-drill', nonce: Date.now() });
               setHub('words');
             }}
           >
-            去巩固
+            <IconNext size={15} />
           </button>
           <button
             type="button"
@@ -1444,14 +1486,17 @@ export default function App() {
                 <span className="update-toast-label">新版本 v{updateState.availableVersion}</span>
                 <button
                   type="button"
-                  className="primary"
+                  className="icon-btn primary"
+                  title="下载并安装更新"
+                  aria-label="更新"
                   onClick={() => void downloadAndInstallUpdate()}
                 >
-                  更新
+                  <IconExport size={15} />
                 </button>
                 <button
                   type="button"
                   className="icon-btn"
+                  title="忽略本次更新"
                   aria-label="忽略更新"
                   onClick={dismissUpdateToast}
                 >
@@ -1472,10 +1517,12 @@ export default function App() {
                 </span>
                 <button
                   type="button"
-                  className="primary"
+                  className="icon-btn primary"
+                  title="立即重启应用新版本"
+                  aria-label="立即重启"
                   onClick={() => void relaunchAfterUpdate()}
                 >
-                  立即重启
+                  <IconReplay size={15} />
                 </button>
               </>
             )}
