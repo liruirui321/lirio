@@ -105,7 +105,22 @@ function shuffle<T>(arr: T[]): T[] {
   return copy;
 }
 
-export function CorpusDictation() {
+export interface CorpusLaunchRequest {
+  mode: 'mistakes-drill' | 'mistakes-view';
+  nonce: number;
+}
+
+interface CorpusDictationProps {
+  launchRequest?: CorpusLaunchRequest | null;
+  onConsumeLaunch?: () => void;
+  onMistakesChanged?: () => void;
+}
+
+export function CorpusDictation({
+  launchRequest,
+  onConsumeLaunch,
+  onMistakesChanged,
+}: CorpusDictationProps = {}) {
   const [persisted, setPersisted] = useState<CorpusPersistedState>(() => loadCorpusState());
   const builtinManifest = useMemo(() => getBuiltinManifest(), []);
   const allBooks: CorpusBookMeta[] = useMemo(() => {
@@ -160,6 +175,9 @@ export function CorpusDictation() {
 
   // Mistakes & custom import
   const [mistakeBookFilter, setMistakeBookFilter] = useState<string>('all');
+  const [mistakeBatchSize, setMistakeBatchSize] = useState<number>(
+    () => persisted.prefs.mistakeBatchSize ?? 30,
+  );
   const [importTitle, setImportTitle] = useState<string>('');
   const [importText, setImportText] = useState<string>('');
 
@@ -170,13 +188,22 @@ export function CorpusDictation() {
   const autoTimerRef = useRef<number | null>(null);
   const loadedSectionKeyRef = useRef<string>('');
 
-  const updatePersisted = useCallback((updater: (prev: CorpusPersistedState) => CorpusPersistedState) => {
-    setPersisted((prev) => {
-      const next = updater(prev);
-      saveCorpusState(next);
-      return next;
-    });
-  }, []);
+  const updatePersisted = useCallback(
+    (updater: (prev: CorpusPersistedState) => CorpusPersistedState) => {
+      setPersisted((prev) => {
+        const next = updater(prev);
+        saveCorpusState(next);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const mistakeCount = Object.keys(persisted.mistakes || {}).length;
+  const historyCount = persisted.history?.length || 0;
+  useEffect(() => {
+    onMistakesChanged?.();
+  }, [mistakeCount, historyCount, onMistakesChanged]);
 
   const stopAudio = useCallback(() => {
     playSeqRef.current++;
@@ -747,10 +774,53 @@ export function CorpusDictation() {
     () => (mistakeBookFilter === 'all' ? allMistakesList : allMistakesList.filter((m) => m.bookId === mistakeBookFilter)),
     [allMistakesList, mistakeBookFilter],
   );
+  const applyMistakeBatch = useCallback(
+    (list: MistakeEntry[]): MistakeEntry[] =>
+      mistakeBatchSize > 0 && list.length > mistakeBatchSize
+        ? list.slice(0, mistakeBatchSize)
+        : list,
+    [mistakeBatchSize],
+  );
+
   const clearQueueMistakes = useMemo(
     () => [...filteredMistakes].sort((a, b) => a.lastWrongAt - b.lastWrongAt || b.count - a.count),
     [filteredMistakes],
   );
+  const batchedFilteredMistakes = useMemo(
+    () => applyMistakeBatch(filteredMistakes),
+    [applyMistakeBatch, filteredMistakes],
+  );
+  const batchedClearMistakes = useMemo(
+    () => applyMistakeBatch(clearQueueMistakes),
+    [applyMistakeBatch, clearQueueMistakes],
+  );
+
+  const launchNonceRef = useRef<number>(0);
+  useEffect(() => {
+    if (!launchRequest || launchRequest.nonce === launchNonceRef.current) return;
+    launchNonceRef.current = launchRequest.nonce;
+    if (launchRequest.mode === 'mistakes-drill') {
+      const allSorted = Object.values(loadCorpusState().mistakes || {}).sort(
+        (a, b) => a.lastWrongAt - b.lastWrongAt || b.count - a.count,
+      );
+      if (allSorted.length > 0) {
+        const batch = applyMistakeBatch(allSorted);
+        const label =
+          batch.length < allSorted.length
+            ? `每日巩固 (${batch.length}/${allSorted.length}词)`
+            : `每日巩固 (${batch.length}词)`;
+        startMistakeDrill(
+          batch.map((m) => ({ w: m.w, t: m.t, uk: m.uk, us: m.us })),
+          label,
+        );
+      } else {
+        setSubView('mistakes');
+      }
+    } else if (launchRequest.mode === 'mistakes-view') {
+      setSubView('mistakes');
+    }
+    onConsumeLaunch?.();
+  }, [launchRequest, applyMistakeBatch, startMistakeDrill, onConsumeLaunch]);
   const mistakeBooksInList = useMemo(() => {
     const map = new Map<string, string>();
     for (const m of allMistakesList) map.set(m.bookId, m.bookTitle);
@@ -1423,21 +1493,35 @@ export function CorpusDictation() {
                         const cst = cardStates[i];
                         const filled = (inputs[i] || '').trim().length > 0;
                         const stateCls = r
-                          ? r.correct ? 'ok' : 'err'
+                          ? r.correct
+                            ? 'ok'
+                            : cst?.status === 'passed'
+                              ? 'warn'
+                              : 'err'
                           : cst?.status === 'passed'
-                            ? cst.hadMistake ? 'err' : 'ok'
+                            ? cst.hadMistake
+                              ? 'warn'
+                              : 'ok'
                             : cst?.status === 'wrong' || cst?.status === 'revealed'
                               ? 'err'
                               : filled
                                 ? 'filled'
                                 : '';
+                        const dotTitle =
+                          stateCls === 'ok'
+                            ? `第 ${i + 1} 词 · 一次拼对`
+                            : stateCls === 'warn'
+                              ? `第 ${i + 1} 词 · 已改对（将收进错词本）`
+                              : stateCls === 'err'
+                                ? `第 ${i + 1} 词 · 拼写有误`
+                                : `第 ${i + 1} 词`;
                         const cls = ['corpus-dot', i === activeIdx ? 'active' : '', stateCls].filter(Boolean).join(' ');
                         return (
                           <button
                             key={`${w.w}-${i}`}
                             type="button"
                             className={cls}
-                            title={`第 ${i + 1} 词`}
+                            title={dotTitle}
                             onClick={() => focusAndPlay(i)}
                           />
                         );
@@ -1627,17 +1711,41 @@ export function CorpusDictation() {
               menuWidth={220}
               onChange={(val) => setMistakeBookFilter(val)}
             />
+            <CustomSelect
+              value={String(mistakeBatchSize)}
+              options={[
+                { value: '20', label: '每批 20 词' },
+                { value: '30', label: '每批 30 词' },
+                { value: '50', label: '每批 50 词' },
+                { value: '0', label: '全部错词' },
+              ]}
+              minWidth={118}
+              onChange={(val) => {
+                const n = Number(val);
+                setMistakeBatchSize(n);
+                updatePersisted((prev) => ({
+                  ...prev,
+                  prefs: { ...prev.prefs, mistakeBatchSize: n },
+                }));
+              }}
+            />
             <button
               className="primary"
-              disabled={!filteredMistakes.length}
+              disabled={!batchedFilteredMistakes.length}
               onClick={() =>
                 startMistakeDrill(
-                  filteredMistakes.map((m) => ({ w: m.w, t: m.t, uk: m.uk, us: m.us })),
-                  `合并错词 (${filteredMistakes.length}词)`,
+                  batchedFilteredMistakes.map((m) => ({ w: m.w, t: m.t, uk: m.uk, us: m.us })),
+                  batchedFilteredMistakes.length < filteredMistakes.length
+                    ? `错词专练 (${batchedFilteredMistakes.length}/${filteredMistakes.length}词)`
+                    : `合并错词 (${batchedFilteredMistakes.length}词)`,
                 )
               }
             >
-              错词专练 ({filteredMistakes.length})
+              错词专练 (
+              {batchedFilteredMistakes.length < filteredMistakes.length
+                ? `${batchedFilteredMistakes.length}/${filteredMistakes.length}`
+                : batchedFilteredMistakes.length}
+              )
             </button>
             {(() => {
               const md = persisted.sectionDrafts['__mistakes__'];
@@ -1664,16 +1772,22 @@ export function CorpusDictation() {
               );
             })()}
             <button
-              disabled={!clearQueueMistakes.length}
+              disabled={!batchedClearMistakes.length}
               title="按滞留时长优先清空错词（一次拼对即移出）"
               onClick={() =>
                 startMistakeDrill(
-                  clearQueueMistakes.map((m) => ({ w: m.w, t: m.t, uk: m.uk, us: m.us })),
-                  `今日待清空 (${clearQueueMistakes.length}词)`,
+                  batchedClearMistakes.map((m) => ({ w: m.w, t: m.t, uk: m.uk, us: m.us })),
+                  batchedClearMistakes.length < clearQueueMistakes.length
+                    ? `今日待清空 (${batchedClearMistakes.length}/${clearQueueMistakes.length}词)`
+                    : `今日待清空 (${batchedClearMistakes.length}词)`,
                 )
               }
             >
-              今日待清空 ({clearQueueMistakes.length})
+              今日待清空 (
+              {batchedClearMistakes.length < clearQueueMistakes.length
+                ? `${batchedClearMistakes.length}/${clearQueueMistakes.length}`
+                : batchedClearMistakes.length}
+              )
             </button>
             <button
               disabled={!filteredMistakes.length || !!exporting}

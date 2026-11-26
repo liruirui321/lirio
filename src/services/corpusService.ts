@@ -71,6 +71,8 @@ export interface CorpusPrefs {
   accent?: Accent;
   rate?: number;
   shuffled?: boolean;
+  mistakeBatchSize?: number;
+  mistakeReminderDismissedDate?: string;
 }
 
 export interface CorpusPersistedState {
@@ -157,6 +159,52 @@ export function saveCorpusState(state: CorpusPersistedState) {
   } catch {
     // ignore quota error
   }
+}
+
+export function getLocalDateKey(ts = Date.now()): string {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export interface DailyMistakeReminder {
+  totalMistakes: number;
+  overdueCount: number;
+  shouldRemind: boolean;
+  today: string;
+}
+
+export function getDailyMistakeReminder(
+  state: CorpusPersistedState,
+  now = Date.now(),
+): DailyMistakeReminder {
+  const mistakes = Object.values(state.mistakes || {});
+  const totalMistakes = mistakes.length;
+  const today = getLocalDateKey(now);
+  const overdueCount = mistakes.filter((m) => getLocalDateKey(m.lastWrongAt) !== today).length;
+  const practicedToday = (state.history || []).some(
+    (h) => h.bookId === 'mistakes' && getLocalDateKey(h.timestamp) === today,
+  );
+  const dismissedToday = state.prefs?.mistakeReminderDismissedDate === today;
+  return {
+    totalMistakes,
+    overdueCount,
+    shouldRemind: totalMistakes > 0 && !practicedToday && !dismissedToday,
+    today,
+  };
+}
+
+export function dismissDailyMistakeReminder(now = Date.now()): void {
+  const cur = loadCorpusState();
+  saveCorpusState({
+    ...cur,
+    prefs: {
+      ...cur.prefs,
+      mistakeReminderDismissedDate: getLocalDateKey(now),
+    },
+  });
 }
 
 export function getActiveCorpusDraftSummary(

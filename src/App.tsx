@@ -6,7 +6,13 @@ import { readFile } from '@tauri-apps/plugin-fs';
 import { audioEngine } from './services/audioEngine';
 import { projectService } from './services/projectService';
 import { simplifyMaterialTitle } from './services/materialTitle';
-import { getActiveCorpusDraftSummary, loadCorpusState } from './services/corpusService';
+import {
+  dismissDailyMistakeReminder,
+  getActiveCorpusDraftSummary,
+  getDailyMistakeReminder,
+  loadCorpusState,
+  type DailyMistakeReminder,
+} from './services/corpusService';
 import { loadSpeakState } from './services/speakService';
 import {
   checkForAppUpdate,
@@ -44,7 +50,7 @@ import { Dictation } from './components/Dictation/Dictation';
 import { MaterialLibrary } from './components/Library/MaterialLibrary';
 import { history } from './services/submissions';
 import { SubmissionAnalysis } from './components/Analysis/SubmissionAnalysis';
-import { CorpusDictation } from './components/Corpus/CorpusDictation';
+import { CorpusDictation, type CorpusLaunchRequest } from './components/Corpus/CorpusDictation';
 import { CustomSelect } from './components/Corpus/CustomSelect';
 import { SpeakCompanion } from './components/Speak/SpeakCompanion';
 import { GlobalSettingsModal, type GlobalSettingsTab } from './components/Settings/GlobalSettingsModal';
@@ -96,6 +102,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
   const [stateTick, setStateTick] = useState(0);
+  const [reminderTick, setReminderTick] = useState(0);
+  const [wordsLaunch, setWordsLaunch] = useState<CorpusLaunchRequest | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
       const saved = localStorage.getItem('aboboo-theme');
@@ -129,11 +137,16 @@ export default function App() {
     const onOnline = () => {
       void refreshAccountMe().catch(() => {});
     };
+    const onWindowFocus = () => {
+      setReminderTick((n) => n + 1);
+    };
     window.addEventListener('online', onOnline);
+    window.addEventListener('focus', onWindowFocus);
     return () => {
       unsubAcct();
       unsubCharge();
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('focus', onWindowFocus);
       if (timer) clearTimeout(timer);
     };
   }, []);
@@ -149,6 +162,13 @@ export default function App() {
       clearTimeout(timer);
     };
   }, []);
+
+  const mistakeReminder: DailyMistakeReminder = useMemo(
+    () => getDailyMistakeReminder(loadCorpusState()),
+    [stateTick, reminderTick, hub],
+  );
+  const handleConsumeWordsLaunch = useCallback(() => setWordsLaunch(null), []);
+  const handleMistakesChanged = useCallback(() => setReminderTick((n) => n + 1), []);
 
   const [asrBusy, setAsrBusy] = useState(false);
   useEffect(() => {
@@ -836,7 +856,13 @@ export default function App() {
       )}
 
       {/* MODULE 2: Words */}
-      {hub === 'words' && <CorpusDictation />}
+      {hub === 'words' && (
+        <CorpusDictation
+          launchRequest={wordsLaunch}
+          onConsumeLaunch={handleConsumeWordsLaunch}
+          onMistakesChanged={handleMistakesChanged}
+        />
+      )}
 
       {/* MODULE 3: Speak */}
       {hub === 'speak' && (
@@ -969,6 +995,48 @@ export default function App() {
               )}
             </div>
           </div>
+        </div>
+      )}
+      {access.allowed && mistakeReminder.shouldRemind && hub !== 'words' && (
+        <div
+          className={`mistake-reminder-toast${
+            !updateState.dismissed &&
+            (updateState.status === 'available' ||
+              updateState.status === 'downloading' ||
+              updateState.status === 'ready')
+              ? ' stacked'
+              : ''
+          }`}
+          role="status"
+        >
+          <span className="mistake-reminder-dot" aria-hidden="true" />
+          <span className="update-toast-label">
+            {mistakeReminder.overdueCount > 0
+              ? `今日错词待巩固（${mistakeReminder.totalMistakes} 词）`
+              : `错词本有 ${mistakeReminder.totalMistakes} 词待巩固`}
+          </span>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              setWordsLaunch({ mode: 'mistakes-drill', nonce: Date.now() });
+              setHub('words');
+            }}
+          >
+            去巩固
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            title="今日不再提醒"
+            aria-label="今日不再提醒"
+            onClick={() => {
+              dismissDailyMistakeReminder();
+              setReminderTick((n) => n + 1);
+            }}
+          >
+            <IconClose size={14} />
+          </button>
         </div>
       )}
       {!updateState.dismissed &&
