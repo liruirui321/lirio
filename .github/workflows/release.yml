@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v0.5.2)'
+        description: 'Release tag (e.g. v0.5.2 or v0.5.2-win-android)'
         required: true
         default: 'v0.5.2'
 
@@ -16,7 +16,8 @@ permissions:
 
 jobs:
   macos:
-    runs-on: macos-14
+    if: ${{ !endsWith(inputs.tag || '', '-win-android') }}
+    runs-on: macos-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
     steps:
@@ -67,26 +68,33 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
       - run: npm run build
-      - name: Build Windows NSIS Setup & MSI
+      - name: Build Windows NSIS Setup & Updater Artifacts
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           $VER = node -p "require('./package.json').version"
+          $cfg = '{"bundle":{"resources":[],"createUpdaterArtifacts":true}}'
           if ($env:TAURI_SIGNING_PRIVATE_KEY) {
-            npx tauri build --config '{"bundle":{"createUpdaterArtifacts":true}}'
+            npx tauri build --bundles nsis --config $cfg
           } else {
-            npx tauri build
+            npx tauri build --bundles nsis --config '{"bundle":{"resources":[]}}'
           }
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          Get-ChildItem target/release/bundle/nsis/*setup.exe | Select-Object -First 1 | Copy-Item -Destination "out/Lirio-$VER-windows-x64-setup.exe"
+          Write-Host "=== Built NSIS files ==="
+          Get-ChildItem target/release/bundle/nsis | Format-Table Name, Length
+          Get-ChildItem target/release/bundle/nsis/*setup.exe | Where-Object { $_.Name -notlike '*.sig' } | Select-Object -First 1 | Copy-Item -Destination "out/Lirio-$VER-windows-x64-setup.exe"
+          Get-ChildItem target/release/bundle/nsis/*setup.exe.sig | Select-Object -First 1 | ForEach-Object {
+            Copy-Item $_ "out/Lirio-$VER-windows-x64-setup.exe.sig"
+          }
           Get-ChildItem target/release/bundle/nsis/*.nsis.zip | Select-Object -First 1 | ForEach-Object {
             Copy-Item $_ "out/Lirio-$VER-windows-x64.nsis.zip"
           }
           Get-ChildItem target/release/bundle/nsis/*.nsis.zip.sig | Select-Object -First 1 | ForEach-Object {
             Copy-Item $_ "out/Lirio-$VER-windows-x64.nsis.zip.sig"
           }
+          Get-ChildItem out | Format-Table Name, Length
       - uses: actions/upload-artifact@v4
         with:
           name: dist-windows
@@ -109,28 +117,53 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
       - run: |
           echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run build
-      - name: Initialize & Build Android APK
+      - name: Patch tauri.conf.json for Android & Build Signed APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          set -euo pipefail
           VER=$(node -p "require('./package.json').version")
+          node -e "const fs=require('fs'),p='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle=c.bundle||{};c.bundle.resources=[];c.bundle.createUpdaterArtifacts=false;fs.writeFileSync(p,JSON.stringify(c,null,2));"
           npx tauri android init
-          npx tauri android build --apk
+          npx tauri android build --apk --target aarch64
           mkdir -p out
           APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
-          cp "$APK" "out/Lirio-${VER}-android.apk"
+          echo "Found built APK: $APK"
+          ALIGNED="/tmp/lirio-aligned.apk"
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -p -f 4 "$APK" "$ALIGNED"
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/keystore.p12
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+              --ks /tmp/keystore.p12 \
+              --ks-type PKCS12 \
+              --ks-key-alias "${ANDROID_KEY_ALIAS:-lirio}" \
+              --ks-pass env:ANDROID_KEYSTORE_PASS \
+              --key-pass env:ANDROID_KEYSTORE_PASS \
+              --out "out/Lirio-${VER}-android.apk" \
+              "$ALIGNED"
+            rm -f /tmp/keystore.p12
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "out/Lirio-${VER}-android.apk"
+          else
+            cp "$ALIGNED" "out/Lirio-${VER}-android.apk"
+          fi
+          ls -lh "out/Lirio-${VER}-android.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: dist-android
           path: out/*
 
   ios:
-    runs-on: macos-14
+    if: ${{ !endsWith(inputs.tag || '', '-win-android') }}
+    runs-on: macos-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
     steps:
@@ -154,7 +187,6 @@ jobs:
             IPA=$(find src-tauri/gen/apple/build -name "*.ipa" | head -n 1 || true)
             if [ -n "$IPA" ]; then cp "$IPA" "out/Lirio-${VER}-ios.ipa"; fi
           else
-            # Fallback to unsigned simulator/device archive build when Apple signing cert secrets are absent
             xcodebuild -project src-tauri/gen/apple/aboboo.xcodeproj -scheme aboboo_iOS -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO build
             ditto -c -k --sequesterRsrc --keepParent src-tauri/gen/apple/build "out/Lirio-${VER}-ios-unsigned.zip" || true
           fi
@@ -165,6 +197,7 @@ jobs:
 
   release:
     needs: [macos, windows, android, ios]
+    if: ${{ always() && (needs.windows.result == 'success' || needs.android.result == 'success' || needs.macos.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -178,7 +211,7 @@ jobs:
           const fs = require('node:fs');
           const path = require('node:path');
           const ver = require('./package.json').version;
-          const baseUrl = `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/latest/download`;
+          const baseUrl = 'https://lirio.deltae.tech/releases';
           const dir = 'release-assets';
           const manifest = { version: ver, notes: `Lirio v${ver}`, pub_date: new Date().toISOString(), platforms: {} };
           const macSig = path.join(dir, `Lirio-${ver}-macos.app.tar.gz.sig`);
@@ -187,13 +220,17 @@ jobs:
             manifest.platforms['darwin-aarch64'] = { signature: sig, url: `${baseUrl}/Lirio-${ver}-macos.app.tar.gz` };
             manifest.platforms['darwin-x86_64'] = { signature: sig, url: `${baseUrl}/Lirio-${ver}-macos.app.tar.gz` };
           }
-          const winSig = path.join(dir, `Lirio-${ver}-windows-x64.nsis.zip.sig`);
-          if (fs.existsSync(winSig)) {
-            manifest.platforms['windows-x86_64'] = { signature: fs.readFileSync(winSig, 'utf8').trim(), url: `${baseUrl}/Lirio-${ver}-windows-x64.nsis.zip` };
+          const winExeSig = path.join(dir, `Lirio-${ver}-windows-x64-setup.exe.sig`);
+          const winZipSig = path.join(dir, `Lirio-${ver}-windows-x64.nsis.zip.sig`);
+          if (fs.existsSync(winExeSig)) {
+            manifest.platforms['windows-x86_64'] = { signature: fs.readFileSync(winExeSig, 'utf8').trim(), url: `${baseUrl}/Lirio-${ver}-windows-x64-setup.exe` };
+          } else if (fs.existsSync(winZipSig)) {
+            manifest.platforms['windows-x86_64'] = { signature: fs.readFileSync(winZipSig, 'utf8').trim(), url: `${baseUrl}/Lirio-${ver}-windows-x64.nsis.zip` };
           }
           fs.writeFileSync(path.join(dir, 'latest.json'), JSON.stringify(manifest, null, 2));
           EOF
       - uses: softprops/action-gh-release@v2
+        if: ${{ !endsWith(inputs.tag || '', '-win-android') }}
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           files: release-assets/*
