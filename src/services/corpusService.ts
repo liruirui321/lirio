@@ -693,9 +693,9 @@ export function addSavedWordToCollection(
     meta: {
       id: SAVED_WORDS_BOOK_ID,
       title: '我的收藏',
-      subtitle: '对话与学习中收藏的生词',
+      desc: '对话与学习中收藏的生词',
       count: prevWords.length,
-      builtIn: false,
+      custom: true,
     },
     words: prevWords,
   };
