@@ -144,6 +144,8 @@ export function CorpusDictation() {
   const [inputs, setInputs] = useState<string[]>([]);
   const [cardStates, setCardStates] = useState<CardWordState[]>([]);
   const [activeIdx, setActiveIdx] = useState<number>(0);
+  const [cardFocused, setCardFocused] = useState<boolean>(false);
+  const [cardCaret, setCardCaret] = useState<number>(0);
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [results, setResults] = useState<GradeResult[]>([]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -193,6 +195,10 @@ export function CorpusDictation() {
   useEffect(() => {
     return () => stopAudio();
   }, [stopAudio]);
+
+  useEffect(() => {
+    setCardCaret((inputs[activeIdx] || '').length);
+  }, [activeIdx]);
 
   useEffect(() => {
     updatePersisted((prev) => {
@@ -580,6 +586,7 @@ export function CorpusDictation() {
         next[activeIdx] = '';
         return next;
       });
+      setCardCaret(0);
       playWordAt(item.w);
       setTimeout(() => cardInputRef.current?.focus(), 0);
     }
@@ -1124,50 +1131,195 @@ export function CorpusDictation() {
                                 : ''}
                     </div>
 
-                    <input
-                      ref={cardInputRef}
-                      className="corpus-card-input"
-                      type="text"
-                      spellCheck={false}
-                      autoComplete="off"
-                      autoCapitalize="off"
-                      disabled={submitted}
-                      readOnly={isRevealed}
-                      value={inputs[activeIdx] || ''}
-                      placeholder="在这里拼写…"
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setInputs((prev) => {
-                          const next = [...prev];
-                          next[activeIdx] = val;
-                          return next;
-                        });
-                        if (st.status === 'wrong') {
-                          setCardStates((prev) => {
-                            const next = [...prev];
-                            next[activeIdx] = { ...prev[activeIdx], status: 'idle' };
-                            return next;
-                          });
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (!submitted && !isRevealed) handleDictationKeySound(e);
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (e.shiftKey) {
-                            if (activeIdx > 0) focusAndPlay(activeIdx - 1);
-                          } else {
-                            handleCardCheckOrNext();
+                    {(() => {
+                      const rawTyped = inputs[activeIdx] || '';
+                      const targetChars = Array.from(item.w);
+                      const showTargetTiles = isRevealed || (submitted && !res?.correct);
+                      const typedChars = Array.from(rawTyped);
+                      const totalSlots = showTargetTiles
+                        ? targetChars.length
+                        : Math.max(targetChars.length, typedChars.length);
+                      const sizeCls = totalSlots >= 17 ? 'xs' : totalSlots >= 13 ? 'sm' : '';
+                      const targetKinds: Array<'ok' | 'missed'> = [];
+                      if (showTargetTiles && res?.diff?.length) {
+                        for (const d of res.diff) {
+                          if (d.kind !== 'extra') {
+                            targetKinds.push(d.kind === 'ok' ? 'ok' : 'missed');
                           }
-                        } else if (e.key === 'Escape') {
-                          e.preventDefault();
-                          if (!submitted && !isPassed && !isRevealed) handleRevealAnswer();
-                        } else if (e.key === 'Tab' && !e.shiftKey) {
-                          e.preventDefault();
-                          playWordAt(item.w);
                         }
-                      }}
-                    />
+                      }
+                      const activeSlot =
+                        totalSlots > 0 ? Math.min(cardCaret, totalSlots - 1) : 0;
+
+                      const segments: Array<
+                        | { type: 'word'; indices: number[] }
+                        | { type: 'space'; idx: number }
+                      > = [];
+                      let curWord: number[] = [];
+                      for (let i = 0; i < totalSlots; i++) {
+                        if (targetChars[i] === ' ') {
+                          if (curWord.length) {
+                            segments.push({ type: 'word', indices: curWord });
+                            curWord = [];
+                          }
+                          segments.push({ type: 'space', idx: i });
+                        } else {
+                          curWord.push(i);
+                        }
+                      }
+                      if (curWord.length) {
+                        segments.push({ type: 'word', indices: curWord });
+                      }
+
+                      const renderSlot = (i: number) => {
+                        const targetCh = targetChars[i];
+                        const typedCh = typedChars[i] ?? '';
+                        const isCursor =
+                          cardFocused &&
+                          !submitted &&
+                          !isPassed &&
+                          !isRevealed &&
+                          i === activeSlot;
+
+                        if (targetCh === ' ') {
+                          const cls = [
+                            'corpus-letter-space',
+                            showTargetTiles
+                              ? 'complete'
+                              : isPassed || (submitted && res?.correct)
+                                ? 'complete'
+                                : typedCh === ' '
+                                  ? 'filled'
+                                  : isWrong && typedCh === ''
+                                    ? 'wrong'
+                                    : '',
+                            isCursor ? 'active' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ');
+                          return (
+                            <span key={i} className={cls}>
+                              {!showTargetTiles && typedCh && typedCh !== ' ' ? typedCh : ''}
+                            </span>
+                          );
+                        }
+
+                        if (showTargetTiles) {
+                          const okMatch =
+                            targetKinds[i] === 'ok' ||
+                            (!targetKinds.length &&
+                              (st.lastAttempt || rawTyped).trim().toLowerCase().charAt(i) ===
+                                (targetCh || '').toLowerCase());
+                          const cls = [
+                            'corpus-letter-tile',
+                            okMatch ? 'complete' : 'missed',
+                          ].join(' ');
+                          return (
+                            <span key={i} className={cls}>
+                              {targetCh}
+                            </span>
+                          );
+                        }
+
+                        const cls = [
+                          'corpus-letter-tile',
+                          isPassed || (submitted && res?.correct)
+                            ? 'complete'
+                            : i >= targetChars.length
+                              ? 'extra'
+                              : typedCh !== ''
+                                ? 'filled'
+                                : isWrong
+                                  ? 'wrong'
+                                  : '',
+                          isCursor ? 'active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ');
+
+                        return (
+                          <span key={i} className={cls}>
+                            {typedCh}
+                          </span>
+                        );
+                      };
+
+                      return (
+                        <div
+                          className="corpus-letter-stage"
+                          onMouseDown={() => cardInputRef.current?.focus()}
+                        >
+                          <div className={`corpus-letter-row ${sizeCls}`} aria-hidden="true">
+                            {segments.map((seg, si) =>
+                              seg.type === 'space' ? (
+                                renderSlot(seg.idx)
+                              ) : (
+                                <span key={`w-${si}`} className="corpus-letter-word">
+                                  {seg.indices.map(renderSlot)}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                          <input
+                            ref={cardInputRef}
+                            className="corpus-letter-hidden-input"
+                            type="text"
+                            spellCheck={false}
+                            autoComplete="off"
+                            autoCapitalize="off"
+                            disabled={submitted}
+                            readOnly={isRevealed}
+                            aria-label="在此逐字母拼写"
+                            value={rawTyped}
+                            onFocus={(e) => {
+                              setCardFocused(true);
+                              setCardCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
+                            }}
+                            onBlur={() => setCardFocused(false)}
+                            onSelect={(e) => {
+                              setCardCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
+                            }}
+                            onKeyUp={(e) => {
+                              setCardCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
+                            }}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const caret = e.currentTarget.selectionStart ?? val.length;
+                              setCardCaret(caret);
+                              setInputs((prev) => {
+                                const next = [...prev];
+                                next[activeIdx] = val;
+                                return next;
+                              });
+                              if (st.status === 'wrong') {
+                                setCardStates((prev) => {
+                                  const next = [...prev];
+                                  next[activeIdx] = { ...prev[activeIdx], status: 'idle' };
+                                  return next;
+                                });
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (!submitted && !isRevealed) handleDictationKeySound(e);
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (e.shiftKey) {
+                                  if (activeIdx > 0) focusAndPlay(activeIdx - 1);
+                                } else {
+                                  handleCardCheckOrNext();
+                                }
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                if (!submitted && !isPassed && !isRevealed) handleRevealAnswer();
+                              } else if (e.key === 'Tab' && !e.shiftKey) {
+                                e.preventDefault();
+                                playWordAt(item.w);
+                              }
+                            }}
+                          />
+                        </div>
+                      );
+                    })()}
 
                     {(isWrong || isPassed || isRevealed || submitted) && res && (
                       <div className="corpus-card-result">
