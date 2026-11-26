@@ -213,10 +213,17 @@ export async function prepareAudioFilesForImport(opts: {
       if (!isContentUri) {
         await invoke('inspect_audio_file', { path: filePath });
       }
-      const bytes = await readFile(filePath);
+      let bytes: Uint8Array;
+      try {
+        bytes = await readFile(filePath);
+      } catch (fsErr) {
+        if (isContentUri) throw fsErr;
+        const buf = await invoke<ArrayBuffer>('read_audio_file_bytes', { path: filePath });
+        bytes = new Uint8Array(buf);
+      }
       if (signal?.cancelled) throw new Error('已取消导入处理。');
       const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
-      const blob = new Blob([bytes], { type: mime });
+      const blob = new Blob([new Uint8Array(bytes)], { type: mime });
       const arrayBuffer = await blob.arrayBuffer();
 
       const project = projectService.createProject(finalTitle, filePath, 0);

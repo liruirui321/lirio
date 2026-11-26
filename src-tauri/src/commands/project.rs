@@ -310,6 +310,24 @@ pub fn inspect_audio_file(path: String) -> Result<u64, String> {
     Ok(meta.len())
 }
 
+const ALLOWED_AUDIO_EXTS: [&str; 9] = ["mp3", "wav", "ogg", "m4a", "aac", "flac", "aif", "aiff", "mp4"];
+
+/// Read raw audio bytes for local or drag-dropped paths outside plugin-fs home scopes.
+#[tauri::command]
+pub fn read_audio_file_bytes(path: String) -> Result<tauri::ipc::Response, String> {
+    let ext = Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !ALLOWED_AUDIO_EXTS.contains(&ext.as_str()) {
+        return Err("仅支持读取常见音频文件（MP3 / M4A / WAV / MP4 / FLAC / OGG）。".into());
+    }
+    inspect_audio_file(path.clone())?;
+    let bytes = std::fs::read(&path).map_err(|e| format!("读取音频文件失败：{e}"))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

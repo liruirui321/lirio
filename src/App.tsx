@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import './theme.css';
 import './styles/mobile.css';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { audioEngine } from './services/audioEngine';
@@ -98,6 +99,13 @@ import {
 type HubSection = 'home' | 'listening' | 'words' | 'speak';
 type ListeningMode = 'library' | 'audio' | 'dictation' | 'favorites' | 'analysis';
 
+const IMPORT_AUDIO_EXTS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'aif', 'aiff', 'mp4']);
+function isSupportedAudioPath(p: string): boolean {
+  if (p.startsWith('content://')) return true;
+  const ext = p.split('.').pop()?.toLowerCase() || '';
+  return IMPORT_AUDIO_EXTS.has(ext);
+}
+
 export default function App() {
   const { project, setProject, setBlobUrl, addRecordingBlob } = useProjectStore();
   const { setDuration, setCurrentTime } = usePlayerStore();
@@ -109,6 +117,7 @@ export default function App() {
   const [autoPlayDictation, setAutoPlayDictation] = useState(false);
   const [speakContext, setSpeakContext] = useState<{ title: string; excerpt: string } | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [importDragOver, setImportDragOver] = useState(false);
   const [importLanguage, setImportLanguage] = useState('en');
   const [importAiPolish, setImportAiPolish] = useState(true);
   const [importBusy, setImportBusy] = useState(false);
@@ -420,6 +429,68 @@ export default function App() {
     [importLanguage, importAiPolish],
   );
 
+  const startPrepareImportFromPaths = useCallback(
+    async (rawPaths: string[]) => {
+      if (!rawPaths.length || importBusy || importSaving) return;
+      const paths = rawPaths.filter(isSupportedAudioPath);
+      if (!paths.length) {
+        setImportError('仅支持 MP3 / M4A / WAV / MP4 / FLAC / OGG 等常见音频文件。');
+        return;
+      }
+
+      stopListeningAudio();
+      importCancelRef.current = { cancelled: false };
+      setImportError('');
+      setImportWarnings([]);
+      setPreparedImports([]);
+      setShowImportModal(true);
+      setImportBusy(true);
+      setAsrBusy(true);
+      setImportProgress({
+        step: 'decode',
+        fileIndex: 1,
+        totalFiles: paths.length,
+        fileName: paths[0].split(/[/\\]/).pop() || '',
+        stage: '正在检查并解码音频…',
+      });
+
+      try {
+        const { prepared, warnings } = await prepareAudioFilesForImport({
+          paths,
+          language: importLanguage,
+          tier: 'auto',
+          sourceKind: 'user',
+          aiPolish: {
+            enabled: importAiPolish,
+            fixText: true,
+            addTranslation: true,
+          },
+          signal: importCancelRef.current,
+          onProgress: (p) => setImportProgress(p),
+        });
+        if (importCancelRef.current.cancelled) {
+          setImportProgress(null);
+          return;
+        }
+        setPreparedImports(prepared);
+        setImportWarnings(warnings);
+        setImportProgress(null);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (importCancelRef.current.cancelled || /已取消/.test(msg)) {
+          setImportError('');
+        } else {
+          setImportError('导入处理失败：' + msg);
+        }
+        setImportProgress(null);
+      } finally {
+        setImportBusy(false);
+        setAsrBusy(false);
+      }
+    },
+    [importBusy, importSaving, importLanguage, importAiPolish],
+  );
+
   const handleBatchImportAudio = async () => {
     setImportError('');
     setImportWarnings([]);
@@ -432,55 +503,57 @@ export default function App() {
     });
     const paths = Array.isArray(picked) ? picked : typeof picked === 'string' ? [picked] : [];
     if (!paths.length) return;
+    await startPrepareImportFromPaths(paths);
+  };
 
-    stopListeningAudio();
-    importCancelRef.current = { cancelled: false };
-    setPreparedImports([]);
-    setShowImportModal(true);
-    setImportBusy(true);
-    setAsrBusy(true);
-    setImportProgress({
-      step: 'decode',
-      fileIndex: 1,
-      totalFiles: paths.length,
-      fileName: paths[0].split(/[/\\]/).pop() || '',
-      stage: '正在检查并解码音频…',
-    });
+  useEffect(() => {
+    const active = showImportModal && !importBusy && !importSaving && preparedImports.length === 0;
+    if (!active) {
+      setImportDragOver(false);
+      return;
+    }
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    const preventNav = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('dragover', preventNav);
+    window.addEventListener('drop', preventNav);
 
     try {
-      const { prepared, warnings } = await prepareAudioFilesForImport({
-        paths,
-        language: importLanguage,
-        tier: 'auto',
-        sourceKind: 'user',
-        aiPolish: {
-          enabled: importAiPolish,
-          fixText: true,
-          addTranslation: true,
-        },
-        signal: importCancelRef.current,
-        onProgress: (p) => setImportProgress(p),
-      });
-      if (importCancelRef.current.cancelled) {
-        setImportProgress(null);
-        return;
-      }
-      setPreparedImports(prepared);
-      setImportWarnings(warnings);
-      setImportProgress(null);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (importCancelRef.current.cancelled || /已取消/.test(msg)) {
-        setImportError('');
-      } else {
-        setImportError('导入处理失败：' + msg);
-      }
-      setImportProgress(null);
-    } finally {
-      setImportBusy(false);
-      setAsrBusy(false);
-    }
-  };
+      void getCurrentWebview()
+        .onDragDropEvent((event) => {
+          if (cancelled) return;
+          const payload = event.payload;
+          if (payload.type === 'enter' || payload.type === 'over') {
+            setImportDragOver(true);
+          } else if (payload.type === 'leave') {
+            setImportDragOver(false);
+          } else if (payload.type === 'drop') {
+            setImportDragOver(false);
+            if (payload.paths?.length) {
+              void startPrepareImportFromPaths(payload.paths);
+            }
+          }
+        })
+        .then((fn) => {
+          if (cancelled) fn();
+          else unlisten = fn;
+        })
+        .catch(() => {});
+    } catch {}
+
+    return () => {
+      cancelled = true;
+      setImportDragOver(false);
+      window.removeEventListener('dragover', preventNav);
+      window.removeEventListener('drop', preventNav);
+      try {
+        unlisten?.();
+      } catch {}
+    };
+  }, [showImportModal, importBusy, importSaving, preparedImports.length, startPrepareImportFromPaths]);
 
   const handleConfirmPreparedImports = async () => {
     if (!preparedImports.length || importSaving) return;
@@ -1312,6 +1385,23 @@ export default function App() {
                     </small>
                   </div>
                 </label>
+
+                <button
+                  type="button"
+                  className={`import-dropzone${importDragOver ? ' is-dragging' : ''}`}
+                  disabled={importBusy}
+                  onClick={() => void handleBatchImportAudio()}
+                >
+                  <span className="import-dropzone-icon" aria-hidden="true">
+                    <IconUpload size={20} />
+                  </span>
+                  <strong>
+                    {importDragOver
+                      ? '松开鼠标，立即读取并制作精听材料'
+                      : '拖拽音频文件到此处，或点击选择'}
+                  </strong>
+                  <small>支持 MP3 · M4A · WAV · MP4 · FLAC · OGG</small>
+                </button>
               </>
             )}
 

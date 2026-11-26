@@ -26,6 +26,7 @@ pub fn run() {
             commands::project::reset_storage_dir,
             commands::project::open_storage_dir,
             commands::project::inspect_audio_file,
+            commands::project::read_audio_file_bytes,
             commands::transcribe::transcribe_audio,
             commands::transcribe::cancel_transcription,
             commands::history::submission_record,

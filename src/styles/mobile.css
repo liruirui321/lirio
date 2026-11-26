@@ -490,6 +490,15 @@ html[data-mobile="true"] .import-preview-scroll {
   max-height: 44dvh;
 }
 
+html[data-mobile="true"] .import-dropzone {
+  padding: 18px 14px;
+}
+
+html[data-mobile="true"] .import-dropzone-icon {
+  width: 40px;
+  height: 40px;
+}
+
 html[data-mobile="true"] .import-preview-title-row input {
   font-size: 16px;
 }
