@@ -39,11 +39,12 @@
       "label": "iPhone / iOS",
       "arch": "iPhone / iPad",
       "minOs": "iOS 15+",
-      "format": "TestFlight / 网页版",
-      "statusNote": "TestFlight 签名筹备中",
+      "format": "敬请期待",
+      "statusNote": "敬请期待",
+      "comingSoon": true,
       "version": "0.5.2",
-      "filename": "Lirio-0.5.2-ios.ipa",
-      "downloadUrl": "https://github.com/liruirui321/lirio/releases/latest/download/Lirio-0.5.2-ios.ipa",
+      "filename": "",
+      "downloadUrl": "",
       "autoUpdate": false
     }
   },

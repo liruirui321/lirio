@@ -425,9 +425,12 @@ async function initSite() {
 
   const primary = data.platforms[os];
   const heroBtn = document.getElementById('primaryDownloadBtn');
-  if (primary) {
+  if (primary && !primary.comingSoon && primary.downloadUrl) {
     heroBtn.textContent = `下载 ${primary.label} 版（v${primary.version}）`;
     heroBtn.href = primary.downloadUrl;
+  } else if (os === 'ios') {
+    heroBtn.textContent = 'iPhone 端敬请期待 · 查看已支持平台';
+    heroBtn.href = '#download';
   }
 
   const order = ['macos', 'windows', 'android', 'ios'];
@@ -435,7 +438,8 @@ async function initSite() {
     .map((key) => {
       const p = data.platforms[key];
       if (!p) return '';
-      const isRec = key === os;
+      const isComingSoon = Boolean(p.comingSoon || !p.downloadUrl);
+      const isRec = key === os && !isComingSoon;
       const badge = isRec
         ? '<span class="ver-pill">推荐</span>'
         : p.statusNote
@@ -448,8 +452,12 @@ async function initSite() {
             ${badge}
           </div>
           <div class="platform-meta">${esc(p.arch)} · ${esc(p.minOs)}</div>
-          <div class="platform-ver">v${esc(p.version)}${p.autoUpdate ? ' · 支持自动更新' : ''}</div>
-          <a class="platform-btn" href="${esc(p.downloadUrl)}">${key === 'ios' ? '查看 / 获取 iOS 包' : `下载 ${esc(p.format)}`}</a>
+          <div class="platform-ver">${isComingSoon ? '暂不支持 · 敬请期待' : `v${esc(p.version)}${p.autoUpdate ? ' · 支持自动更新' : ''}`}</div>
+          ${
+            isComingSoon
+              ? '<span class="platform-btn disabled">iPhone 端敬请期待</span>'
+              : `<a class="platform-btn" href="${esc(p.downloadUrl)}">下载 ${esc(p.format)}</a>`
+          }
         </div>
       `;
     })

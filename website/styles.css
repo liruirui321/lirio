@@ -825,6 +825,12 @@ main {
   background: var(--accent);
   color: #fff;
 }
+.platform-btn.disabled {
+  opacity: 0.62;
+  color: var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
 
 /* Pricing & FAQ & History */
 .pricing-box {
