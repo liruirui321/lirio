@@ -12,7 +12,6 @@ import {
   refreshAccountMe,
   registerAccount,
   simulatePayStoreOrder,
-  updateAccountState,
   type AccountState,
   type LocalAccessResult,
   type StoreConfig,
@@ -31,7 +30,6 @@ export function LicenseGateModal({
   const [email, setEmail] = useState(() => account.user?.email || '');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
-  const [showServerUrl, setShowServerUrl] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
@@ -233,26 +231,7 @@ export function LicenseGateModal({
                   注册领 3 天体验
                 </button>
               </div>
-              <button
-                type="button"
-                className="ghost-pill-btn"
-                onClick={() => setShowServerUrl((v) => !v)}
-              >
-                {showServerUrl ? '收起地址' : '服务器地址'}
-              </button>
             </div>
-
-            {showServerUrl && (
-              <div className="speak-field">
-                <label>服务端地址</label>
-                <input
-                  type="text"
-                  value={account.serverUrl}
-                  placeholder="http://127.0.0.1:8787"
-                  onChange={(e) => updateAccountState({ serverUrl: e.target.value })}
-                />
-              </div>
-            )}
 
             <div className="speak-field">
               <label>邮箱</label>

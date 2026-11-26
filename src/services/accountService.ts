@@ -166,10 +166,6 @@ const BUILD_DEFAULT_SERVER_URL = (
   .trim()
   .replace(/\/+$/, '');
 
-function isLocalhostUrl(url: string): boolean {
-  return /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(String(url || '').trim());
-}
-
 const DEFAULT_STATE: AccountState = {
   serverUrl: BUILD_DEFAULT_SERVER_URL || 'http://127.0.0.1:8787',
   token: null,
@@ -302,16 +298,10 @@ export function getAccountState(): AccountState {
     const raw = localStorage.getItem(ACCOUNT_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const shouldUpgradeUrl =
-        !isLocalhostUrl(BUILD_DEFAULT_SERVER_URL) &&
-        parsed?.serverUrl === 'http://127.0.0.1:8787' &&
-        !parsed?.token;
       return {
         ...DEFAULT_STATE,
         ...(parsed || {}),
-        serverUrl: shouldUpgradeUrl
-          ? BUILD_DEFAULT_SERVER_URL
-          : parsed?.serverUrl || DEFAULT_STATE.serverUrl,
+        serverUrl: DEFAULT_STATE.serverUrl,
         aiMode: parsed?.aiMode === 'pro_balance' ? 'pro_balance' : 'byok',
         proCloudSpeech: Boolean(parsed?.proCloudSpeech),
       };
@@ -362,8 +352,8 @@ async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   let resp: Response;
   try {
     resp = await fetch(`${base}${path}`, { ...opts, headers });
-  } catch (e) {
-    throw new Error(`无法连接 Lirio 计费服务器（${base}），请确认服务端已启动：${String(e)}`);
+  } catch {
+    throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {

@@ -119,7 +119,6 @@ export function GlobalSettingsModal({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
-  const [showServerUrl, setShowServerUrl] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [redeemInput, setRedeemInput] = useState('');
   const [showBuyPanel, setShowBuyPanel] = useState(false);
@@ -669,25 +668,7 @@ export function GlobalSettingsModal({
                         注册（赠 ¥0.5）
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      className="dict-slow-btn"
-                      onClick={() => setShowServerUrl((s) => !s)}
-                    >
-                      服务地址
-                    </button>
                   </div>
-
-                  {showServerUrl && (
-                    <div className="speak-field">
-                      <label>Server URL</label>
-                      <input
-                        type="text"
-                        value={account.serverUrl}
-                        onChange={(e) => updateAccountState({ serverUrl: e.target.value })}
-                      />
-                    </div>
-                  )}
 
                   <div className="settings-two-col">
                     <div className="speak-field">
