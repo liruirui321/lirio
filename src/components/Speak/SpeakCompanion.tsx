@@ -32,6 +32,7 @@ import {
   buildExaminerOpener,
   buildFullMockQueue,
   findLinkedPart3,
+  formatIeltsPartLabel,
   generateCompanionReply,
   generateExaminerReply,
   generateSessionTakeaways,
@@ -765,7 +766,7 @@ export function SpeakCompanion({
         !deck &&
         drawnSet.length >= 2 &&
         targetDeck?.items.length &&
-        drawnSet.every((x) => targetDeck.items.some((it) => it.id === x.id))
+        drawnSet.every((x) => x.part === 'warmup' || targetDeck.items.some((it) => it.id === x.id))
       ) {
         queue = drawnSet;
       } else {
@@ -1061,11 +1062,11 @@ export function SpeakCompanion({
   const handleHangUp = useCallback(async () => {
     const mockPartsLabel =
       mockQueueRef.current.length > 1
-        ? mockQueueRef.current.map((q) => q.part.toUpperCase()).join(' · ')
+        ? mockQueueRef.current.map((q) => formatIeltsPartLabel(q.part)).join(' · ')
         : '';
     const sessionTopicIds =
       mockQueueRef.current.length > 0
-        ? mockQueueRef.current.map((q) => q.id)
+        ? mockQueueRef.current.filter((q) => q.part !== 'warmup').map((q) => q.id)
         : speakModeRef.current === 'examiner' && questionRef.current
           ? [questionRef.current.id]
           : [];
@@ -1113,7 +1114,7 @@ export function SpeakCompanion({
       const topicTitle = mockPartsLabel
         ? `全真模考 (${mockPartsLabel})`
         : modeNow === 'examiner' && questionRef.current
-          ? `${questionRef.current.part.toUpperCase()} · ${questionRef.current.topic}`
+          ? `${formatIeltsPartLabel(questionRef.current.part)} · ${questionRef.current.topic}`
           : (SPEAK_TOPICS.find((t) => t.id === topicIdRef.current) || SPEAK_TOPICS[0]).title;
 
       const resumedId = activeSessionIdRef.current;
@@ -1613,7 +1614,7 @@ export function SpeakCompanion({
                   key={q.id}
                   className={`exam-stage-step${idx === mockStep ? ' active' : idx < mockStep ? ' done' : ''}`}
                 >
-                  {q.part.toUpperCase()}
+                  {formatIeltsPartLabel(q.part)}
                   {q.topicZh ? ` · ${q.topicZh}` : ''}
                 </span>
               ))}
@@ -1624,7 +1625,7 @@ export function SpeakCompanion({
                   disabled={reviewing}
                   onClick={() => void handleNextMockStage()}
                 >
-                  下一部分 ({mockQueue[mockStep + 1].part.toUpperCase()})
+                  下一部分 ({formatIeltsPartLabel(mockQueue[mockStep + 1].part)})
                 </button>
               )}
             </div>
@@ -2155,7 +2156,7 @@ export function SpeakCompanion({
                     return (
                       <div key={item.id} className="deck-item-card">
                         <div className="deck-item-head">
-                          <span className="tier-badge small">{item.part.toUpperCase()}</span>
+                          <span className="tier-badge small">{formatIeltsPartLabel(item.part)}</span>
                           <div className="deck-item-title-col">
                             <strong>{item.topic}</strong>
                             {item.topicZh && <span className="deck-item-zh">{item.topicZh}</span>}

@@ -12,7 +12,7 @@ export type AsrProviderId = 'local_whisper' | 'openai';
 export type SpeakMode = 'companion' | 'examiner';
 export type CompanionPersonaId = 'clara' | 'noah' | 'oliver';
 export type CallViewMode = 'chat' | 'phone';
-export type IeltsPart = 'part1' | 'part2' | 'part3';
+export type IeltsPart = 'warmup' | 'part1' | 'part2' | 'part3';
 export type IeltsCategory = 'new' | 'core' | 'retained' | 'overseas';
 
 export interface ProviderProfile {
@@ -986,6 +986,45 @@ function samplePreferringUnpracticed(
   return sampleArray(least.length ? least : filtered);
 }
 
+export function formatIeltsPartLabel(part: IeltsPart): string {
+  switch (part) {
+    case 'warmup':
+      return 'Warm-up';
+    case 'part1':
+      return 'Part 1';
+    case 'part2':
+      return 'Part 2';
+    case 'part3':
+      return 'Part 3';
+  }
+}
+
+/**
+ * Compulsory official IELTS opening warm-up (ID check + work/study + hometown/accommodation)
+ * prepended before the rotating Part 1-3 topics in full mock mode.
+ */
+export function buildIeltsWarmupItem(): IeltsQuestionItem {
+  return {
+    id: '__ielts_warmup__',
+    part: 'warmup',
+    category: 'core',
+    topic: 'Opening Warm-up (Name, Work/Study, Hometown)',
+    topicZh: '考前热身（姓名·工作/学业·家乡/住处）',
+    prompts: [
+      'Could you tell me your full name, please, and what shall I call you?',
+      'Do you work or are you a student?',
+      'What kind of work do you do / what are you studying, and why did you choose it?',
+      'Where do you live / where is your hometown, and what do you like most about living there?',
+    ],
+    promptsZh: [
+      '请告诉我你的全名，我该怎么称呼你？',
+      '你目前在工作还是在读书？',
+      '你具体做什么工作 / 学什么专业，为什么选择它？',
+      '你现在住在哪里 / 你的家乡是哪里，你最喜欢那里的什么？',
+    ],
+  };
+}
+
 export function buildFullMockQueue(
   deck?: IeltsDeck,
   opts?: {
@@ -998,13 +1037,17 @@ export function buildFullMockQueue(
 ): IeltsQuestionItem[] {
   if (!deck?.items.length) return [];
   const p1Pool = deck.items.filter((q) => q.part === 'part1');
+  const rotatingP1Pool = p1Pool.filter(
+    (q) => q.category !== 'core' && !/work|study|studies|hometown|accommodation|live/i.test(q.topic),
+  );
+  const p1CandidatePool = rotatingP1Pool.length > 0 ? rotatingP1Pool : p1Pool;
   const p2Pool = deck.items.filter((q) => q.part === 'part2');
   const p3Pool = deck.items.filter((q) => q.part === 'part3');
 
   let p1: IeltsQuestionItem | undefined = opts?.pinnedPart1;
-  if (!p1 && p1Pool.length) {
+  if (!p1 && p1CandidatePool.length) {
     p1 = trimPart1ForExam(
-      samplePreferringUnpracticed(p1Pool, opts?.excludePart1Id, opts?.practicedTopics),
+      samplePreferringUnpracticed(p1CandidatePool, opts?.excludePart1Id, opts?.practicedTopics),
     );
   } else if (p1) {
     p1 = trimPart1ForExam(p1);
@@ -1022,7 +1065,7 @@ export function buildFullMockQueue(
   }
 
   const ordered = [p1, p2, p3].filter((q): q is IeltsQuestionItem => Boolean(q));
-  if (ordered.length > 0) return ordered;
+  if (ordered.length > 0) return [buildIeltsWarmupItem(), ...ordered];
   return deck.items.slice(0, 3);
 }
 
@@ -1112,7 +1155,18 @@ function buildExaminerSystemPrompt(
   const endMarker = opts.hasNextPart ? '[NEXT_PART]' : '[END_TEST]';
 
   const partRule =
-    questionItem.part === 'part1'
+    questionItem.part === 'warmup'
+      ? [
+          'Phase: IELTS Speaking Official Opening Warm-up (ID Check + Core Introductory Questions before Part 1).',
+          `Question #1 (asking full name and what to call the candidate) was already asked in your opener. Candidate answers so far in Warm-up: ${candidateAnswersInPart}. Total compulsory checkpoints: ${totalQs}.`,
+          'Follow the authentic IELTS examiner opening sequence strictly in 1 concise turn per checkpoint:',
+          '- After their name (candidateAnswersInPart === 1): address them naturally by the name they gave (e.g., "Thank you, [Name]. Now, do you work or are you a student?").',
+          '- After they say work or student (candidateAnswersInPart === 2): ask ONE natural tailored follow-up matching what they actually said — if working, ask about their job/company/why they chose it; if studying, ask about their major/university/why they chose it.',
+          '- After that follow-up (candidateAnswersInPart === 3): transition smoothly to hometown/accommodation ("Thank you. And where are you from, or where do you live at the moment? What do you like most about living there?").',
+          'If an answer is ultra-short (under 5 words) and unclear, you may probe briefly once before moving on; never repeat a question already answered.',
+          `Once all ${totalQs} warm-up checkpoints have been answered (candidateAnswersInPart >= ${totalQs}), thank them neutrally and transition directly toward Part 1 everyday topics by saying "Thank you. Now let's move on to some other everyday topics." and append the exact token ${endMarker} at the very end of your response.`,
+        ].join('\n')
+      : questionItem.part === 'part1'
       ? [
           'Phase: IELTS Speaking Part 1 (Interview).',
           `Question #1 was already asked in your opener. Candidate answers so far in Part 1: ${candidateAnswersInPart}. Total questions on sheet: ${totalQs}.`,
@@ -1254,9 +1308,12 @@ export function buildExaminerOpener(
   item: IeltsQuestionItem,
   linkedPart2?: IeltsQuestionItem,
 ): string {
+  if (item.part === 'warmup') {
+    return 'Good afternoon. Welcome to the IELTS speaking test. First of all, could you tell me your full name, please, and what shall I call you?';
+  }
   if (item.part === 'part1') {
     const q1 = item.prompts[0] || `Let's talk about ${item.topic}.`;
-    return `Good to see you. Let's talk about ${item.topic}. ${q1}`;
+    return `Now let's talk about ${item.topic}. ${q1}`;
   }
   if (item.part === 'part2') {
     return `Now I'm going to give you a topic and I'd like you to talk about it for one to two minutes. Before you talk, you'll have one minute to think about what you're going to say. Here is your topic: ${item.topic}. You can make some notes if you wish.`;
