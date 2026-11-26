@@ -715,3 +715,27 @@ pub async fn podcast_download_latest(
     .await
     .map_err(|e| format!("下载任务中断：{e}"))?
 }
+
+#[tauri::command]
+pub fn open_mic_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+            .status()
+            .map_err(|e| format!("无法打开系统设置：{e}"))?;
+        return Ok(());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", "ms-settings:privacy-microphone"])
+            .status()
+            .map_err(|e| format!("无法打开系统设置：{e}"))?;
+        return Ok(());
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Err("请在系统「设置 → 应用权限 → 麦克风」中允许 Lirio 访问麦克风。".into())
+    }
+}

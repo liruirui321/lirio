@@ -33,6 +33,14 @@ import {
 } from './services/accountService';
 import { hydrateStateFromDisk, restoreStateFromCloudIfLocalEmpty } from './services/stateSync';
 import {
+  checkMicPermission,
+  hasDismissedFirstRunMicPrompt,
+  markFirstRunMicPrompt,
+  openSystemMicSettings,
+  requestMicPermission,
+  type MicPermissionStatus,
+} from './services/micPermission';
+import {
   importAudioFilesToLibrary,
   type ImportProgress,
   type ImportTierChoice,
@@ -96,6 +104,10 @@ export default function App() {
   const [stateTick, setStateTick] = useState(0);
   const [reminderTick, setReminderTick] = useState(0);
   const [wordsLaunch, setWordsLaunch] = useState<CorpusLaunchRequest | null>(null);
+  const [micModalOpen, setMicModalOpen] = useState(false);
+  const [micStatus, setMicStatus] = useState<MicPermissionStatus>('prompt');
+  const [micBusy, setMicBusy] = useState(false);
+  const [micError, setMicError] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
       const saved = localStorage.getItem('aboboo-theme');
@@ -148,6 +160,19 @@ export default function App() {
       unsub();
       clearTimeout(timer);
     };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (hasDismissedFirstRunMicPrompt()) return;
+      void checkMicPermission().then((status) => {
+        setMicStatus(status);
+        if (status !== 'granted') {
+          setMicModalOpen(true);
+        }
+      });
+    }, 600);
+    return () => clearTimeout(timer);
   }, []);
 
   const mistakeReminder: DailyMistakeReminder = useMemo(
@@ -851,6 +876,74 @@ export default function App() {
         theme={theme}
         onThemeChange={setTheme}
       />
+
+      {micModalOpen && (
+        <div className="import-modal-backdrop">
+          <div
+            className="import-modal mic-permission-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="开启麦克风权限"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="import-modal-head">
+              <h2>开启麦克风权限</h2>
+            </div>
+            <p className="mic-modal-desc">
+              Lirio 的口语对话与跟读练习需要使用麦克风录音，音频仅用于语音识别，不会在后台采集。
+            </p>
+            {micError && (
+              <div className="app-error" style={{ borderRadius: 10 }}>
+                {micError}
+              </div>
+            )}
+            <div className="import-modal-actions">
+              <button
+                type="button"
+                disabled={micBusy}
+                onClick={() => {
+                  markFirstRunMicPrompt('later');
+                  setMicModalOpen(false);
+                }}
+              >
+                稍后再说
+              </button>
+              {micStatus === 'denied' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void openSystemMicSettings().catch((e) => setMicError(String(e)));
+                  }}
+                >
+                  打开系统设置
+                </button>
+              )}
+              <button
+                type="button"
+                className="primary"
+                disabled={micBusy}
+                onClick={async () => {
+                  setMicBusy(true);
+                  setMicError('');
+                  try {
+                    const res = await requestMicPermission();
+                    setMicStatus(res.status);
+                    if (res.ok) {
+                      setMicModalOpen(false);
+                    } else if (res.error) {
+                      setMicError(res.error);
+                    }
+                  } finally {
+                    setMicBusy(false);
+                  }
+                }}
+              >
+                {micBusy ? '请求中…' : micStatus === 'denied' ? '重试授权' : '立即授权'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Automated Audio Import & Segmentation Agent Modal */}
       {showImportModal && (

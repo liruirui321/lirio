@@ -140,6 +140,7 @@ jobs:
           VER=$(node -p "require('./package.json').version")
           node -e "const fs=require('fs'),p='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle=c.bundle||{};c.bundle.resources=[];c.bundle.createUpdaterArtifacts=false;fs.writeFileSync(p,JSON.stringify(c,null,2));"
           npx tauri android init
+          node scripts/patch-android-mic.mjs
           npx tauri android build --apk --target aarch64
           mkdir -p out
           APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)

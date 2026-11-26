@@ -527,7 +527,12 @@ export function SpeakCompanion({
         },
       });
     } catch (e) {
-      setStatusMsg('无法访问麦克风，请检查系统权限：' + String(e));
+      const msg = String(e);
+      setStatusMsg(
+        /NotAllowed|PermissionDenied|permission|denied/i.test(msg)
+          ? '无法访问麦克风，请前往「设置 → 通用」开启麦克风权限。'
+          : '无法访问麦克风，请检查系统权限：' + msg,
+      );
       callActiveRef.current = false;
       setCallActive(false);
       setCallPhase('idle');
@@ -890,7 +895,12 @@ export function SpeakCompanion({
       } catch (e) {
         shadowRecorderRef.current = null;
         setShadowingIdx(null);
-        setStatusMsg('麦克风启动失败：' + String(e));
+        const msg = String(e);
+        setStatusMsg(
+          /NotAllowed|PermissionDenied|permission|denied/i.test(msg)
+            ? '无法访问麦克风，请前往「设置 → 通用」开启麦克风权限。'
+            : '麦克风启动失败：' + msg,
+        );
       }
     },
     [shadowingIdx, shadowingBusy, stopShadowRecorder, stopAudio],

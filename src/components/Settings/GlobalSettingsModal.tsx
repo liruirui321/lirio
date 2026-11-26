@@ -55,6 +55,12 @@ import {
   setTypingSoundEnabled,
 } from '../../services/typingSound';
 import {
+  checkMicPermission,
+  openSystemMicSettings,
+  requestMicPermission,
+  type MicPermissionStatus,
+} from '../../services/micPermission';
+import {
   checkForAppUpdate,
   downloadAndInstallUpdate,
   getUpdateState,
@@ -163,6 +169,8 @@ export function GlobalSettingsModal({
   const [typingSound, setTypingSound] = useState<boolean>(() => isTypingSoundEnabled());
   const [showGuide, setShowGuide] = useState<boolean>(false);
   const [updateState, setUpdateState] = useState<UpdateState>(() => getUpdateState());
+  const [micStatus, setMicStatus] = useState<MicPermissionStatus>('prompt');
+  const [micBusy, setMicBusy] = useState(false);
 
   const [fbCategory, setFbCategory] = useState<FeedbackCategory>('feature');
   const [fbModule, setFbModule] = useState<string>('听力');
@@ -188,6 +196,7 @@ export function GlobalSettingsModal({
     setUpdateState(getUpdateState());
     void initAppVersion();
     getStorageInfo().then(setStorageInfo).catch(() => {});
+    checkMicPermission().then(setMicStatus).catch(() => {});
     const acct = getAccountState();
     setAccount(acct);
     setAiViewMode(acct.aiMode);
@@ -1130,6 +1139,53 @@ export function GlobalSettingsModal({
                   </button>
                   <button type="button" disabled={busyData} onClick={() => void handleImportBackup()}>
                     导入恢复
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-row-between">
+                <div className="settings-version-meta">
+                  <span className="settings-section-title">麦克风</span>
+                  <small>
+                    {micStatus === 'granted'
+                      ? '已授权 · 可用于口语对话与跟读'
+                      : micStatus === 'denied'
+                        ? '未授权 · 请在系统设置中开启'
+                        : micStatus === 'unsupported'
+                          ? '未检测到可用麦克风设备'
+                          : '未授权 · 授权后可用于口语与跟读'}
+                  </small>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {micStatus === 'denied' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setErrorMsg('');
+                        void openSystemMicSettings().catch((e) => setErrorMsg(String(e)));
+                      }}
+                    >
+                      打开系统设置
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={micBusy}
+                    onClick={async () => {
+                      setMicBusy(true);
+                      setErrorMsg('');
+                      setStatusMsg('');
+                      try {
+                        const res = await requestMicPermission();
+                        setMicStatus(res.status);
+                        if (res.ok) setStatusMsg('麦克风已授权');
+                        else if (res.error) setErrorMsg(res.error);
+                      } finally {
+                        setMicBusy(false);
+                      }
+                    }}
+                  >
+                    {micBusy ? '检测中…' : micStatus === 'granted' ? '重新检测' : micStatus === 'denied' ? '重试授权' : '立即授权'}
                   </button>
                 </div>
               </div>

@@ -4168,6 +4168,15 @@ textarea:focus { outline: none; }
   height: 100%;
   object-fit: contain;
 }
+.mic-permission-modal {
+  width: min(410px, 100%);
+}
+.mic-modal-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
 
 /* ---------- Mobile & Tablet Responsive Layout ---------- */
 @media (max-width: 768px) {

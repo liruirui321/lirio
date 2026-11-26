@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Lirio needs microphone access to record your voice for language practice.</string>
+  <string>Lirio 需要使用麦克风进行英语口语对话与跟读练习录音。</string>
 </dict>
 </plist>

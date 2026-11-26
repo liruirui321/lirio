@@ -41,6 +41,7 @@ pub fn run() {
             commands::speak::speak_tts,
             commands::speak::speak_auto_detect_deepseek,
             commands::speak::podcast_download_latest,
+            commands::speak::open_mic_settings,
             commands::state::app_state_load,
             commands::state::app_state_save,
         ])
