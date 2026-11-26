@@ -311,13 +311,13 @@
       <div class="lookup-card">
         <div class="lookup-head">
           <div>
-            <strong>买完忘了码？输入邮箱秒找回</strong>
-            <p>填下单时的邮箱就能查到历史订单与兑换码。</p>
+            <strong>买完忘了码？输入账号秒找回</strong>
+            <p>填下单时的账号或邮箱就能查到历史订单与兑换码。</p>
           </div>
           <span id="supportContactText" class="lookup-support">售后联系：support@lirio.app</span>
         </div>
         <form id="lookupForm" class="lookup-form">
-          <input id="lookupEmail" type="email" placeholder="输入下单邮箱（例如 you@example.com）" required />
+          <input id="lookupEmail" type="text" placeholder="输入下单账号或邮箱（4–32 位）" required />
           <input id="lookupOrderNo" type="text" placeholder="订单号（选填，如 LR-261126-XXXXXX）" />
           <button type="submit" class="btn-primary">找回卡密</button>
         </form>
@@ -395,10 +395,10 @@
 
       <div id="checkoutPlanBar" class="checkout-plan-bar"></div>
 
-      <!-- Step 1: Confirm email & payment method -->
+      <!-- Step 1: Confirm account & payment method -->
       <form id="checkoutStepForm" class="checkout-step">
-        <label class="field-label" for="checkoutEmail">接收 / 查询卡密的邮箱</label>
-        <input id="checkoutEmail" type="email" placeholder="输入你的常用邮箱，付款后可随时找回卡密" required />
+        <label class="field-label" for="checkoutEmail">接收 / 查询卡密的账号或邮箱</label>
+        <input id="checkoutEmail" type="text" placeholder="输入你的 Lirio 账号或常用邮箱，付款后可随时找回卡密" required />
 
         <div class="field-label">选择付款方式</div>
         <div class="channel-grid">

@@ -1148,7 +1148,8 @@ main {
   flex-wrap: wrap;
 }
 .lookup-form input,
-.checkout-step input[type="email"] {
+.checkout-step input[type="email"],
+.checkout-step input[type="text"] {
   flex: 1;
   min-width: 190px;
   border: 1px solid var(--line);
@@ -1161,7 +1162,8 @@ main {
   outline: none;
 }
 .lookup-form input:focus,
-.checkout-step input[type="email"]:focus {
+.checkout-step input[type="email"]:focus,
+.checkout-step input[type="text"]:focus {
   border-color: var(--accent);
 }
 .lookup-results {

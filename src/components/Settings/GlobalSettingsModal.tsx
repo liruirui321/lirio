@@ -26,6 +26,8 @@ import {
   submitFeedback,
   subscribeAccount,
   updateAccountState,
+  validateAccountId,
+  validatePassword,
   type AccountState,
   type FeedbackCategory,
   type FeedbackItem,
@@ -253,14 +255,28 @@ export function GlobalSettingsModal({
   };
 
   const handleAuthSubmit = async () => {
+    const acctErr = validateAccountId(email);
+    if (acctErr) {
+      setErrorMsg(acctErr);
+      return;
+    }
+    const pwdErr = validatePassword(password);
+    if (pwdErr) {
+      setErrorMsg(pwdErr);
+      return;
+    }
+    if (authMode === 'register' && nickname.trim().length > 24) {
+      setErrorMsg('昵称最多 24 个字符。');
+      return;
+    }
     setAuthBusy(true);
     setErrorMsg('');
     setStatusMsg('');
     try {
       const res =
         authMode === 'register'
-          ? await registerAccount({ email, password, name: nickname })
-          : await loginAccount({ email, password });
+          ? await registerAccount({ email: email.trim(), password, name: nickname.trim() })
+          : await loginAccount({ email: email.trim(), password });
       setLedger(res.ledger || []);
       setPassword('');
       setStatusMsg(authMode === 'register' ? `已赠 ${formatYuan(res.user.balanceUnits, 2)}` : '已登录');
@@ -672,11 +688,16 @@ export function GlobalSettingsModal({
 
                   <div className="settings-two-col">
                     <div className="speak-field">
-                      <label>邮箱</label>
+                      <label>账号</label>
                       <input
-                        type="email"
+                        type="text"
                         value={email}
-                        placeholder="name@example.com"
+                        placeholder="4–32 位字母/数字/下划线"
+                        minLength={4}
+                        maxLength={32}
+                        autoComplete="username"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         onChange={(e) => setEmail(e.target.value)}
                       />
                     </div>
@@ -685,10 +706,12 @@ export function GlobalSettingsModal({
                       <input
                         type="password"
                         value={password}
-                        placeholder="至少 6 位"
+                        placeholder="6–32 位，不含空格"
+                        minLength={6}
+                        maxLength={32}
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && email && password) void handleAuthSubmit();
+                          if (e.key === 'Enter' && email.trim().length >= 4 && password.length >= 6) void handleAuthSubmit();
                         }}
                       />
                     </div>
@@ -700,7 +723,8 @@ export function GlobalSettingsModal({
                       <input
                         type="text"
                         value={nickname}
-                        placeholder="可选"
+                        placeholder="选填"
+                        maxLength={24}
                         onChange={(e) => setNickname(e.target.value)}
                       />
                     </div>
@@ -710,7 +734,7 @@ export function GlobalSettingsModal({
                     <button
                       type="button"
                       className="primary"
-                      disabled={authBusy || !email.trim() || password.length < 6}
+                      disabled={authBusy || email.trim().length < 4 || password.length < 6}
                       onClick={() => void handleAuthSubmit()}
                     >
                       {authBusy ? '请稍候…' : authMode === 'register' ? '注册' : '登录'}

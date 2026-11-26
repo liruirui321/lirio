@@ -60,6 +60,18 @@ import {
 } from './pricing.mjs';
 import { forwardChatCompletion, forwardTranscribe, forwardTts } from './aiProxy.mjs';
 
+function isValidAccountId(raw) {
+  const s = String(raw || '').trim();
+  return /^[a-zA-Z0-9._@-]{4,32}$/.test(s) && /[a-zA-Z0-9]/.test(s);
+}
+
+function validatePasswordStrength(raw) {
+  const p = String(raw || '');
+  if (p.length < 6 || p.length > 32) return '密码长度需为 6–32 位。';
+  if (/\s/.test(p)) return '密码不能包含空格。';
+  return null;
+}
+
 export const CODE_PRESETS = [
   {
     id: 'pro_99',
@@ -1389,19 +1401,24 @@ export function createLirioServer({ dbPath } = {}) {
 
       if (req.method === 'POST' && pathname === '/api/auth/register') {
         const body = await readJsonBody(req);
-        const email = String(body.email || '').trim().toLowerCase();
+        const email = String(body.account || body.username || body.email || '').trim().toLowerCase();
         const password = String(body.password || '');
         const name = String(body.name || '').trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          sendJson(res, 400, { error: '请输入有效的邮箱地址。' });
+        if (!isValidAccountId(email)) {
+          sendJson(res, 400, { error: '账号需为 4–32 位字母、数字、下划线或邮箱格式，不含空格。' });
           return;
         }
-        if (password.length < 6) {
-          sendJson(res, 400, { error: '密码长度至少为 6 位。' });
+        const pwdErr = validatePasswordStrength(password);
+        if (pwdErr) {
+          sendJson(res, 400, { error: pwdErr });
+          return;
+        }
+        if (name.length > 24) {
+          sendJson(res, 400, { error: '昵称最多 24 个字符。' });
           return;
         }
         if (getUserByEmail(db, email)) {
-          sendJson(res, 409, { error: '该邮箱已注册，请直接登录。' });
+          sendJson(res, 409, { error: '该账号已被注册，请换一个或直接登录。' });
           return;
         }
         const passwordHash = hashPassword(password);
@@ -1434,11 +1451,11 @@ export function createLirioServer({ dbPath } = {}) {
 
       if (req.method === 'POST' && pathname === '/api/auth/login') {
         const body = await readJsonBody(req);
-        const email = String(body.email || '').trim().toLowerCase();
+        const email = String(body.account || body.username || body.email || '').trim().toLowerCase();
         const password = String(body.password || '');
         const row = getUserByEmail(db, email);
         if (!row || !verifyPassword(password, row.password_hash)) {
-          sendJson(res, 401, { error: '邮箱或密码不正确。' });
+          sendJson(res, 401, { error: '账号或密码不正确。' });
           return;
         }
         const user = serializeUser(row);
@@ -1831,8 +1848,8 @@ export function createLirioServer({ dbPath } = {}) {
           return;
         }
         const buyerEmail = String(body.buyerEmail || '').trim().toLowerCase();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
-          sendJson(res, 400, { error: '请输入有效的邮箱地址（用于查询与接收卡密）。' });
+        if (!isValidAccountId(buyerEmail)) {
+          sendJson(res, 400, { error: '请输入有效的账号或邮箱（4–32 位）。' });
           return;
         }
         const order = createOrder(db, {
@@ -1856,8 +1873,8 @@ export function createLirioServer({ dbPath } = {}) {
 
       if (isRead && pathname === '/api/orders/lookup') {
         const email = String(url.searchParams.get('email') || '').trim().toLowerCase();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          sendJson(res, 400, { error: '请输入下单时填写的有效邮箱地址。' }, headOnly);
+        if (!isValidAccountId(email)) {
+          sendJson(res, 400, { error: '请输入下单时填写的账号或邮箱（4–32 位）。' }, headOnly);
           return;
         }
         const orderNo = String(url.searchParams.get('orderNo') || '').trim().toUpperCase();

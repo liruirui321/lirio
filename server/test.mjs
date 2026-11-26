@@ -640,7 +640,43 @@ try {
   const proofLedgerRes = await req('GET', '/api/billing/ledger', null, token);
   assert.ok(proofLedgerRes.json.ledger.some((e) => e.feature === '字幕 AI 精校'));
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (17/17)');
+  // 18. Verify plain unique username auth (without @), length/char rules, and order checkout/lookup
+  assert.equal((await req('POST', '/api/auth/register', { email: 'ab', password: 'password123' })).status, 400);
+  assert.equal((await req('POST', '/api/auth/register', { email: 'bad user!', password: 'password123' })).status, 400);
+  assert.equal((await req('POST', '/api/auth/register', { email: 'cherry_01', password: 'pass word' })).status, 400);
+  assert.equal(
+    (await req('POST', '/api/auth/register', { email: 'cherry_01', password: 'a'.repeat(33) })).status,
+    400,
+  );
+
+  const userReg = await req('POST', '/api/auth/register', {
+    email: 'cherry_01',
+    password: 'password123',
+    name: '',
+  });
+  assert.equal(userReg.status, 201);
+  assert.equal(userReg.json.user.email, 'cherry_01');
+  assert.equal(userReg.json.user.name, 'cherry_01');
+
+  const userDup = await req('POST', '/api/auth/register', {
+    email: 'Cherry_01',
+    password: 'password123',
+  });
+  assert.equal(userDup.status, 409);
+
+  const userLogin = await req('POST', '/api/auth/login', {
+    email: 'cherry_01',
+    password: 'password123',
+  });
+  assert.equal(userLogin.status, 200);
+
+  const acctOrder = await req('POST', '/api/orders', { planId: 'pro_99', buyerEmail: 'cherry_01' });
+  assert.equal(acctOrder.status, 201);
+  const acctLookup = await req('GET', '/api/orders/lookup?email=cherry_01');
+  assert.equal(acctLookup.status, 200);
+  assert.ok(acctLookup.json.orders.some((o) => o.orderNo === acctOrder.json.order.orderNo));
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (18/18)');
 } finally {
   server.close();
 }

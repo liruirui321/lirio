@@ -12,6 +12,8 @@ import {
   refreshAccountMe,
   registerAccount,
   simulatePayStoreOrder,
+  validateAccountId,
+  validatePassword,
   type AccountState,
   type LocalAccessResult,
   type StoreConfig,
@@ -64,15 +66,29 @@ export function LicenseGateModal({
 
   const handleAuthSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    const acctErr = validateAccountId(email);
+    if (acctErr) {
+      setErrorMsg(acctErr);
+      return;
+    }
+    const pwdErr = validatePassword(password);
+    if (pwdErr) {
+      setErrorMsg(pwdErr);
+      return;
+    }
+    if (authMode === 'register' && nickname.trim().length > 24) {
+      setErrorMsg('昵称最多 24 个字符。');
+      return;
+    }
     setBusy(true);
     setErrorMsg('');
     setStatusMsg('');
     try {
       if (authMode === 'register') {
-        await registerAccount({ email, password, name: nickname });
+        await registerAccount({ email: email.trim(), password, name: nickname.trim() });
         setStatusMsg('注册成功，已开通 3 天全功能免费体验');
       } else {
-        await loginAccount({ email, password });
+        await loginAccount({ email: email.trim(), password });
         setStatusMsg('登录成功');
       }
       setPassword('');
@@ -236,11 +252,16 @@ export function LicenseGateModal({
             </div>
 
             <div className="speak-field">
-              <label>邮箱</label>
+              <label>账号</label>
               <input
-                type="email"
+                type="text"
                 value={email}
-                placeholder="you@example.com"
+                placeholder="4–32 位字母、数字或下划线"
+                minLength={4}
+                maxLength={32}
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 required
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -251,7 +272,9 @@ export function LicenseGateModal({
               <input
                 type="password"
                 value={password}
-                placeholder="至少 6 位"
+                placeholder="6–32 位，不含空格"
+                minLength={6}
+                maxLength={32}
                 required
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -264,6 +287,7 @@ export function LicenseGateModal({
                   type="text"
                   value={nickname}
                   placeholder="选填"
+                  maxLength={24}
                   onChange={(e) => setNickname(e.target.value)}
                 />
               </div>
@@ -272,7 +296,7 @@ export function LicenseGateModal({
             <button
               type="submit"
               className="primary-btn full-width"
-              disabled={busy || !email.trim() || password.length < 6}
+              disabled={busy || email.trim().length < 4 || password.length < 6}
             >
               {busy ? '请稍候…' : authMode === 'register' ? '注册' : '登录'}
             </button>

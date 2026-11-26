@@ -329,6 +329,25 @@ export function updateAccountState(patch: Partial<AccountState>): AccountState {
   return next;
 }
 
+export function validateAccountId(raw: string): string | null {
+  const s = String(raw || '').trim();
+  if (!/^[a-zA-Z0-9._@-]{4,32}$/.test(s) || !/[a-zA-Z0-9]/.test(s)) {
+    return '账号需为 4–32 位字母、数字或下划线（不含空格）。';
+  }
+  return null;
+}
+
+export function validatePassword(raw: string): string | null {
+  const p = String(raw || '');
+  if (p.length < 6 || p.length > 32) {
+    return '密码长度需为 6–32 位。';
+  }
+  if (/\s/.test(p)) {
+    return '密码不能包含空格。';
+  }
+  return null;
+}
+
 export function formatYuan(units: number | undefined | null, decimals = 2): string {
   const v = (Number(units) || 0) / 10000;
   return `¥${v.toFixed(decimals)}`;
