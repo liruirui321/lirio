@@ -778,30 +778,58 @@ export async function synthesizeSpeech(
   const { config } = loadSpeakState();
   const effectiveAccent = voiceOverride?.accent || accent;
   const acct = getAccountState();
-  if (acct.aiMode === 'pro_balance' && acct.proCloudSpeech) {
-    return proxyTts(
+
+  const invokeFreeTts = async (): Promise<string> => {
+    const res = await invoke<TtsResult>('speak_tts', {
       text,
-      effectiveAccent,
-      voiceOverride?.openaiVoice || config.speechVoice,
-      '云端语音合成',
-    );
+      accent: effectiveAccent,
+      provider: config.ttsProvider === 'macos' ? 'macos' : 'edge',
+      apiKey: null,
+      baseUrl: 'https://api.openai.com/v1',
+      model: config.speechModel || 'tts-1',
+      voice: voiceOverride?.edgeVoice || null,
+    });
+    const blob = new Blob([new Uint8Array(res.bytes)], { type: res.mime || 'audio/mpeg' });
+    return URL.createObjectURL(blob);
+  };
+
+  if (acct.aiMode === 'pro_balance') {
+    if (acct.proCloudSpeech) {
+      try {
+        return await proxyTts(
+          text,
+          effectiveAccent,
+          voiceOverride?.openaiVoice || config.speechVoice,
+          '云端语音合成',
+        );
+      } catch (err) {
+        console.warn('[TTS] pro cloud speech failed, falling back to free local/Edge TTS:', err);
+      }
+    }
+    return invokeFreeTts();
   }
-  const useCustomApi = config.speechMode === 'api';
+
   const apiKey = (config.speechApiKey || '').trim();
   const baseUrl = (config.speechBaseUrl || '').trim() || 'https://api.openai.com/v1';
-  const res = await invoke<TtsResult>('speak_tts', {
-    text,
-    accent: effectiveAccent,
-    provider: useCustomApi ? 'custom' : config.ttsProvider === 'macos' ? 'macos' : 'edge',
-    apiKey: useCustomApi ? apiKey || null : null,
-    baseUrl,
-    model: config.speechModel || 'tts-1',
-    voice: useCustomApi
-      ? voiceOverride?.openaiVoice || config.speechVoice || 'alloy'
-      : voiceOverride?.edgeVoice || config.speechVoice || 'alloy',
-  });
-  const blob = new Blob([new Uint8Array(res.bytes)], { type: res.mime || 'audio/mpeg' });
-  return URL.createObjectURL(blob);
+  if (config.speechMode === 'api' && apiKey.length > 0) {
+    try {
+      const res = await invoke<TtsResult>('speak_tts', {
+        text,
+        accent: effectiveAccent,
+        provider: 'custom',
+        apiKey,
+        baseUrl,
+        model: config.speechModel || 'tts-1',
+        voice: voiceOverride?.openaiVoice || config.speechVoice || 'alloy',
+      });
+      const blob = new Blob([new Uint8Array(res.bytes)], { type: res.mime || 'audio/mpeg' });
+      return URL.createObjectURL(blob);
+    } catch (err) {
+      console.warn('[TTS] custom speech API failed, falling back to free local/Edge TTS:', err);
+    }
+  }
+
+  return invokeFreeTts();
 }
 
 // ---------- Prompts: Soyas Companion & Certified IELTS Examiner ----------
