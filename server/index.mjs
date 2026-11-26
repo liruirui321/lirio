@@ -2106,7 +2106,9 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
         if (!authState) return;
         const user = authState.user;
-        if (user.balanceUnits <= 0) {
+        const asrModelEnv = (process.env.LIRIO_ASR_MODEL || 'whisper-1').trim();
+        const isFreeAsrModel = asrModelEnv.includes('SenseVoiceSmall');
+        if (!isFreeAsrModel && user.balanceUnits <= 0) {
           sendJson(res, 402, { error: '当前余额不足，请充值或切换免费本地 Whisper。' });
           return;
         }
@@ -2115,7 +2117,19 @@ export function createLirioServer({ dbPath } = {}) {
           wavBase64: body.wavBase64,
           durationSec: body.durationSec,
         });
-        const costUnits = calculateAsrCostUnits(asrRes.durationSec);
+        const costUnits = asrRes.isFree ? 0 : calculateAsrCostUnits(asrRes.durationSec);
+        if (costUnits <= 0) {
+          sendJson(res, 200, {
+            text: asrRes.text,
+            model: asrRes.model,
+            durationSec: asrRes.durationSec,
+            costUnits: 0,
+            balanceUnits: user.balanceUnits,
+            totalSpentUnits: user.totalSpentUnits,
+            user,
+          });
+          return;
+        }
         const settled = deductUserBalance(db, {
           userId: user.id,
           costUnits,

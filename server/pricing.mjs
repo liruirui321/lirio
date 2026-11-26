@@ -92,10 +92,10 @@ export function calculateChatCostUnits(
   return Math.max(1, Math.ceil(raw));
 }
 
-// Simulated affordable commercial neural TTS rate: ¥0.03 / 1,000 chars = 300 units / 1,000 chars (0.3 units/char)
+// SiliconFlow CosyVoice2 rate: ¥0.05 / 1,000 UTF-8 bytes upstream -> billed at ¥0.06 / 1,000 UTF-8 bytes (0.6 units/byte)
 export function calculateTtsCostUnits(chars = 0) {
   const n = Math.max(1, Number(chars) || 0);
-  return Math.max(1, Math.ceil(n * 0.3));
+  return Math.max(1, Math.ceil(n * 0.6));
 }
 
 // whisper-1: ¥0.05 / minute = 500 units / 60s

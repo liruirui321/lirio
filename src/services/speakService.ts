@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { loadCorpusState, lookupBuiltinWord, saveCorpusState, type Accent } from './corpusService';
-import { getAccountState, proxyChat, proxyTts } from './accountService';
+import { getAccountState, proxyChat, proxyTranscribe, proxyTts } from './accountService';
 import { saveStateBackup } from './stateSync';
 import ielts2026Q4Raw from '../data/ielts_speaking_2026_sep_dec.json';
 
@@ -759,9 +759,16 @@ export class VadVoiceRecorder {
 }
 
 export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
-  return invoke<string>('speak_transcribe', {
-    wavBytes: Array.from(wavBytes),
-  });
+  try {
+    return await invoke<string>('speak_transcribe', {
+      wavBytes: Array.from(wavBytes),
+    });
+  } catch (localErr) {
+    if (getAccountState().token) {
+      return await proxyTranscribe(wavBytes, '云端语音识别');
+    }
+    throw localErr;
+  }
 }
 
 interface TtsResult {

@@ -248,6 +248,37 @@ asyncio.run(main())
   }
 }
 
+const COSYVOICE_VOICE_MAP = {
+  claire: 'claire',
+  anna: 'anna',
+  bella: 'bella',
+  diana: 'diana',
+  alex: 'alex',
+  benjamin: 'benjamin',
+  charles: 'charles',
+  david: 'david',
+  nova: 'claire',
+  shimmer: 'claire',
+  sage: 'anna',
+  alloy: 'claire',
+  echo: 'alex',
+  onyx: 'benjamin',
+  ash: 'alex',
+  fable: 'charles',
+  ballad: 'charles',
+};
+
+function resolveCosyVoiceName(ttsModel, accent, voice) {
+  const raw = String(voice || '').trim();
+  if (raw.includes(':')) return raw;
+  const key = raw.toLowerCase();
+  if (COSYVOICE_VOICE_MAP[key]) {
+    return `${ttsModel}:${COSYVOICE_VOICE_MAP[key]}`;
+  }
+  const byAccent = accent === 'uk' ? 'charles' : 'claire';
+  return `${ttsModel}:${byAccent}`;
+}
+
 export async function forwardTts({ text, accent = 'uk', voice }) {
   const cleanText = String(text || '').trim();
   if (!cleanText) throw new Error('朗读文本不能为空。');
@@ -271,6 +302,11 @@ export async function forwardTts({ text, accent = 'uk', voice }) {
   }
 
   const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const ttsModel = (process.env.LIRIO_TTS_MODEL || 'tts-1').trim();
+  const isCosyVoice = ttsModel.includes('CosyVoice2');
+  const finalVoice = isCosyVoice ? resolveCosyVoiceName(ttsModel, accent, chosenVoice) : chosenVoice;
+  const billedChars = isCosyVoice ? Buffer.byteLength(cleanText, 'utf8') : cleanText.length;
+
   const resp = await fetch(`${baseUrl}/audio/speech`, {
     method: 'POST',
     headers: {
@@ -278,9 +314,9 @@ export async function forwardTts({ text, accent = 'uk', voice }) {
       Authorization: `Bearer ${speechKey}`,
     },
     body: JSON.stringify({
-      model: 'tts-1',
+      model: ttsModel,
       input: cleanText,
-      voice: chosenVoice,
+      voice: finalVoice,
       response_format: 'mp3',
     }),
   });
@@ -292,10 +328,10 @@ export async function forwardTts({ text, accent = 'uk', voice }) {
 
   const ab = await resp.arrayBuffer();
   return {
-    provider: 'openai',
-    model: 'tts-1',
-    voice: chosenVoice,
-    chars: cleanText.length,
+    provider: baseUrl.includes('siliconflow') ? 'siliconflow' : 'openai',
+    model: ttsModel,
+    voice: finalVoice,
+    chars: billedChars,
     mime: 'audio/mpeg',
     audioBase64: Buffer.from(ab).toString('base64'),
   };
@@ -308,10 +344,14 @@ export async function forwardTranscribe({ wavBase64, durationSec }) {
   }
   const approxSec = Number(durationSec) > 0 ? Number(durationSec) : Math.max(1, Math.round(buf.length / 32000));
 
+  const asrModel = (process.env.LIRIO_ASR_MODEL || 'whisper-1').trim();
+  const isSenseVoice = asrModel.includes('SenseVoiceSmall');
+
   if (isMockMode()) {
     return {
       provider: 'openai',
-      model: 'whisper-1',
+      model: asrModel,
+      isFree: isSenseVoice,
       durationSec: approxSec,
       text: 'I really enjoy spending weekends in quiet cafes with my friends.',
     };
@@ -325,8 +365,10 @@ export async function forwardTranscribe({ wavBase64, durationSec }) {
 
   const form = new FormData();
   form.append('file', new Blob([buf], { type: 'audio/wav' }), 'speech.wav');
-  form.append('model', 'whisper-1');
-  form.append('language', 'en');
+  form.append('model', asrModel);
+  if (asrModel === 'whisper-1') {
+    form.append('language', 'en');
+  }
 
   const resp = await fetch(`${baseUrl}/audio/transcriptions`, {
     method: 'POST',
@@ -346,8 +388,9 @@ export async function forwardTranscribe({ wavBase64, durationSec }) {
   }
 
   return {
-    provider: 'openai',
-    model: 'whisper-1',
+    provider: baseUrl.includes('siliconflow') ? 'siliconflow' : 'openai',
+    model: asrModel,
+    isFree: isSenseVoice,
     durationSec: approxSec,
     text,
   };

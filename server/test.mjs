@@ -157,8 +157,8 @@ try {
   // Peak (3x): 0.5*1200 + 0.5*60000 + 240000 = 270600 units (¥27.06); Off-peak is exact half = 135300 units (¥13.53)
   assert.equal(peakCost, 270600);
   assert.equal(offPeakCost, 135300);
-  // TTS: 1000 chars = ¥0.03 = 300 units
-  assert.equal(calculateTtsCostUnits(1000), 300);
+  // TTS: 1000 UTF-8 bytes = ¥0.06 = 600 units
+  assert.equal(calculateTtsCostUnits(1000), 600);
 
   const demo = seedDemoUser(db);
   assert.equal(demo.email, 'tester@lirio.app');
