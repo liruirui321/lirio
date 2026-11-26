@@ -890,7 +890,19 @@ export function GlobalSettingsModal({
                         <span>余额</span>
                         <strong>{formatYuan(account.user.balanceUnits, 4)}</strong>
                       </div>
-                      <div className="account-balance-stats">
+                      <div
+                        className="account-balance-stats"
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}
+                      >
+                        {account.user.tier === 'pro' && (
+                          <button
+                            type="button"
+                            className="ghost-pill-btn"
+                            onClick={() => void handleToggleBuyPanel()}
+                          >
+                            {showBuyPanel ? '收起' : '充值'}
+                          </button>
+                        )}
                         <span>已充 {formatYuan(account.user.totalRechargedUnits, 2)} · 已用 {formatYuan(account.user.totalSpentUnits, 4)}</span>
                       </div>
                     </div>
@@ -913,51 +925,58 @@ export function GlobalSettingsModal({
                       </div>
                     </div>
 
-                    <div className="redeem-code-wrap">
-                      <div className="redeem-code-row">
-                        <input
-                          type="text"
-                          value={redeemInput}
-                          onChange={(e) => setRedeemInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !authBusy) {
-                              e.preventDefault();
-                              void handleRedeemCode();
+                    {(account.user.tier !== 'pro' || showBuyPanel) && (
+                      <div className="redeem-code-wrap">
+                        <div className="redeem-code-row">
+                          <input
+                            type="text"
+                            value={redeemInput}
+                            onChange={(e) => setRedeemInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !authBusy) {
+                                e.preventDefault();
+                                void handleRedeemCode();
+                              }
+                            }}
+                            placeholder={
+                              account.user.tier === 'pro'
+                                ? '输入加油包兑换码'
+                                : '输入卡密兑换码（LIRIO-XXXX-XXXX-XXXX）'
                             }
-                          }}
-                          placeholder="输入卡密兑换码（如 LIRIO-XXXX-XXXX-XXXX）"
-                          spellCheck={false}
-                          autoCapitalize="characters"
-                          disabled={authBusy}
-                        />
+                            spellCheck={false}
+                            autoCapitalize="characters"
+                            disabled={authBusy}
+                          />
+                          <button
+                            type="button"
+                            className="primary-btn"
+                            disabled={authBusy || !redeemInput.trim()}
+                            onClick={() => void handleRedeemCode()}
+                          >
+                            兑换
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {account.user.tier !== 'pro' && (
+                      <div className="redeem-actions-row">
                         <button
                           type="button"
-                          className="primary-btn"
-                          disabled={authBusy || !redeemInput.trim()}
-                          onClick={() => void handleRedeemCode()}
+                          className="ghost-pill-btn"
+                          onClick={() => void handleToggleBuyPanel()}
                         >
-                          兑换
+                          {showBuyPanel ? '收起购卡' : '购买卡密'}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-pill-btn"
+                          onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
+                        >
+                          官网购卡页 ↗
                         </button>
                       </div>
-                      <div className="sub">支持 ¥99 Lirio Pro · 永久版激活码与 AI 对话加油包，兑换后立即到账</div>
-                    </div>
-
-                    <div className="redeem-actions-row">
-                      <button
-                        type="button"
-                        className="ghost-pill-btn"
-                        onClick={() => void handleToggleBuyPanel()}
-                      >
-                        {showBuyPanel ? '收起购卡' : '购买卡密'}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-pill-btn"
-                        onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
-                      >
-                        官网购卡页 ↗
-                      </button>
-                    </div>
+                    )}
 
                     {showBuyPanel && (
                       <div className="buy-code-panel">
@@ -986,43 +1005,45 @@ export function GlobalSettingsModal({
                               <div className="sub">正在加载卡密套餐…</div>
                             ) : (
                               <div className="buy-pack-grid">
-                                {(storeConfig?.presets || []).map((p) => {
-                                  const st = storeConfig?.settings;
-                                  const extUrl =
-                                    p.id === 'pro_99'
-                                      ? st?.shopUrlPro99
-                                      : p.id === 'topup_10'
-                                        ? st?.shopUrlTopup10
-                                        : st?.shopUrlTopup30;
-                                  return (
-                                    <div key={p.id} className="buy-pack-card">
-                                      <div className="buy-pack-head">
-                                        <strong>{p.shortTitle || p.label}</strong>
-                                        <span>¥{p.payYuan}</span>
-                                      </div>
-                                      <small>{p.subtitle || p.note}</small>
-                                      <div className="buy-pack-btns">
-                                        {extUrl ? (
+                                {(storeConfig?.presets || [])
+                                  .filter((p) => (account.user?.tier === 'pro' ? !p.upgradeToPro : true))
+                                  .map((p) => {
+                                    const st = storeConfig?.settings;
+                                    const extUrl =
+                                      p.id === 'pro_99'
+                                        ? st?.shopUrlPro99
+                                        : p.id === 'topup_10'
+                                          ? st?.shopUrlTopup10
+                                          : st?.shopUrlTopup30;
+                                    return (
+                                      <div key={p.id} className="buy-pack-card">
+                                        <div className="buy-pack-head">
+                                          <strong>{p.shortTitle || p.label}</strong>
+                                          <span>¥{p.payYuan}</span>
+                                        </div>
+                                        <small>{p.subtitle || p.note}</small>
+                                        <div className="buy-pack-btns">
+                                          {extUrl ? (
+                                            <button
+                                              type="button"
+                                              className="ghost-pill-btn"
+                                              onClick={() => void openUrlSafe(extUrl)}
+                                            >
+                                              店铺购卡 ↗
+                                            </button>
+                                          ) : null}
                                           <button
                                             type="button"
-                                            className="ghost-pill-btn"
-                                            onClick={() => void openUrlSafe(extUrl)}
+                                            className="primary-btn"
+                                            disabled={storeBusy}
+                                            onClick={() => void handleCreateOrder(p.id)}
                                           >
-                                            店铺购卡 ↗
+                                            应用内下单
                                           </button>
-                                        ) : null}
-                                        <button
-                                          type="button"
-                                          className="primary-btn"
-                                          disabled={storeBusy}
-                                          onClick={() => void handleCreateOrder(p.id)}
-                                        >
-                                          应用内下单
-                                        </button>
+                                        </div>
                                       </div>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  })}
                               </div>
                             )}
                           </>
