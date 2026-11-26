@@ -161,7 +161,7 @@ export const DEFAULT_RECHARGE_PACKS: RechargePack[] = [
 
 const ACCOUNT_KEY = 'lirio-account-v1';
 const BUILD_DEFAULT_SERVER_URL = (
-  (import.meta.env?.VITE_LIRIO_SERVER_URL as string | undefined) || 'http://127.0.0.1:8787'
+  (import.meta.env?.VITE_LIRIO_SERVER_URL as string | undefined) || 'https://lirio.deltae.tech'
 )
   .trim()
   .replace(/\/+$/, '');
