@@ -58,6 +58,32 @@ export function openDatabase(dbPath = process.env.LIRIO_DB_PATH || path.join(__d
     );
 
     CREATE INDEX IF NOT EXISTS idx_redeem_codes_created ON redeem_codes(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      order_no TEXT UNIQUE NOT NULL,
+      plan_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      pay_yuan REAL NOT NULL,
+      amount_units INTEGER NOT NULL,
+      upgrade_to_pro INTEGER NOT NULL DEFAULT 1,
+      buyer_email TEXT NOT NULL,
+      pay_channel TEXT NOT NULL DEFAULT 'wechat',
+      status TEXT NOT NULL DEFAULT 'pending',
+      issued_code TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      paid_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(buyer_email, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS store_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   return db;
@@ -444,4 +470,238 @@ export function redeemCodeForUser(db, { userId, rawCode }) {
     } catch {}
     throw err;
   }
+}
+
+export const DEFAULT_STORE_SETTINGS = {
+  wechatQr: '',
+  alipayQr: '',
+  shopUrlPro99: '',
+  shopUrlTopup10: '',
+  shopUrlTopup30: '',
+  supportContact: '售后联系：support@lirio.app',
+  paymentNotice: '扫码付款时请在备注栏填写订单号，确认收款后页面将自动弹出卡密兑换码。',
+};
+
+export function getStoreSettings(db) {
+  const rows = db.prepare('SELECT key, value FROM store_settings').all();
+  const out = { ...DEFAULT_STORE_SETTINGS };
+  for (const row of rows) {
+    if (Object.prototype.hasOwnProperty.call(DEFAULT_STORE_SETTINGS, row.key)) {
+      out[row.key] = String(row.value || '');
+    }
+  }
+  return out;
+}
+
+export function saveStoreSettings(db, patch = {}) {
+  const now = Date.now();
+  const stmt = db.prepare(
+    `INSERT INTO store_settings (key, value, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+  );
+  for (const key of Object.keys(DEFAULT_STORE_SETTINGS)) {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) {
+      stmt.run(key, String(patch[key] ?? ''), now);
+    }
+  }
+  return getStoreSettings(db);
+}
+
+export function serializeOrder(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    orderNo: row.order_no,
+    planId: row.plan_id,
+    label: row.label,
+    payYuan: Number(row.pay_yuan),
+    amountUnits: Number(row.amount_units),
+    upgradeToPro: Number(row.upgrade_to_pro) === 1,
+    buyerEmail: row.buyer_email,
+    payChannel: row.pay_channel || 'wechat',
+    status: row.status || 'pending',
+    issuedCode: row.issued_code || null,
+    note: row.note || '',
+    createdAt: Number(row.created_at),
+    paidAt: row.paid_at ? Number(row.paid_at) : null,
+  };
+}
+
+function generateOrderNo() {
+  const d = new Date();
+  const ymd =
+    String(d.getFullYear()).slice(2) +
+    String(d.getMonth() + 1).padStart(2, '0') +
+    String(d.getDate()).padStart(2, '0');
+  let suffix = '';
+  for (let i = 0; i < 6; i++) {
+    suffix += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
+  }
+  return `LR-${ymd}-${suffix}`;
+}
+
+export function createOrder(
+  db,
+  {
+    planId,
+    label,
+    payYuan,
+    amountUnits,
+    upgradeToPro = true,
+    buyerEmail,
+    payChannel = 'wechat',
+    note = '',
+  },
+) {
+  const id = randomUUID();
+  const now = Date.now();
+  const cleanEmail = String(buyerEmail || '').trim().toLowerCase();
+  const cleanChannel = payChannel === 'alipay' ? 'alipay' : 'wechat';
+  let orderNo = '';
+  for (let i = 0; i < 8; i++) {
+    const candidate = generateOrderNo();
+    const exists = db.prepare('SELECT 1 FROM orders WHERE order_no = ?').get(candidate);
+    if (!exists) {
+      orderNo = candidate;
+      break;
+    }
+  }
+  if (!orderNo) throw new Error('ORDER_NO_GENERATION_FAILED');
+  db.prepare(
+    `INSERT INTO orders (id, order_no, plan_id, label, pay_yuan, amount_units, upgrade_to_pro, buyer_email, pay_channel, status, note, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+  ).run(
+    id,
+    orderNo,
+    planId,
+    label,
+    Number(payYuan) || 0,
+    Math.max(0, Math.round(Number(amountUnits) || 0)),
+    upgradeToPro ? 1 : 0,
+    cleanEmail,
+    cleanChannel,
+    String(note || ''),
+    now,
+  );
+  return getOrderByNo(db, orderNo);
+}
+
+export function getOrderByNo(db, orderNo) {
+  const clean = String(orderNo || '').trim().toUpperCase();
+  if (!clean) return null;
+  const row = db.prepare('SELECT * FROM orders WHERE order_no = ?').get(clean);
+  return serializeOrder(row);
+}
+
+export function listOrders(db, limit = 80) {
+  const safeLimit = Math.max(1, Math.min(500, Number(limit) || 80));
+  const rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT ?').all(safeLimit);
+  return rows.map(serializeOrder);
+}
+
+export function lookupOrdersByEmail(db, email, { orderNo = '', limit = 15 } = {}) {
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail) return [];
+  const cleanNo = String(orderNo || '').trim().toUpperCase();
+  const safeLimit = Math.max(1, Math.min(50, Number(limit) || 15));
+  const rows = cleanNo
+    ? db
+        .prepare('SELECT * FROM orders WHERE buyer_email = ? AND order_no = ? ORDER BY created_at DESC LIMIT ?')
+        .all(cleanEmail, cleanNo, safeLimit)
+    : db
+        .prepare('SELECT * FROM orders WHERE buyer_email = ? ORDER BY created_at DESC LIMIT ?')
+        .all(cleanEmail, safeLimit);
+  return rows.map(serializeOrder);
+}
+
+export function confirmOrderAndIssueCode(db, { orderNo, note = '' }) {
+  const cleanOrderNo = String(orderNo || '').trim().toUpperCase();
+  if (!cleanOrderNo) throw new Error('ORDER_NOT_FOUND');
+  const now = Date.now();
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare('SELECT * FROM orders WHERE order_no = ?').get(cleanOrderNo);
+    if (!row) throw new Error('ORDER_NOT_FOUND');
+    if (row.status === 'paid' && row.issued_code) {
+      const codeRow = db
+        .prepare(
+          `SELECT rc.*, u.email AS redeemed_by_email
+           FROM redeem_codes rc LEFT JOIN users u ON rc.redeemed_by = u.id WHERE rc.code = ?`,
+        )
+        .get(row.issued_code);
+      db.exec('COMMIT');
+      return { order: serializeOrder(row), redeemCode: serializeRedeemCode(codeRow), alreadyPaid: true };
+    }
+    if (row.status === 'cancelled') throw new Error('ORDER_CANCELLED');
+
+    let code = '';
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = generateRandomCodeString('LIRIO');
+      const exists = db.prepare('SELECT 1 FROM redeem_codes WHERE code = ?').get(candidate);
+      if (!exists) {
+        code = candidate;
+        break;
+      }
+    }
+    if (!code) throw new Error('CODE_GENERATION_FAILED');
+
+    const codeNote = `订单 ${row.order_no} · ${row.buyer_email}`;
+    db.prepare(
+      `INSERT INTO redeem_codes (code, plan_id, label, amount_units, upgrade_to_pro, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      code,
+      row.plan_id,
+      row.label,
+      Number(row.amount_units),
+      Number(row.upgrade_to_pro) === 1 ? 1 : 0,
+      codeNote,
+      now,
+    );
+
+    const updatedNote = note ? String(note) : row.note || '';
+    const upd = db
+      .prepare(
+        `UPDATE orders SET status = 'paid', issued_code = ?, paid_at = ?, note = ?
+         WHERE id = ? AND status = 'pending'`,
+      )
+      .run(code, now, updatedNote, row.id);
+    if (!upd || upd.changes !== 1) throw new Error('ORDER_STATE_CONFLICT');
+
+    db.exec('COMMIT');
+    const updatedOrder = serializeOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(row.id));
+    const codeRow = db
+      .prepare(
+        `SELECT rc.*, u.email AS redeemed_by_email
+         FROM redeem_codes rc LEFT JOIN users u ON rc.redeemed_by = u.id WHERE rc.code = ?`,
+      )
+      .get(code);
+    return { order: updatedOrder, redeemCode: serializeRedeemCode(codeRow), alreadyPaid: false };
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {}
+    throw err;
+  }
+}
+
+export function cancelOrder(db, { orderNo }) {
+  const cleanOrderNo = String(orderNo || '').trim().toUpperCase();
+  const row = db.prepare('SELECT * FROM orders WHERE order_no = ?').get(cleanOrderNo);
+  if (!row) throw new Error('ORDER_NOT_FOUND');
+  if (row.status !== 'pending') throw new Error('ORDER_NOT_PENDING');
+  db.prepare(`UPDATE orders SET status = 'cancelled' WHERE id = ? AND status = 'pending'`).run(row.id);
+  return getOrderByNo(db, cleanOrderNo);
+}
+
+export function listUnusedRedeemCodes(db, planId = '') {
+  const cleanPlan = String(planId || '').trim();
+  const rows = cleanPlan
+    ? db
+        .prepare('SELECT * FROM redeem_codes WHERE redeemed_by IS NULL AND plan_id = ? ORDER BY created_at DESC')
+        .all(cleanPlan)
+    : db.prepare('SELECT * FROM redeem_codes WHERE redeemed_by IS NULL ORDER BY created_at DESC').all();
+  return rows.map(serializeRedeemCode);
 }

@@ -1,3 +1,54 @@
+const FALLBACK_STORE = {
+  presets: [
+    {
+      id: 'pro_99',
+      payYuan: 99,
+      label: '¥99 买断卡密（含 ¥10 余额）',
+      shortTitle: 'Lirio 永久买断版',
+      badge: '最推荐 · 永久买断',
+      subtitle: '四端软件永久使用 + 本地免费语音与切分 + 赠 ¥10 对话余额',
+      amountUnits: 100000,
+      upgradeToPro: true,
+    },
+    {
+      id: 'topup_10',
+      payYuan: 10,
+      label: '¥10 余额充值码',
+      shortTitle: '¥10 对话充值码',
+      badge: '轻度按量',
+      subtitle: '约 80–270 场雅思模考 · 余额永不过期',
+      amountUnits: 100000,
+      upgradeToPro: false,
+    },
+    {
+      id: 'topup_30',
+      payYuan: 30,
+      label: '¥30 余额充值码（赠 ¥5）',
+      shortTitle: '¥30 冲刺充值码',
+      badge: '超值赠 ¥5',
+      subtitle: '实付 ¥30 到账 ¥35 · 重度备考首选',
+      amountUnits: 350000,
+      upgradeToPro: false,
+    },
+  ],
+  settings: {
+    wechatQr: '',
+    alipayQr: '',
+    shopUrlPro99: '',
+    shopUrlTopup10: '',
+    shopUrlTopup30: '',
+    supportContact: '售后联系：support@lirio.app',
+    paymentNotice: '扫码付款时请在备注栏填写订单号，确认收款后页面将自动弹出卡密兑换码。',
+  },
+  sandboxPayEnabled: false,
+};
+
+let storeState = FALLBACK_STORE;
+let selectedPlan = null;
+let currentOrder = null;
+let currentBuyerEmail = '';
+let pollTimer = null;
+
 function detectPlatform() {
   const ua = (navigator.userAgent || '').toLowerCase();
   if (/iphone|ipad|ipod/.test(ua)) return 'ios';
@@ -6,14 +57,6 @@ function detectPlatform() {
   if (/macintosh|mac os x/.test(ua)) return 'macos';
   return 'macos';
 }
-
-const themeBtn = document.getElementById('themeBtn');
-themeBtn.addEventListener('click', () => {
-  const cur = document.documentElement.getAttribute('data-theme') || 'light';
-  const next = cur === 'light' ? 'dark' : 'light';
-  document.documentElement.setAttribute('data-theme', next);
-  themeBtn.textContent = next === 'light' ? '深色' : '浅色';
-});
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (m) => ({
@@ -25,7 +68,352 @@ function esc(s) {
   })[m]);
 }
 
+function getShopUrlForPlan(planId) {
+  const st = storeState.settings || {};
+  if (planId === 'pro_99') return (st.shopUrlPro99 || '').trim();
+  if (planId === 'topup_10') return (st.shopUrlTopup10 || '').trim();
+  if (planId === 'topup_30') return (st.shopUrlTopup30 || '').trim();
+  return '';
+}
+
+function getPackBullets(preset) {
+  if (preset.id === 'pro_99') {
+    return [
+      '激活 Pro 永久买断身份（Mac / Win / Android 通用）',
+      '附赠 ¥10.00 对话与模考初始余额',
+      '本地 Whisper + 音频切分永久 0 Token',
+    ];
+  }
+  const creditYuan = ((Number(preset.amountUnits) || 0) / 10000).toFixed(0);
+  return [
+    `兑换立即到账 ¥${creditYuan}.00 对话余额`,
+    '支持雅思考官全真模考、双语闲聊与错因诊断',
+    '按 3 倍 DeepSeek 原生费率按量扣费 · 永不过期',
+  ];
+}
+
+// Theme toggle
+const themeBtn = document.getElementById('themeBtn');
+themeBtn.addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = cur === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  themeBtn.textContent = next === 'light' ? '深色' : '浅色';
+});
+
+// Product preview tabs
+document.querySelectorAll('.preview-tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const key = btn.getAttribute('data-preview');
+    document.querySelectorAll('.preview-tab').forEach((b) => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.preview-pane').forEach((pane) => {
+      pane.classList.toggle('active', pane.getAttribute('data-pane') === key);
+    });
+  });
+});
+
+function renderStorefront() {
+  const grid = document.getElementById('packGrid');
+  if (!grid) return;
+  const presets = storeState.presets?.length ? storeState.presets : FALLBACK_STORE.presets;
+  grid.innerHTML = presets
+    .map((p) => {
+      const shopUrl = getShopUrlForPlan(p.id);
+      const isFeatured = p.id === 'pro_99';
+      const creditYuan = ((Number(p.amountUnits) || 0) / 10000).toFixed(0);
+      const bullets = getPackBullets(p)
+        .map((line) => `<li>${esc(line)}</li>`)
+        .join('');
+      return `
+        <article class="pack-card${isFeatured ? ' featured' : ''}">
+          <div class="pack-top">
+            <strong>${esc(p.shortTitle || p.label)}</strong>
+            <span class="tag">${esc(p.badge || (p.upgradeToPro ? '永久买断' : '余额充值'))}</span>
+          </div>
+          <div class="pack-price">¥${esc(p.payYuan)}<span>到账 ¥${esc(creditYuan)} 余额</span></div>
+          <p class="pack-sub">${esc(p.subtitle || p.note || '')}</p>
+          <ul class="pack-list">${bullets}</ul>
+          <div class="pack-actions">
+            ${
+              shopUrl
+                ? `<a class="btn-primary full-width" href="${esc(shopUrl)}" target="_blank" rel="noopener noreferrer">前往官方店铺购卡 ↗</a>
+                   <button type="button" class="btn-ghost full-width buy-plan-btn" data-plan="${esc(p.id)}">官网扫码下单</button>`
+                : `<button type="button" class="${isFeatured ? 'btn-primary' : 'btn-ghost'} full-width buy-plan-btn" data-plan="${esc(p.id)}">立即购买（¥${esc(p.payYuan)}）</button>`
+            }
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+
+  const supportEl = document.getElementById('supportContactText');
+  if (supportEl && storeState.settings?.supportContact) {
+    supportEl.textContent = storeState.settings.supportContact;
+  }
+}
+
+function stopOrderPoll() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function showCheckoutStep(step) {
+  document.getElementById('checkoutStepForm').hidden = step !== 'form';
+  document.getElementById('checkoutStepPay').hidden = step !== 'pay';
+  document.getElementById('checkoutStepSuccess').hidden = step !== 'success';
+}
+
+function renderQrBox(channel) {
+  const st = storeState.settings || {};
+  const qr = channel === 'alipay' ? st.alipayQr : st.wechatQr;
+  const label = channel === 'alipay' ? '支付宝' : '微信支付';
+  const box = document.getElementById('payQrBox');
+  if (qr) {
+    box.innerHTML = `<img src="${esc(qr)}" alt="${label}收款码" /><span class="platform-meta">${label}扫码 · 实付 ¥${esc(selectedPlan?.payYuan || '')}</span>`;
+  } else {
+    box.innerHTML = `<strong>${label}收款码待店主在管理后台上传</strong><span class="platform-meta">${esc(st.supportContact || '请联系店主付款，付款后将自动出码')}</span>`;
+  }
+}
+
+function showIssuedCode(code) {
+  stopOrderPoll();
+  document.getElementById('issuedCodeBox').textContent = code;
+  showCheckoutStep('success');
+}
+
+function startOrderPoll() {
+  stopOrderPoll();
+  pollTimer = setInterval(async () => {
+    if (!currentOrder || !currentBuyerEmail) return;
+    try {
+      const res = await fetch(
+        `/api/orders/${encodeURIComponent(currentOrder.orderNo)}?email=${encodeURIComponent(currentBuyerEmail)}`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.order?.status === 'paid' && data?.order?.issuedCode) {
+        currentOrder = data.order;
+        showIssuedCode(data.order.issuedCode);
+      } else if (data?.order?.status === 'cancelled') {
+        stopOrderPoll();
+        const err = document.getElementById('checkoutPayErr');
+        err.textContent = '该订单已被取消，请重新下单。';
+        err.hidden = false;
+      }
+    } catch {}
+  }, 2500);
+}
+
+function openCheckoutModal(planId) {
+  const presets = storeState.presets?.length ? storeState.presets : FALLBACK_STORE.presets;
+  selectedPlan = presets.find((p) => p.id === planId) || presets[0];
+  currentOrder = null;
+  stopOrderPoll();
+
+  document.getElementById('checkoutTitle').textContent = selectedPlan.shortTitle || selectedPlan.label;
+  document.getElementById('checkoutPlanBar').innerHTML = `
+    <span>${esc(selectedPlan.label)}</span>
+    <strong>¥${esc(selectedPlan.payYuan)}</strong>
+  `;
+  document.getElementById('checkoutFormErr').hidden = true;
+  document.getElementById('checkoutPayErr').hidden = true;
+  const savedEmail = localStorage.getItem('lirio-buyer-email') || '';
+  if (savedEmail && !document.getElementById('checkoutEmail').value) {
+    document.getElementById('checkoutEmail').value = savedEmail;
+  }
+  showCheckoutStep('form');
+  document.getElementById('checkoutModal').hidden = false;
+}
+
+function closeCheckoutModal() {
+  stopOrderPoll();
+  document.getElementById('checkoutModal').hidden = true;
+}
+
+document.getElementById('packGrid').addEventListener('click', (e) => {
+  const btn = e.target.closest('.buy-plan-btn');
+  if (!btn) return;
+  openCheckoutModal(btn.getAttribute('data-plan'));
+});
+
+document.getElementById('closeCheckoutBtn').addEventListener('click', closeCheckoutModal);
+document.getElementById('checkoutModal').addEventListener('click', (e) => {
+  if (e.target.id === 'checkoutModal') closeCheckoutModal();
+});
+
+document.querySelectorAll('input[name="payChannel"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.channel-opt').forEach((el) => {
+      el.classList.toggle('active', el.querySelector('input')?.checked);
+    });
+  });
+});
+
+document.getElementById('checkoutStepForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('checkoutFormErr');
+  errEl.hidden = true;
+  const email = document.getElementById('checkoutEmail').value.trim();
+  const channel = document.querySelector('input[name="payChannel"]:checked')?.value || 'wechat';
+  const btn = document.getElementById('createOrderBtn');
+  btn.disabled = true;
+  btn.textContent = '正在创建订单…';
+  try {
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ planId: selectedPlan.id, buyerEmail: email, payChannel: channel }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '创建订单失败');
+    currentOrder = data.order;
+    currentBuyerEmail = email.toLowerCase();
+    localStorage.setItem('lirio-buyer-email', currentBuyerEmail);
+    if (data.settings) storeState.settings = data.settings;
+    if (data.sandboxPayEnabled !== undefined) storeState.sandboxPayEnabled = data.sandboxPayEnabled;
+
+    document.getElementById('payOrderNo').textContent = currentOrder.orderNo;
+    document.getElementById('payNoticeText').textContent =
+      storeState.settings?.paymentNotice || FALLBACK_STORE.settings.paymentNotice;
+    renderQrBox(channel);
+
+    const extUrl = getShopUrlForPlan(selectedPlan.id);
+    const extBtn = document.getElementById('payExternalShopBtn');
+    if (extUrl) {
+      extBtn.href = extUrl;
+      extBtn.hidden = false;
+    } else {
+      extBtn.hidden = true;
+    }
+
+    document.getElementById('sandboxPayBtn').hidden = !storeState.sandboxPayEnabled;
+    document.getElementById('checkoutPayErr').hidden = true;
+    showCheckoutStep('pay');
+    startOrderPoll();
+  } catch (err) {
+    errEl.textContent = err.message || String(err);
+    errEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '提交订单并获取收款码';
+  }
+});
+
+document.getElementById('backToFormBtn').addEventListener('click', () => {
+  stopOrderPoll();
+  showCheckoutStep('form');
+});
+
+document.getElementById('copyOrderNoBtn').addEventListener('click', async () => {
+  const no = document.getElementById('payOrderNo').textContent;
+  await navigator.clipboard.writeText(no);
+  const btn = document.getElementById('copyOrderNoBtn');
+  btn.textContent = '已复制';
+  setTimeout(() => { btn.textContent = '复制订单号'; }, 1500);
+});
+
+document.getElementById('sandboxPayBtn').addEventListener('click', async () => {
+  if (!currentOrder || !currentBuyerEmail) return;
+  const errEl = document.getElementById('checkoutPayErr');
+  errEl.hidden = true;
+  const btn = document.getElementById('sandboxPayBtn');
+  btn.disabled = true;
+  btn.textContent = '正在模拟确认并生成卡密…';
+  try {
+    const res = await fetch(`/api/orders/${encodeURIComponent(currentOrder.orderNo)}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ simulate: true, email: currentBuyerEmail }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '模拟发卡失败');
+    currentOrder = data.order;
+    showIssuedCode(data.order.issuedCode);
+  } catch (err) {
+    errEl.textContent = err.message || String(err);
+    errEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '本地演示：一键模拟支付成功并生成卡密';
+  }
+});
+
+document.getElementById('copyIssuedCodeBtn').addEventListener('click', async () => {
+  const code = document.getElementById('issuedCodeBox').textContent.trim();
+  await navigator.clipboard.writeText(code);
+  const btn = document.getElementById('copyIssuedCodeBtn');
+  btn.textContent = '已复制到剪贴板';
+  setTimeout(() => { btn.textContent = '复制卡密兑换码'; }, 1800);
+});
+
+// Lookup orders by email
+document.getElementById('lookupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('lookupEmail').value.trim();
+  const orderNo = document.getElementById('lookupOrderNo').value.trim();
+  const box = document.getElementById('lookupResults');
+  box.hidden = false;
+  box.innerHTML = '<div class="lookup-row">查询中…</div>';
+  try {
+    const qs = new URLSearchParams({ email, ...(orderNo ? { orderNo } : {}) });
+    const res = await fetch(`/api/orders/lookup?${qs.toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '查询失败');
+    if (!data.orders?.length) {
+      box.innerHTML = '<div class="lookup-row">未找到该邮箱下的订单记录，请确认下单邮箱是否填写一致。</div>';
+      return;
+    }
+    box.innerHTML = data.orders
+      .map((o) => {
+        const statusText =
+          o.status === 'paid' ? '已发卡' : o.status === 'cancelled' ? '已取消' : '待确认收款';
+        return `
+          <div class="lookup-row">
+            <div>
+              <strong>${esc(o.orderNo)}</strong> · ${esc(o.label)} · ¥${esc(o.payYuan)} · <span>${esc(statusText)}</span>
+            </div>
+            ${
+              o.issuedCode
+                ? `<div style="display:flex;align-items:center;gap:8px;">
+                     <span class="lookup-code">${esc(o.issuedCode)}</span>
+                     <button type="button" class="mini-btn" data-copy-code="${esc(o.issuedCode)}">复制</button>
+                   </div>`
+                : '<span class="platform-meta">确认收款后刷新即可查看卡密</span>'
+            }
+          </div>
+        `;
+      })
+      .join('');
+  } catch (err) {
+    box.innerHTML = `<div class="lookup-row">${esc(err.message || String(err))}</div>`;
+  }
+});
+
+document.getElementById('lookupResults').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-copy-code]');
+  if (!btn) return;
+  await navigator.clipboard.writeText(btn.getAttribute('data-copy-code'));
+  btn.textContent = '已复制';
+  setTimeout(() => { btn.textContent = '复制'; }, 1500);
+});
+
 async function initSite() {
+  renderStorefront();
+
+  // Fetch live storefront config from backend when served by Lirio Pro Server
+  try {
+    const storeRes = await fetch('/api/store/config', { cache: 'no-store' });
+    if (storeRes.ok) {
+      const cfg = await storeRes.json();
+      if (cfg?.presets) {
+        storeState = cfg;
+        renderStorefront();
+      }
+    }
+  } catch {}
+
   const res = await fetch('./versions.json', { cache: 'no-store' });
   if (!res.ok) return;
   const data = await res.json();
@@ -48,15 +436,20 @@ async function initSite() {
       const p = data.platforms[key];
       if (!p) return '';
       const isRec = key === os;
+      const badge = isRec
+        ? '<span class="ver-pill">推荐</span>'
+        : p.statusNote
+          ? `<span class="platform-meta">${esc(p.statusNote)}</span>`
+          : `<span class="platform-meta">${esc(p.format)}</span>`;
       return `
         <div class="platform-card${isRec ? ' recommended' : ''}">
           <div class="platform-top">
             <strong>${esc(p.label)}</strong>
-            ${isRec ? '<span class="ver-pill">推荐</span>' : `<span class="platform-meta">${esc(p.format)}</span>`}
+            ${badge}
           </div>
           <div class="platform-meta">${esc(p.arch)} · ${esc(p.minOs)}</div>
           <div class="platform-ver">v${esc(p.version)}${p.autoUpdate ? ' · 支持自动更新' : ''}</div>
-          <a class="platform-btn" href="${esc(p.downloadUrl)}">下载 ${esc(p.format)}</a>
+          <a class="platform-btn" href="${esc(p.downloadUrl)}">${key === 'ios' ? '查看 / 获取 iOS 包' : `下载 ${esc(p.format)}`}</a>
         </div>
       `;
     })

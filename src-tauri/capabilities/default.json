@@ -29,6 +29,7 @@
     "fs:allow-read-file",
     "fs:allow-mkdir",
     "updater:default",
-    "process:default"
+    "process:default",
+    "shell:allow-open"
   ]
 }

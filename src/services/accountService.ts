@@ -38,6 +38,51 @@ export interface RechargePack {
   note: string;
 }
 
+export interface StorePreset {
+  id: string;
+  payYuan: number;
+  label: string;
+  shortTitle?: string;
+  badge?: string;
+  subtitle?: string;
+  amountUnits: number;
+  upgradeToPro: boolean;
+  note?: string;
+}
+
+export interface StoreSettings {
+  wechatQr: string;
+  alipayQr: string;
+  shopUrlPro99: string;
+  shopUrlTopup10: string;
+  shopUrlTopup30: string;
+  supportContact: string;
+  paymentNotice: string;
+}
+
+export interface StoreConfig {
+  presets: StorePreset[];
+  settings: StoreSettings;
+  sandboxPayEnabled: boolean;
+}
+
+export interface StoreOrder {
+  id: string;
+  orderNo: string;
+  planId: string;
+  label: string;
+  payYuan: number;
+  amountUnits: number;
+  upgradeToPro: boolean;
+  buyerEmail: string;
+  payChannel: 'wechat' | 'alipay';
+  status: 'pending' | 'paid' | 'cancelled';
+  issuedCode: string | null;
+  note: string;
+  createdAt: number;
+  paidAt: number | null;
+}
+
 export interface AccountState {
   serverUrl: string;
   token: string | null;
@@ -230,6 +275,46 @@ export async function rechargeAccount(packageId: string): Promise<{
   );
   updateAccountState({ user: res.user, aiMode: 'pro_balance' });
   return res;
+}
+
+export function getStoreWebsiteUrl(): string {
+  const st = getAccountState();
+  const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  return `${base}/site/#buy`;
+}
+
+export async function fetchStoreConfig(): Promise<StoreConfig> {
+  return apiFetch<StoreConfig>('/api/store/config');
+}
+
+export async function createStoreOrder(opts: {
+  planId: string;
+  buyerEmail: string;
+  payChannel: 'wechat' | 'alipay';
+}): Promise<{ order: StoreOrder; settings: StoreSettings; sandboxPayEnabled: boolean }> {
+  return apiFetch<{ order: StoreOrder; settings: StoreSettings; sandboxPayEnabled: boolean }>('/api/orders', {
+    method: 'POST',
+    body: JSON.stringify(opts),
+  });
+}
+
+export async function fetchStoreOrder(
+  orderNo: string,
+  email: string,
+): Promise<{ order: StoreOrder; sandboxPayEnabled: boolean }> {
+  return apiFetch<{ order: StoreOrder; sandboxPayEnabled: boolean }>(
+    `/api/orders/${encodeURIComponent(orderNo)}?email=${encodeURIComponent(email)}`,
+  );
+}
+
+export async function simulatePayStoreOrder(
+  orderNo: string,
+  email: string,
+): Promise<{ order: StoreOrder }> {
+  return apiFetch<{ order: StoreOrder }>(`/api/orders/${encodeURIComponent(orderNo)}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ simulate: true, email }),
+  });
 }
 
 export async function redeemCode(code: string): Promise<{

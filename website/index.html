@@ -16,26 +16,92 @@
       </a>
       <nav class="nav-links">
         <a href="#features">核心功能</a>
+        <a href="#buy">购买卡密</a>
         <a href="#download">四端下载</a>
         <a href="#pricing">费用透明</a>
-        <a href="#versions">版本控制</a>
+        <a href="#faq">常见问题</a>
       </nav>
-      <button type="button" id="themeBtn" class="theme-btn" aria-label="切换主题">深色</button>
+      <div class="nav-actions">
+        <button type="button" id="themeBtn" class="theme-btn" aria-label="切换主题">深色</button>
+        <a class="btn-nav-buy" href="#buy">购买卡密</a>
+      </div>
     </div>
   </header>
 
   <main id="top">
     <section class="hero">
-      <img class="hero-mark" src="./assets/lirio-icon.png" alt="Lirio" />
-      <h1>把精听、拼写和雅思模考<br />装进一个安静好用的 App</h1>
+      <span class="hero-eyebrow">内置免费本地语音模型 · 音频自动切分 0 Token · 一次买断</span>
+      <div class="hero-title-row">
+        <img class="hero-mark" src="./assets/lirio-icon.png" alt="Lirio" />
+        <h1>把精听、拼写和雅思模考<br />装进一个安静好用的 App</h1>
+      </div>
       <p class="hero-sub">
-        ¥99 一次买断软件，内置免费本地语音模型；上传音频自动分句切分 0 Token 消耗，AI 对话与复盘按量计费。
+        ¥99 一次买断四端软件，自带离线语音识别与合成；上传听力音频自动切分 0 Token 消耗，AI 模考与复盘按实际用量透明扣费。
       </p>
       <div class="hero-actions">
-        <a id="primaryDownloadBtn" class="btn-primary" href="#download">立即下载</a>
-        <a class="btn-ghost" href="#download">查看四端版本</a>
+        <a class="btn-primary" href="#buy">¥99 立即购买卡密</a>
+        <a id="primaryDownloadBtn" class="btn-ghost" href="#download">下载客户端</a>
       </div>
-      <div id="heroOsHint" class="hero-meta">支持 macOS · Windows · Android · iPhone</div>
+      <div class="hero-metrics">
+        <div class="metric-pill"><strong>¥99</strong><span>一次买断 · 四端通用</span></div>
+        <div class="metric-pill"><strong>¥0</strong><span>本地语音 &amp; 音频切分</span></div>
+        <div class="metric-pill"><strong>¥10</strong><span>约用 80–270 场模考</span></div>
+      </div>
+
+      <div class="preview-shell" aria-label="产品界面预览">
+        <div class="preview-topbar">
+          <div class="preview-dots"><span></span><span></span><span></span></div>
+          <div class="preview-tabs" role="tablist">
+            <button type="button" class="preview-tab active" data-preview="dictation">精听逐词分空</button>
+            <button type="button" class="preview-tab" data-preview="vocab">单词清脆听写</button>
+            <button type="button" class="preview-tab" data-preview="speak">2026 雅思考官复盘</button>
+          </div>
+          <span class="preview-badge">0 Token 本地引擎</span>
+        </div>
+
+        <div class="preview-body">
+          <div class="preview-pane active" data-pane="dictation">
+            <div class="mock-sentence">
+              <span class="mock-chip ok">The</span>
+              <span class="mock-chip ok">coastal</span>
+              <span class="mock-chip focus">ecosystem</span>
+              <span class="mock-chip blank">_______</span>
+              <span class="mock-chip ok">rapidly</span>
+            </div>
+            <div class="mock-meta-row">
+              <span>第 14 / 42 句 · 0.85x 慢速二听 · 本地 Whisper 自动断句（0 Token）</span>
+              <span class="mock-accent-pill">已自动诊断：弱读连读漏听</span>
+            </div>
+          </div>
+
+          <div class="preview-pane" data-pane="vocab">
+            <div class="mock-vocab-card">
+              <div>
+                <div class="mock-word">sustainable <small>/səˈsteɪnəbl/</small></div>
+                <div class="mock-word-sub">adj. 可持续的 · 雅思 807 高频核心词</div>
+              </div>
+              <div class="mock-sound-pill">机械键盘清脆敲击音 · 语音输入自动静音</div>
+            </div>
+          </div>
+
+          <div class="preview-pane" data-pane="speak">
+            <div class="mock-chat">
+              <div class="mock-bubble ai">
+                <strong>Examiner · Part 2</strong>
+                Tell me about a quiet place in your hometown where you like to spend time.
+              </div>
+              <div class="mock-bubble user">
+                <strong>你</strong>
+                I often visit an old botanical garden near the river because it helps me unwind after work.
+              </div>
+              <div class="mock-polish">
+                <span>地道表达复盘 · 预估 ¥0.04</span>
+                <em>“unwind after work” → 可升级为 “recharge away from the hustle and bustle”（4 维评分已生成）</em>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="features" class="section">
@@ -49,13 +115,47 @@
         <article class="card">
           <span class="tag">单词拼写</span>
           <h3>雅思高频词卡 · 错词专练</h3>
-          <p>精选雅思听力高频语料，支持卡片逐词、随身听与乱序听写；物理打字带清脆敲击音，语音输入自动静音，生词在精听/口语中可划词一键收录。</p>
+          <p>精选雅思听力高频语料，支持卡片逐词、随身听与乱序听写；物理打字带清脆敲击音，语音输入自动静音，生词在精听与口语中可划词一键收录。</p>
         </article>
         <article class="card">
           <span class="tag">口语与模考</span>
           <h3>双语陪练 + 2026 雅思考官</h3>
           <p>支持中英混说语音通话，考官严格按 Part 1 → 2 → 3 追问。每场对话与模考结束都生成四维评分、逐题高分示范与地道表达复盘。</p>
         </article>
+      </div>
+    </section>
+
+    <section id="buy" class="section">
+      <div class="section-head">
+        <div>
+          <h2>购买卡密 · 一人一码即时兑换</h2>
+          <p class="section-sub">先下载安装 App 免费体验，满意后再购买卡密解锁永久版或补充对话余额。</p>
+        </div>
+        <span id="storeModePill" class="ver-pill">单次唯一卡密 · 永久有效</span>
+      </div>
+
+      <div class="flow-strip">
+        <div class="flow-step"><em>01</em><strong>下载安装客户端</strong><span>支持 Mac / Win / Android</span></div>
+        <div class="flow-step"><em>02</em><strong>下方选档下单付款</strong><span>微信 / 支付宝或官方店铺</span></div>
+        <div class="flow-step"><em>03</em><strong>复制卡密 App 内兑换</strong><span>设置 → AI 与账号 → 立即到账</span></div>
+      </div>
+
+      <div id="packGrid" class="pack-grid"></div>
+
+      <div class="lookup-card">
+        <div class="lookup-head">
+          <div>
+            <strong>已付款？查询订单 / 找回已发卡密</strong>
+            <p>输入下单时填写的邮箱即可找回最近订单与已发放的激活码。</p>
+          </div>
+          <span id="supportContactText" class="lookup-support">售后联系：support@lirio.app</span>
+        </div>
+        <form id="lookupForm" class="lookup-form">
+          <input id="lookupEmail" type="email" placeholder="输入下单邮箱（例如 you@example.com）" required />
+          <input id="lookupOrderNo" type="text" placeholder="订单号（选填，如 LR-261126-XXXXXX）" />
+          <button type="submit" class="btn-primary">查询订单</button>
+        </form>
+        <div id="lookupResults" class="lookup-results" hidden></div>
       </div>
     </section>
 
@@ -74,8 +174,8 @@
       <h2>为什么 ¥99 买断 + ¥10 余额能用很久？</h2>
       <div class="pricing-box">
         <div class="pricing-lead">
-          <div class="price-big">¥99 <span>一次买断软件</span></div>
-          <p>买回去即自带全套本地语音模型（ASR 识别 + 离线语音合成），日常听写、词卡、导入切分全部 ¥0。仅云端 AI 推理按量扣费（支持登录充值或填写自己的 API Key）。</p>
+          <div class="price-big">¥99 <span>一次买断软件（含 ¥10 对话余额）</span></div>
+          <p>买回去即自带全套本地语音模型（ASR 识别 + 离线语音合成），日常听写、词卡、导入切分全部 ¥0。仅云端 AI 推理按量扣费（也支持在设置里改用自己的 DeepSeek API Key）。</p>
         </div>
         <div class="table-wrap">
           <table>
@@ -89,7 +189,7 @@
             </thead>
             <tbody>
               <tr>
-                <td><strong>自定义上传音频 & 自动分句切分</strong></td>
+                <td><strong>自定义上传音频 &amp; 自动分句切分</strong></td>
                 <td>本机离线运行（0 Token）</td>
                 <td class="free">¥0 免费</td>
                 <td class="free">无限次</td>
@@ -124,6 +224,28 @@
       </div>
     </section>
 
+    <section id="faq" class="section">
+      <h2>常见问题</h2>
+      <div class="faq-list">
+        <details class="faq-item" open>
+          <summary>¥99 买断卡密包含哪些权益？会按月续费吗？</summary>
+          <p>不会按月续费。¥99 为软件本体一次买断激活码，兑换后永久解锁 Pro 身份并赠送 ¥10 对话余额。软件本身的听力精听、单词听写、本地 Whisper 语音识别与音频切分永久免费。</p>
+        </details>
+        <details class="faq-item">
+          <summary>为什么你们不卖高价 AI 年卡，而用卡密按量计费？</summary>
+          <p>因为语言学习 90% 的时间都在本地听音频和打字练习。只在你开启 AI 口语考官、地道复盘和错因诊断时消耗 DeepSeek Token，¥10 余额足够大多数同学备考 1–2 个月。</p>
+        </details>
+        <details class="faq-item">
+          <summary>用户在客户端会拿到服务端的 DeepSeek API Key 吗？</summary>
+          <p>不会。DeepSeek 主 Key 仅保存在服务端环境变量中，客户端只持有你个人的登录 JWT 令牌并通过服务端按量扣费代理调用。</p>
+        </details>
+        <details class="faq-item">
+          <summary>目前 iPhone 怎么用？</summary>
+          <p>iOS 因苹果签名政策要求正在筹备 TestFlight 公测通道；在此之前，iPhone 可通过 Safari 访问部署后的响应式网页端直接练词汇和口语复盘，或先使用 Mac / Windows / Android 原生端。</p>
+        </details>
+      </div>
+    </section>
+
     <section id="versions" class="section">
       <h2>版本控制与更新记录</h2>
       <div id="historyList" class="history-list"></div>
@@ -134,6 +256,71 @@
     <span>Lirio · 精听 · 拼写 · 对话</span>
     <span id="footerVersion">Version 0.5.2</span>
   </footer>
+
+  <!-- Checkout Modal -->
+  <div id="checkoutModal" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
+      <div class="modal-head">
+        <div>
+          <span class="tag">卡密收银台</span>
+          <h3 id="checkoutTitle">购买卡密</h3>
+        </div>
+        <button type="button" id="closeCheckoutBtn" class="modal-close" aria-label="关闭">×</button>
+      </div>
+
+      <div id="checkoutPlanBar" class="checkout-plan-bar"></div>
+
+      <!-- Step 1: Confirm email & payment method -->
+      <form id="checkoutStepForm" class="checkout-step">
+        <label class="field-label" for="checkoutEmail">接收 / 查询卡密的邮箱</label>
+        <input id="checkoutEmail" type="email" placeholder="输入你的常用邮箱，付款后可随时找回卡密" required />
+
+        <div class="field-label">选择付款方式</div>
+        <div class="channel-grid">
+          <label class="channel-opt active">
+            <input type="radio" name="payChannel" value="wechat" checked />
+            <span>微信支付</span>
+          </label>
+          <label class="channel-opt">
+            <input type="radio" name="payChannel" value="alipay" />
+            <span>支付宝</span>
+          </label>
+        </div>
+
+        <div id="checkoutFormErr" class="checkout-err" hidden></div>
+        <button type="submit" id="createOrderBtn" class="btn-primary full-width">提交订单并获取收款码</button>
+      </form>
+
+      <!-- Step 2: Pay QR & wait confirmation -->
+      <div id="checkoutStepPay" class="checkout-step" hidden>
+        <div class="order-no-row">
+          <span>订单号：<strong id="payOrderNo">-</strong></span>
+          <button type="button" id="copyOrderNoBtn" class="mini-btn">复制订单号</button>
+        </div>
+
+        <div id="payQrBox" class="pay-qr-box"></div>
+        <p id="payNoticeText" class="pay-notice"></p>
+        <div id="payWaitingBanner" class="waiting-banner">等待核实收款，核实后页面将自动弹出卡密兑换码…</div>
+
+        <div class="pay-actions-stack">
+          <a id="payExternalShopBtn" class="btn-ghost full-width" href="#" target="_blank" rel="noopener noreferrer" hidden>前往官方发卡店铺付款 ↗</a>
+          <button type="button" id="sandboxPayBtn" class="sandbox-btn" hidden>本地演示：一键模拟支付成功并生成卡密</button>
+          <button type="button" id="backToFormBtn" class="mini-btn">返回修改邮箱或换个套餐</button>
+        </div>
+        <div id="checkoutPayErr" class="checkout-err" hidden></div>
+      </div>
+
+      <!-- Step 3: Code issued -->
+      <div id="checkoutStepSuccess" class="checkout-step" hidden>
+        <div class="success-banner">付款已确认 · 唯一卡密已生成</div>
+        <div id="issuedCodeBox" class="issued-code-box">LIRIO-XXXX-XXXX-XXXX</div>
+        <button type="button" id="copyIssuedCodeBtn" class="btn-primary full-width">复制卡密兑换码</button>
+        <p class="issued-guide">
+          打开 Lirio App → 右上角「设置」→「AI 与账号」→ 登录后粘贴卡密并点击「兑换」，余额与买断身份立即到账。
+        </p>
+      </div>
+    </div>
+  </div>
 
   <script src="./app.js"></script>
 </body>

@@ -2,21 +2,29 @@ import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile } from '@tauri-apps/plugin-fs';
+import { open as openExternalUrl } from '@tauri-apps/plugin-shell';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import type { Accent } from '../../services/corpusService';
 import {
+  createStoreOrder,
   fetchBillingLedger,
+  fetchStoreConfig,
+  fetchStoreOrder,
   formatYuan,
   getAccountState,
+  getStoreWebsiteUrl,
   loginAccount,
   logoutAccount,
   redeemCode,
   refreshAccountMe,
   registerAccount,
+  simulatePayStoreOrder,
   subscribeAccount,
   updateAccountState,
   type AccountState,
   type LedgerEntry,
+  type StoreConfig,
+  type StoreOrder,
 } from '../../services/accountService';
 import { exportAllStateJson, importAllStateJson } from '../../services/stateSync';
 import {
@@ -96,6 +104,11 @@ export function GlobalSettingsModal({
   const [showServerUrl, setShowServerUrl] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [redeemInput, setRedeemInput] = useState('');
+  const [showBuyPanel, setShowBuyPanel] = useState(false);
+  const [storeConfig, setStoreConfig] = useState<StoreConfig | null>(null);
+  const [storeBusy, setStoreBusy] = useState(false);
+  const [buyChannel, setBuyChannel] = useState<'wechat' | 'alipay'>('wechat');
+  const [activeOrder, setActiveOrder] = useState<StoreOrder | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [ledgerBusy, setLedgerBusy] = useState(false);
 
@@ -163,6 +176,20 @@ export function GlobalSettingsModal({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !showBuyPanel || !activeOrder || activeOrder.status !== 'pending') return;
+    const emailForOrder = activeOrder.buyerEmail || account.user?.email || '';
+    if (!emailForOrder) return;
+    const timer = window.setInterval(() => {
+      fetchStoreOrder(activeOrder.orderNo, emailForOrder)
+        .then((res) => {
+          if (res.order) setActiveOrder(res.order);
+        })
+        .catch(() => {});
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [isOpen, showBuyPanel, activeOrder, account.user?.email]);
+
   if (!isOpen) return null;
 
   const config = persisted.config;
@@ -202,8 +229,8 @@ export function GlobalSettingsModal({
     }
   };
 
-  const handleRedeemCode = async () => {
-    const code = redeemInput.trim();
+  const handleRedeemCode = async (overrideCode?: string) => {
+    const code = (overrideCode ?? redeemInput).trim();
     if (!code) {
       setErrorMsg('请输入卡密兑换码。');
       return;
@@ -214,12 +241,76 @@ export function GlobalSettingsModal({
     try {
       const res = await redeemCode(code);
       setLedger(res.ledger || []);
-      setRedeemInput('');
+      if (!overrideCode) setRedeemInput('');
+      setActiveOrder(null);
+      setShowBuyPanel(false);
       setStatusMsg(`兑换成功 +${formatYuan(res.entry.amountUnits, 2)}`);
     } catch (e) {
       setErrorMsg(String(e));
     } finally {
       setAuthBusy(false);
+    }
+  };
+
+  const openUrlSafe = async (url: string) => {
+    try {
+      await openExternalUrl(url);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleToggleBuyPanel = async () => {
+    const next = !showBuyPanel;
+    setShowBuyPanel(next);
+    setErrorMsg('');
+    if (next && !storeConfig) {
+      setStoreBusy(true);
+      try {
+        const cfg = await fetchStoreConfig();
+        setStoreConfig(cfg);
+      } catch (e) {
+        setErrorMsg(String(e));
+      } finally {
+        setStoreBusy(false);
+      }
+    }
+  };
+
+  const handleCreateOrder = async (planId: string) => {
+    const buyerEmail = account.user?.email || '';
+    if (!buyerEmail) {
+      setErrorMsg('请先登录账号再下单。');
+      return;
+    }
+    setStoreBusy(true);
+    setErrorMsg('');
+    try {
+      const res = await createStoreOrder({ planId, buyerEmail, payChannel: buyChannel });
+      setActiveOrder(res.order);
+      setStoreConfig((prev) => ({
+        presets: prev?.presets || [],
+        settings: res.settings,
+        sandboxPayEnabled: res.sandboxPayEnabled,
+      }));
+    } catch (e) {
+      setErrorMsg(String(e));
+    } finally {
+      setStoreBusy(false);
+    }
+  };
+
+  const handleSimulatePay = async () => {
+    if (!activeOrder) return;
+    setStoreBusy(true);
+    setErrorMsg('');
+    try {
+      const res = await simulatePayStoreOrder(activeOrder.orderNo, activeOrder.buyerEmail);
+      setActiveOrder(res.order);
+    } catch (e) {
+      setErrorMsg(String(e));
+    } finally {
+      setStoreBusy(false);
     }
   };
 
@@ -446,6 +537,13 @@ export function GlobalSettingsModal({
                   <div className="settings-rate-tip" style={{ textAlign: 'center' }}>
                     按量扣费 · 文本 ¥3~6/百万 tok · 本地语音免费
                   </div>
+                  <button
+                    type="button"
+                    className="link-inline-btn"
+                    onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
+                  >
+                    还没卡密？前往官网购买 ¥99 买断卡密 ↗
+                  </button>
                 </div>
               ) : (
                 <>
@@ -522,6 +620,154 @@ export function GlobalSettingsModal({
                       </div>
                       <div className="sub">支持 ¥99 买断激活码与余额充值码，兑换后立即到账</div>
                     </div>
+
+                    <div className="redeem-actions-row">
+                      <button
+                        type="button"
+                        className="ghost-pill-btn"
+                        onClick={() => void handleToggleBuyPanel()}
+                      >
+                        {showBuyPanel ? '收起购卡' : '购买卡密'}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-pill-btn"
+                        onClick={() => void openUrlSafe(getStoreWebsiteUrl())}
+                      >
+                        官网购卡页 ↗
+                      </button>
+                    </div>
+
+                    {showBuyPanel && (
+                      <div className="buy-code-panel">
+                        {!activeOrder ? (
+                          <>
+                            <div className="buy-channel-bar">
+                              <span>支付方式</span>
+                              <div className="buy-channel-pills">
+                                <button
+                                  type="button"
+                                  className={buyChannel === 'wechat' ? 'active' : ''}
+                                  onClick={() => setBuyChannel('wechat')}
+                                >
+                                  微信支付
+                                </button>
+                                <button
+                                  type="button"
+                                  className={buyChannel === 'alipay' ? 'active' : ''}
+                                  onClick={() => setBuyChannel('alipay')}
+                                >
+                                  支付宝
+                                </button>
+                              </div>
+                            </div>
+                            {storeBusy && !storeConfig?.presets?.length ? (
+                              <div className="sub">正在加载卡密套餐…</div>
+                            ) : (
+                              <div className="buy-pack-grid">
+                                {(storeConfig?.presets || []).map((p) => {
+                                  const st = storeConfig?.settings;
+                                  const extUrl =
+                                    p.id === 'pro_99'
+                                      ? st?.shopUrlPro99
+                                      : p.id === 'topup_10'
+                                        ? st?.shopUrlTopup10
+                                        : st?.shopUrlTopup30;
+                                  return (
+                                    <div key={p.id} className="buy-pack-card">
+                                      <div className="buy-pack-head">
+                                        <strong>{p.shortTitle || p.label}</strong>
+                                        <span>¥{p.payYuan}</span>
+                                      </div>
+                                      <small>{p.subtitle || p.note}</small>
+                                      <div className="buy-pack-btns">
+                                        {extUrl ? (
+                                          <button
+                                            type="button"
+                                            className="ghost-pill-btn"
+                                            onClick={() => void openUrlSafe(extUrl)}
+                                          >
+                                            店铺购卡 ↗
+                                          </button>
+                                        ) : null}
+                                        <button
+                                          type="button"
+                                          className="primary-btn"
+                                          disabled={storeBusy}
+                                          onClick={() => void handleCreateOrder(p.id)}
+                                        >
+                                          应用内下单
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </>
+                        ) : activeOrder.status === 'paid' && activeOrder.issuedCode ? (
+                          <div className="buy-order-box">
+                            <div className="sub">收款已确认 · 卡密已生成（{activeOrder.orderNo}）</div>
+                            <div className="buy-issued-code">{activeOrder.issuedCode}</div>
+                            <div className="redeem-actions-row">
+                              <button
+                                type="button"
+                                className="primary-btn"
+                                disabled={authBusy}
+                                onClick={() => void handleRedeemCode(activeOrder.issuedCode!)}
+                              >
+                                一键立即兑换到当前账号
+                              </button>
+                              <button
+                                type="button"
+                                className="ghost-pill-btn"
+                                onClick={() => setActiveOrder(null)}
+                              >
+                                返回
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="buy-order-box">
+                            <div className="buy-pack-head">
+                              <strong>订单 {activeOrder.orderNo}</strong>
+                              <span>实付 ¥{activeOrder.payYuan}</span>
+                            </div>
+                            {((buyChannel === 'alipay' ? storeConfig?.settings?.alipayQr : storeConfig?.settings?.wechatQr) || '') ? (
+                              <img
+                                className="buy-qr-img"
+                                src={buyChannel === 'alipay' ? storeConfig!.settings.alipayQr : storeConfig!.settings.wechatQr}
+                                alt="收款码"
+                              />
+                            ) : (
+                              <div className="sub">店主尚未上传二维码，可点击「官网购卡页」查看详情或联系客服</div>
+                            )}
+                            <div className="sub">
+                              {storeConfig?.settings?.paymentNotice || '付款后页面每 2.5 秒自动查询核实并出码…'}
+                            </div>
+                            <div className="redeem-actions-row">
+                              {storeConfig?.sandboxPayEnabled && (
+                                <button
+                                  type="button"
+                                  className="ghost-pill-btn"
+                                  disabled={storeBusy}
+                                  onClick={() => void handleSimulatePay()}
+                                >
+                                  本地演示：模拟支付并出码
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="ghost-pill-btn"
+                                onClick={() => setActiveOrder(null)}
+                              >
+                                取消返回
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="settings-row-between">

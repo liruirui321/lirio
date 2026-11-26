@@ -362,7 +362,106 @@ try {
     delete process.env.LIRIO_ADMIN_TOKEN;
   }
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (13/13)');
+  // 14. Verify storefront config, order checkout, QR settings, sandbox & admin confirmation, lookup, TXT export, and redemption
+  const storeCfg1 = await req('GET', '/api/store/config');
+  assert.equal(storeCfg1.status, 200);
+  assert.equal(storeCfg1.json.presets.length, 3);
+  assert.equal(storeCfg1.json.sandboxPayEnabled, true);
+
+  const saveSettingsRes = await req('POST', '/api/admin/settings', {
+    wechatQr: 'data:image/png;base64,iVBORw0KGgo=',
+    shopUrlPro99: 'https://shop.lirio.app/pro99',
+    supportContact: '售后微信：lirio-help',
+  });
+  assert.equal(saveSettingsRes.status, 200);
+  assert.equal(saveSettingsRes.json.settings.shopUrlPro99, 'https://shop.lirio.app/pro99');
+
+  const storeCfg2 = await req('GET', '/api/store/config');
+  assert.equal(storeCfg2.json.settings.wechatQr, 'data:image/png;base64,iVBORw0KGgo=');
+  assert.equal(storeCfg2.json.settings.supportContact, '售后微信：lirio-help');
+
+  const orderRes = await req('POST', '/api/orders', {
+    planId: 'pro_99',
+    buyerEmail: 'Buyer@Lirio.App',
+    payChannel: 'wechat',
+  });
+  assert.equal(orderRes.status, 201);
+  const ordNo = orderRes.json.order.orderNo;
+  assert.ok(ordNo.startsWith('LR-'));
+  assert.equal(orderRes.json.order.status, 'pending');
+
+  const wrongOwnerGet = await req('GET', `/api/orders/${ordNo}?email=other@lirio.app`);
+  assert.equal(wrongOwnerGet.status, 403);
+  const ownerGet = await req('GET', `/api/orders/${ordNo}?email=buyer@lirio.app`);
+  assert.equal(ownerGet.status, 200);
+  assert.equal(ownerGet.json.order.orderNo, ordNo);
+
+  const confirmOrderRes = await req('POST', `/api/orders/${ordNo}/confirm`, {
+    simulate: true,
+    email: 'buyer@lirio.app',
+  });
+  assert.equal(confirmOrderRes.status, 200);
+  assert.equal(confirmOrderRes.json.order.status, 'paid');
+  const issuedCode = confirmOrderRes.json.order.issuedCode;
+  assert.ok(issuedCode.startsWith('LIRIO-'));
+
+  const idempotentConfirm = await req('POST', `/api/orders/${ordNo}/confirm`, {
+    simulate: true,
+    email: 'buyer@lirio.app',
+  });
+  assert.equal(idempotentConfirm.status, 200);
+  assert.equal(idempotentConfirm.json.alreadyPaid, true);
+  assert.equal(idempotentConfirm.json.order.issuedCode, issuedCode);
+
+  const lookupRes = await req('GET', '/api/orders/lookup?email=buyer@lirio.app');
+  assert.equal(lookupRes.status, 200);
+  assert.ok(lookupRes.json.orders.some((o) => o.orderNo === ordNo && o.issuedCode === issuedCode));
+
+  const meBeforeOrderRedeem = await req('GET', '/api/auth/me', null, token);
+  const balBeforeOrderRedeem = meBeforeOrderRedeem.json.user.balanceUnits;
+  const orderRedeemRes = await req('POST', '/api/billing/redeem', { code: issuedCode }, token);
+  assert.equal(orderRedeemRes.status, 200);
+  assert.equal(orderRedeemRes.json.user.balanceUnits, balBeforeOrderRedeem + 100000);
+
+  const exportRes = await fetch(`${base}/api/admin/codes/export`);
+  assert.equal(exportRes.status, 200);
+  assert.ok((exportRes.headers.get('content-type') || '').includes('text/plain'));
+  const exportTxt = await exportRes.text();
+  assert.ok(exportTxt.includes('LIRIO-DEMO-9900-PRO1'));
+
+  process.env.NODE_ENV = 'production';
+  process.env.LIRIO_ADMIN_TOKEN = testAdminToken;
+  try {
+    const prodOrderRes = await req('POST', '/api/orders', {
+      planId: 'topup_10',
+      buyerEmail: 'prod-buyer@lirio.app',
+      payChannel: 'alipay',
+    });
+    assert.equal(prodOrderRes.status, 201);
+    const prodOrdNo = prodOrderRes.json.order.orderNo;
+
+    const blockedSandboxConfirm = await req('POST', `/api/orders/${prodOrdNo}/confirm`, {
+      simulate: true,
+      email: 'prod-buyer@lirio.app',
+    });
+    assert.equal(blockedSandboxConfirm.status, 401);
+
+    const adminConfirmRes = await fetch(`${base}/api/orders/${prodOrdNo}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': testAdminToken },
+      body: '{}',
+    });
+    assert.equal(adminConfirmRes.status, 200);
+    const adminConfirmJson = await adminConfirmRes.json();
+    assert.equal(adminConfirmJson.order.status, 'paid');
+    assert.ok(adminConfirmJson.order.issuedCode.startsWith('LIRIO-'));
+  } finally {
+    if (prevNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prevNodeEnv;
+    delete process.env.LIRIO_ADMIN_TOKEN;
+  }
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (14/14)');
 } finally {
   server.close();
 }
