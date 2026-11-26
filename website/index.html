@@ -397,8 +397,9 @@
 
       <!-- Step 1: Confirm account & payment method -->
       <form id="checkoutStepForm" class="checkout-step">
-        <label class="field-label" for="checkoutEmail">接收 / 查询卡密的账号或邮箱</label>
-        <input id="checkoutEmail" type="text" placeholder="输入你的 Lirio 账号或常用邮箱，付款后可随时找回卡密" required />
+        <label class="field-label" for="checkoutEmail">已注册的 Lirio 账号</label>
+        <input id="checkoutEmail" type="text" placeholder="请输入已在 Lirio 客户端注册的账号" required />
+        <p class="checkout-hint">需先在 Lirio 客户端完成注册，未注册账号无法提交订单。</p>
 
         <div class="field-label">选择付款方式</div>
         <div class="channel-grid">
@@ -430,7 +431,7 @@
         <div class="pay-actions-stack">
           <a id="payExternalShopBtn" class="btn-ghost full-width" href="#" target="_blank" rel="noopener noreferrer" hidden>前往官方发卡店铺付款 ↗</a>
           <button type="button" id="sandboxPayBtn" class="sandbox-btn" hidden>本地演示：一键模拟支付成功并生成卡密</button>
-          <button type="button" id="backToFormBtn" class="mini-btn">返回修改邮箱或换个套餐</button>
+          <button type="button" id="backToFormBtn" class="mini-btn">返回修改账号或换个套餐</button>
         </div>
         <div id="checkoutPayErr" class="checkout-err" hidden></div>
       </div>

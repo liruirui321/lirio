@@ -1880,7 +1880,14 @@ export function createLirioServer({ dbPath } = {}) {
         }
         const buyerEmail = String(body.buyerEmail || '').trim().toLowerCase();
         if (!isValidAccountId(buyerEmail)) {
-          sendJson(res, 400, { error: '请输入有效的账号或邮箱（4–32 位）。' });
+          sendJson(res, 400, { error: '请输入有效的 Lirio 账号（4–32 位）。' });
+          return;
+        }
+        const existingUser = getUserByEmail(db, buyerEmail);
+        if (!existingUser) {
+          sendJson(res, 404, {
+            error: '该账号尚未注册，请先下载并在 Lirio 客户端中注册账号后再购买卡密。',
+          });
           return;
         }
         const order = createOrder(db, {

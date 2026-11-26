@@ -385,6 +385,21 @@ try {
   assert.equal(storeCfg2.json.settings.wechatQr, 'data:image/png;base64,iVBORw0KGgo=');
   assert.equal(storeCfg2.json.settings.supportContact, '售后微信：lirio-help');
 
+  const unregisteredOrderRes = await req('POST', '/api/orders', {
+    planId: 'pro_99',
+    buyerEmail: 'unregistered_user_999',
+    payChannel: 'wechat',
+  });
+  assert.equal(unregisteredOrderRes.status, 404);
+  assert.ok(unregisteredOrderRes.json.error.includes('未注册'));
+
+  const regBuyerRes = await req('POST', '/api/auth/register', {
+    email: 'buyer@lirio.app',
+    password: 'buyerPass123',
+    name: 'Buyer',
+  });
+  assert.equal(regBuyerRes.status, 201);
+
   const orderRes = await req('POST', '/api/orders', {
     planId: 'pro_99',
     buyerEmail: 'Buyer@Lirio.App',
@@ -437,6 +452,13 @@ try {
   process.env.NODE_ENV = 'production';
   process.env.LIRIO_ADMIN_TOKEN = testAdminToken;
   try {
+    const regProdBuyerRes = await req('POST', '/api/auth/register', {
+      email: 'prod-buyer@lirio.app',
+      password: 'prodBuyer123',
+      name: 'ProdBuyer',
+    });
+    assert.equal(regProdBuyerRes.status, 201);
+
     const prodOrderRes = await req('POST', '/api/orders', {
       planId: 'topup_10',
       buyerEmail: 'prod-buyer@lirio.app',
