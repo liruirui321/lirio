@@ -367,7 +367,7 @@ function buildOverview(db) {
     period: getDeepSeekPeriodLabel(),
     rates: {
       deepseek: getDeepSeekRatesPer1M(),
-      ttsPer1kCharsYuan: 0.03,
+      ttsPer1kCharsYuan: 0.06,
     },
     stats,
     users,
@@ -622,8 +622,8 @@ function renderDashboardHtml(overview, { adminAuthEnabled = false } = {}) {
   <section class="panel" id="panel-users">
     <div class="rates">
       <span>文本：输入 ¥3~6 / 缓存 ¥0.06~0.12 / 输出 ¥12~24（每百万 tok）</span>
-      <span>本地语音与音频自动切分：¥0（0 Token）</span>
-      <span>可选云端语音：¥0.03 / 千字</span>
+      <span>本地语音、转写与音频切分：¥0（免费，速度较慢）</span>
+      <span>可选云端语音（更快）：播音 ¥0.06 / 千字节 · 语音转写免费</span>
     </div>
     <div class="card">
       <div class="toolbar-row">
@@ -2068,7 +2068,7 @@ export function createLirioServer({ dbPath } = {}) {
         if (!authState) return;
         const user = authState.user;
         if (user.balanceUnits <= 0) {
-          sendJson(res, 402, { error: '当前余额不足，请充值或切换免费 Edge 语音。' });
+          sendJson(res, 402, { error: '当前余额不足，请充值或关闭云端语音以使用免费本地语音。' });
           return;
         }
         const body = await readJsonBody(req);
@@ -2109,7 +2109,7 @@ export function createLirioServer({ dbPath } = {}) {
         const asrModelEnv = (process.env.LIRIO_ASR_MODEL || 'whisper-1').trim();
         const isFreeAsrModel = asrModelEnv.includes('SenseVoiceSmall');
         if (!isFreeAsrModel && user.balanceUnits <= 0) {
-          sendJson(res, 402, { error: '当前余额不足，请充值或切换免费本地 Whisper。' });
+          sendJson(res, 402, { error: '当前余额不足，请充值或切换免费本地转写。' });
           return;
         }
         const body = await readJsonBody(req);

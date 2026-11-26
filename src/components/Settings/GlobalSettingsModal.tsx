@@ -962,7 +962,7 @@ export function GlobalSettingsModal({
                       </div>
                       <div className="pricing-mini-row">
                         <span>语音</span>
-                        <span>{account.proCloudSpeech ? '¥0.06 / 千字 · CosyVoice2' : '本地免费'}</span>
+                        <span>{account.proCloudSpeech ? '云端极速 · 播音 ¥0.06 / 千字节（转写免费）' : '本地免费（速度较慢）'}</span>
                       </div>
                     </div>
 
@@ -1165,15 +1165,18 @@ export function GlobalSettingsModal({
                     </div>
                     <label
                       className="settings-check-line"
-                      title="使用硅基流动 CosyVoice2 极速播音（约 0.5 秒出声，¥0.06/千字），关闭则使用免费本地语音"
+                      title="开启后使用云端语音播音与转写，响应更快（播音 ¥0.06 / 千字节，转写免费）；关闭后使用本地语音与转写，免费但速度较慢"
                     >
                       <input
                         type="checkbox"
                         checked={account.proCloudSpeech}
                         onChange={(e) => updateAccountState({ proCloudSpeech: e.target.checked })}
                       />
-                      云端语音
+                      云端语音（更快）
                     </label>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -4, lineHeight: 1.5 }}>
+                    云端语音与转写响应更快（播音 ¥0.06 / 千字节，转写免费）；关闭后使用本地转写与播音，免费但速度会慢一些。
                   </div>
 
                   <div className="ledger-section">
@@ -1584,7 +1587,7 @@ export function GlobalSettingsModal({
                 <div className="guide-block">
                   <strong>免费本地功能</strong>
                   <p>
-                    导入音频、自动断句、默认朗读、单词听写与错词本均本地运行，免费不限次。
+                    导入音频、自动断句、本地语音与转写、单词听写与错词本均本地运行，免费不限次（本地转写与播音速度会慢一些）。
                   </p>
                 </div>
                 <div className="guide-block">
@@ -1593,6 +1596,7 @@ export function GlobalSettingsModal({
                     <li>雅思模考 + 复盘：约 ¥0.04–¥0.12 / 场</li>
                     <li>双语陪练 + 复盘：约 ¥0.03–¥0.10 / 次</li>
                     <li>听力诊断 / 字幕精校：约 ¥0.005–¥0.01 / 次</li>
+                    <li>云端极速语音：播音 ¥0.06 / 千字节，云端转写免费（比本地响应更快）</li>
                   </ul>
                 </div>
               </div>

@@ -759,12 +759,20 @@ export class VadVoiceRecorder {
 }
 
 export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
+  const acct = getAccountState();
+  if (acct.aiMode === 'pro_balance' && acct.proCloudSpeech && acct.token) {
+    try {
+      return await proxyTranscribe(wavBytes, '云端语音识别');
+    } catch (cloudErr) {
+      console.warn('[ASR] pro cloud transcription failed, falling back to local:', cloudErr);
+    }
+  }
   try {
     return await invoke<string>('speak_transcribe', {
       wavBytes: Array.from(wavBytes),
     });
   } catch (localErr) {
-    if (getAccountState().token) {
+    if (acct.token) {
       return await proxyTranscribe(wavBytes, '云端语音识别');
     }
     throw localErr;

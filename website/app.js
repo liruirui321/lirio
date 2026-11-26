@@ -79,16 +79,16 @@ function getShopUrlForPlan(planId) {
 function getPackBullets(preset) {
   if (preset.id === 'pro_99') {
     return [
-      '解锁精听、词卡与本地音频自动切分（3 台设备）',
-      '含 ¥10 对话余额，按实际用量扣费',
+      '解锁精听、词卡与本地离线语音/转写（3 台设备，免费但速度较慢）',
+      '含 ¥10 余额，开启云端语音与转写响应更快，按实际用量扣费',
       '应用内支持问题与功能反馈',
     ];
   }
   const creditYuan = ((Number(preset.amountUnits) || 0) / 10000).toFixed(0);
   return [
     `到账 ¥${creditYuan} 对话余额`,
-    '可用于口语陪练、雅思考官模考与字幕精校',
-    '按实际 Token 用量计费，余额长期有效',
+    '可用于口语陪练、雅思考官、云端极速语音与字幕精校',
+    '按实际用量计费，余额长期有效（云端更快，本地免费）',
   ];
 }
 
