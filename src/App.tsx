@@ -850,12 +850,6 @@ export default function App() {
 
         <div className="toolbar-spacer" />
 
-        {hub === 'listening' && project && (
-          <span className="toolbar-project-name" title={project.name}>
-            {simplifyMaterialTitle(project.name).shortTitle}
-          </span>
-        )}
-
         {accountState.user ? (
           <button
             type="button"

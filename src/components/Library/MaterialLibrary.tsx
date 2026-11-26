@@ -467,7 +467,20 @@ export function MaterialLibrary({
 
       {/* Resume Last Listening Session */}
       {showResume && resumeInfo && (
-        <div className="library-resume-bar">
+        <button
+          type="button"
+          className="library-resume-bar"
+          disabled={!!opening}
+          title={`继续听写：${resumeInfo.title}`}
+          aria-label={`继续听写：${resumeInfo.title}`}
+          onClick={() => {
+            setError('');
+            setOpening(resumeInfo.item.id);
+            onOpen(resumeInfo.item.id)
+              .catch((e) => setError(String(e)))
+              .finally(() => setOpening(''));
+          }}
+        >
           <div className="library-resume-info">
             <span className="tier-badge small">继续上次</span>
             <strong>{resumeInfo.title}</strong>
@@ -475,23 +488,10 @@ export function MaterialLibrary({
               第 {resumeInfo.index + 1} / {resumeInfo.total} 句
             </small>
           </div>
-          <button
-            type="button"
-            className="icon-btn primary"
-            disabled={!!opening}
-            title="继续听写"
-            aria-label="继续听写"
-            onClick={() => {
-              setError('');
-              setOpening(resumeInfo.item.id);
-              onOpen(resumeInfo.item.id)
-                .catch((e) => setError(String(e)))
-                .finally(() => setOpening(''));
-            }}
-          >
+          <span className="library-resume-play" aria-hidden="true">
             {opening === resumeInfo.item.id ? '…' : <IconPlay size={16} />}
-          </button>
-        </div>
+          </span>
+        </button>
       )}
 
       {/* 4-Tier Ladder Cards (Graded Library only, hidden in My Uploads) */}

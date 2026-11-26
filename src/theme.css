@@ -1553,7 +1553,7 @@ textarea:focus { outline: none; }
 .library-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
 .material-library h1 { margin: 0; font-size: 24px; font-weight: 600; color: var(--text-strong); letter-spacing: -0.3px; }
 .material-library p { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
-.material-library button:not(.icon-btn):not(.icon-action-btn):not(.tier-card) { border: 0; border-radius: 999px; padding: 7px 14px; background: var(--surface-2); color: var(--text-strong); font-size: 12.5px; font-weight: 500; }
+.material-library button:not(.icon-btn):not(.icon-action-btn):not(.tier-card):not(.library-resume-bar) { border: 0; border-radius: 999px; padding: 7px 14px; background: var(--surface-2); color: var(--text-strong); font-size: 12.5px; font-weight: 500; }
 .corpus-tabs {
   display: inline-flex;
   align-items: center;
