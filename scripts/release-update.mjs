@@ -91,16 +91,24 @@ if (fs.existsSync(appPath)) {
 
 const signature = fs.readFileSync(sigPath, 'utf8').trim();
 const platformKey = process.arch === 'arm64' ? 'darwin-aarch64' : 'darwin-x86_64';
+const platforms = {
+  [platformKey]: {
+    signature,
+    url: `${baseUrl}/${outTarName}`,
+  },
+};
+const winSigPath = path.join(DIST_DIR, `Lirio-${version}-windows-x64-setup.exe.sig`);
+if (fs.existsSync(winSigPath)) {
+  platforms['windows-x86_64'] = {
+    signature: fs.readFileSync(winSigPath, 'utf8').trim(),
+    url: `${baseUrl}/Lirio-${version}-windows-x64-setup.exe`,
+  };
+}
 const manifest = {
   version,
   notes,
   pub_date: new Date().toISOString(),
-  platforms: {
-    [platformKey]: {
-      signature,
-      url: `${baseUrl}/${outTarName}`,
-    },
-  },
+  platforms,
 };
 
 fs.writeFileSync(path.join(DIST_DIR, 'latest.json'), JSON.stringify(manifest, null, 2));

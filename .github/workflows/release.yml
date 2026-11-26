@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   macos:
-    if: ${{ !endsWith(inputs.tag || '', '-win-android') }}
+    if: ${{ !endsWith(inputs.tag || '', '-win-android') && !endsWith(inputs.tag || '', '-android') }}
     runs-on: macos-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
@@ -55,6 +55,7 @@ jobs:
           path: out/*
 
   windows:
+    if: ${{ !endsWith(inputs.tag || '', '-android') }}
     runs-on: windows-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}
@@ -114,14 +115,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
       - run: |
-          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          set -euo pipefail
+          ANDROID_SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKM=$(ls -d "$ANDROID_SDK"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)
+          echo "Using sdkmanager: $SDKM"
+          yes | "$SDKM" --licenses >/dev/null || true
+          "$SDKM" "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"
+          echo "ANDROID_HOME=$ANDROID_SDK" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_SDK/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run build
       - name: Patch tauri.conf.json for Android & Build Signed APK
@@ -162,7 +168,7 @@ jobs:
           path: out/*
 
   ios:
-    if: ${{ !endsWith(inputs.tag || '', '-win-android') }}
+    if: ${{ !endsWith(inputs.tag || '', '-win-android') && !endsWith(inputs.tag || '', '-android') }}
     runs-on: macos-latest
     env:
       VITE_LIRIO_SERVER_URL: ${{ secrets.VITE_LIRIO_SERVER_URL }}

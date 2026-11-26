@@ -1,6 +1,22 @@
 import { getVersion } from '@tauri-apps/api/app';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { open as openExternalUrl } from '@tauri-apps/plugin-shell';
+import { getAccountState } from './accountService';
+
+function isAndroidClient(): boolean {
+  return typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent || '');
+}
+
+function compareSemver(a: string, b: string): number {
+  const pa = String(a || '0').replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b || '0').replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
 
 export type UpdateStatus =
   | 'idle'
@@ -27,6 +43,7 @@ let state: UpdateState = {
 };
 
 let pendingUpdate: Update | null = null;
+let pendingAndroidUrl: string | null = null;
 const listeners = new Set<(next: UpdateState) => void>();
 
 function setState(patch: Partial<UpdateState>) {
@@ -72,6 +89,46 @@ export async function checkForAppUpdate(opts?: { silent?: boolean }): Promise<Up
   }
   await initAppVersion();
   setState({ status: 'checking', error: undefined });
+  if (isAndroidClient()) {
+    try {
+      const serverBase = (getAccountState().serverUrl || 'https://lirio.deltae.tech').replace(/\/+$/, '');
+      const res = await fetch(`${serverBase}/versions.json`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const androidInfo = data?.platforms?.android;
+      const remoteVer = String(androidInfo?.version || data?.latestVersion || '').trim();
+      const downloadUrl = String(androidInfo?.downloadUrl || '').trim();
+      if (downloadUrl && remoteVer && compareSemver(remoteVer, state.currentVersion) > 0) {
+        pendingAndroidUrl = downloadUrl;
+        pendingUpdate = null;
+        const notes =
+          (Array.isArray(data?.history)
+            ? data.history.find((h: { version?: string; highlights?: string[] }) => h?.version === remoteVer)?.highlights?.join('\n')
+            : '') || '';
+        setState({
+          status: 'available',
+          availableVersion: remoteVer,
+          releaseNotes: notes,
+          progressPct: 0,
+          dismissed: false,
+        });
+      } else {
+        pendingAndroidUrl = null;
+        setState({
+          status: silent ? 'idle' : 'up_to_date',
+          availableVersion: undefined,
+        });
+      }
+    } catch {
+      pendingAndroidUrl = null;
+      setState({
+        status: silent ? 'idle' : 'error',
+        error: silent ? undefined : '暂未检测到可下载更新（请确认网络状态）',
+      });
+    }
+    return state;
+  }
+
   try {
     const update = await check();
     if (update) {
@@ -101,6 +158,16 @@ export async function checkForAppUpdate(opts?: { silent?: boolean }): Promise<Up
 }
 
 export async function downloadAndInstallUpdate(): Promise<void> {
+  if (pendingAndroidUrl) {
+    const url = pendingAndroidUrl;
+    try {
+      await openExternalUrl(url);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+    setState({ status: 'idle', dismissed: true });
+    return;
+  }
   if (!pendingUpdate) return;
   setState({ status: 'downloading', progressPct: 0, error: undefined, dismissed: false });
   let totalBytes = 0;
