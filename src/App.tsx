@@ -925,9 +925,9 @@ export default function App() {
                 onChange={(e) => setImportAiPolish(e.target.checked)}
               />
               <div>
-                <strong>导入后顺便 AI 精校字幕 + 生成中文译文（可选 · 少量消耗 Token）</strong>
+                <strong>导入后 AI 精校字幕 + 生成中文译文（可选）</strong>
                 <small>
-                  不勾选则全程本机离线运行（0 Token 免费），进入精听页后也可随时对单句或全篇点击「AI 精校」。
+                  默认离线免费识别；导入后也可随时按需 AI 精校。
                 </small>
               </div>
             </label>

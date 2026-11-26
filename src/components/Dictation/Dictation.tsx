@@ -778,7 +778,7 @@ export function Dictation({
               type="button"
               className={`dict-slow-btn dict-ai-btn${showAiPolish || project.dictation?.aiPolished ? ' active' : ''}`}
               disabled={busy}
-              title="按需使用 AI 精校英文字幕并生成中文译文（默认本机离线 0 Token）"
+              title="AI 精校字幕与中文译文"
               onClick={() => {
                 setShowDrawer(false);
                 setShowSettings(false);
@@ -867,7 +867,7 @@ export function Dictation({
             </div>
             <div className="dict-ai-meta">
               <span className={`dict-ai-mode-pill${project.dictation?.aiPolished ? ' polished' : ''}`}>
-                {project.dictation?.aiPolished ? '当前：AI 已精校字幕' : '当前：本机离线字幕（0 Token）'}
+                {project.dictation?.aiPolished ? 'AI 已精校' : '离线字幕'}
               </span>
               <span className="dict-ai-source" title={project.dictation?.source || ''}>
                 {project.dictation?.source || '本机识别'}
@@ -890,7 +890,7 @@ export function Dictation({
               )}
             </div>
             <p className="dict-ai-note">
-              导入与重识别默认走本机离线 Whisper（0 Token 免费）。遇到生僻专有名词、连读吞音或需要中文译文对照时，可按需运行 AI 精校（单篇约 ¥0.003–¥0.01，精校前自动备份，随时可还原）。
+              可按需修正识别错误并补全中文译文，精校前自动备份，随时可还原。
             </p>
             <div className="corpus-popover-checks dict-ai-checks">
               <label>

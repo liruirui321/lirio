@@ -562,7 +562,7 @@ export function GlobalSettingsModal({
       const content = await readTextFile(picked);
       const byteSize = new TextEncoder().encode(content).length;
       if (byteSize > 512 * 1024) {
-        setErrorMsg('上传文本附件不能超过 512 KB；大型听力音频请直接在软件本地导入（0 Token 自动切分）。');
+        setErrorMsg('附件不能超过 512 KB');
         return;
       }
       const fname = picked.split(/[/\\]/).pop() || 'attachment.txt';
@@ -580,7 +580,7 @@ export function GlobalSettingsModal({
     if (!file) return;
     setErrorMsg('');
     if (!/\.(txt|csv|md|json|srt|lrc)$/i.test(file.name)) {
-      setErrorMsg('仅支持文本格式附件（.txt / .csv / .md / .json / .srt / .lrc），听力音频请直接本地导入。');
+      setErrorMsg('仅支持 .txt / .csv / .md / .json / .srt / .lrc 文本文件');
       return;
     }
     const content = await file.text();
@@ -1179,7 +1179,7 @@ export function GlobalSettingsModal({
             ) : (
               <>
                 <div className="settings-row-between">
-                  <span className="settings-section-title">文本模型（DeepSeek / OpenAI 兼容 API）</span>
+                  <span className="settings-section-title">文本模型 API</span>
                 </div>
 
                 <div className="provider-form">
@@ -1394,7 +1394,7 @@ export function GlobalSettingsModal({
                 <div className="storage-path-box" title={storageInfo?.activeDir || ''}>
                   {storageInfo
                     ? storageInfo.activeDir
-                    : '网页预览模式（数据暂存浏览器本地 Storage；请用导出备份迁移）'}
+                    : '浏览器暂存'}
                 </div>
 
                 {storageInfo && (
@@ -1433,13 +1433,10 @@ export function GlobalSettingsModal({
                         checked={migrateOnSwitch}
                         onChange={(e) => setMigrateOnSwitch(e.target.checked)}
                       />
-                      <span>切换时自动复制并迁移当前数据（取消勾选可直接加载目标文件夹已有备份）</span>
+                      <span>切换时同步迁移当前数据</span>
                     </label>
                   </>
                 )}
-                <small className="storage-path-hint">
-                  包含精听材料库（library）、听写提交记录（submissions）、错词与口语进度（lirio_state）及音频缓存；迁移电脑时直接复制此文件夹即可。
-                </small>
               </div>
 
               <div className="settings-row-between">
@@ -1508,17 +1505,17 @@ export function GlobalSettingsModal({
             {showGuide && (
               <div className="settings-guide-card">
                 <div className="guide-block">
-                  <strong>完全免费 · 0 Token（本地运行）</strong>
+                  <strong>免费本地功能</strong>
                   <p>
-                    自定义上传音频与自动意群切分（本地 Whisper + 本地分句）、默认本地语音朗读与识别、听写与错词本均永久免费。
+                    导入音频、自动断句、默认朗读、单词听写与错词本均本地运行，免费不限次。
                   </p>
                 </div>
                 <div className="guide-block">
-                  <strong>官方余额估算（¥10 约可用 80–270 场模考）</strong>
+                  <strong>费用参考（¥10 约可用 80–270 场）</strong>
                   <ul>
-                    <li>雅思全真模考 + 地道表达复盘：约 1–1.4 万 tok（约 ¥0.036–¥0.120 / 场）</li>
-                    <li>双语闲聊 10 轮 + 复盘：约 0.8–1.1 万 tok（约 ¥0.030–¥0.105 / 次）</li>
-                    <li>听力错因 AI 诊断：约 1–1.5 千 tok（约 ¥0.006–¥0.012 / 次）</li>
+                    <li>雅思模考 + 复盘：约 ¥0.04–¥0.12 / 场</li>
+                    <li>双语陪练 + 复盘：约 ¥0.03–¥0.10 / 次</li>
+                    <li>听力诊断 / 字幕精校：约 ¥0.005–¥0.01 / 次</li>
                   </ul>
                 </div>
               </div>
@@ -1586,7 +1583,7 @@ export function GlobalSettingsModal({
                       <input
                         type="text"
                         value={fbSourceUrl}
-                        placeholder="播客 RSS 或公开链接（本地音频可直接用顶部「导入音频」离线切分）"
+                        placeholder="播客 RSS 或公开链接"
                         onChange={(e) => setFbSourceUrl(e.target.value)}
                       />
                     </div>
