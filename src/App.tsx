@@ -79,7 +79,6 @@ import {
   IconClose,
   IconCorpus,
   IconExport,
-  IconFolderAudio,
   IconHeadphones,
   IconLibrary,
   IconLirioMark,
@@ -740,12 +739,6 @@ export default function App() {
             stopListeningAudio();
             setListeningMode(mode);
           }}
-          onOpenImport={() => {
-            setImportError('');
-            setImportWarnings([]);
-            setPreparedImports([]);
-            setShowImportModal(true);
-          }}
         />
       ) : (
       /* Breathable Borderless Top Navigation */
@@ -822,18 +815,6 @@ export default function App() {
               }}
             >
               <IconChart size={17} />
-            </button>
-            <button
-              className={`icon-btn${showImportModal ? ' active' : ''}`}
-              title="导入音频（自动识别分句并入库）"
-              aria-label="导入音频并自动入库"
-              disabled={asrBusy || !!loading || isRec}
-              onClick={() => {
-                setImportError('');
-                setShowImportModal(true);
-              }}
-            >
-              <IconFolderAudio size={17} />
             </button>
             {project && (
               <>

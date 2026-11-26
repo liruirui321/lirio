@@ -4,7 +4,6 @@ import {
   IconChart,
   IconChat,
   IconCorpus,
-  IconFolderAudio,
   IconHeadphones,
   IconLibrary,
   IconLirioMark,
@@ -31,7 +30,6 @@ interface MobileTopBarProps {
   onOpenSettings: (tab: 'ai' | 'data' | 'feedback') => void;
   onBackListeningLibrary: () => void;
   onSelectListeningMode: (mode: MobileListeningMode) => void;
-  onOpenImport: () => void;
 }
 
 export function MobileTopBar({
@@ -47,7 +45,6 @@ export function MobileTopBar({
   onOpenSettings,
   onBackListeningLibrary,
   onSelectListeningMode,
-  onOpenImport,
 }: MobileTopBarProps) {
   const showListeningBack = hub === 'listening' && listeningMode !== 'library';
 
@@ -123,15 +120,6 @@ export function MobileTopBar({
               onClick={() => onSelectListeningMode(listeningMode === 'analysis' ? 'library' : 'analysis')}
             >
               <IconChart size={17} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              disabled={busy}
-              aria-label="导入音频"
-              onClick={onOpenImport}
-            >
-              <IconFolderAudio size={17} />
             </button>
           </>
         )}
