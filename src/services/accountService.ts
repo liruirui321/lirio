@@ -1,4 +1,7 @@
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { Accent } from './corpusService';
+import { recordDiagEvent } from './diagnostics';
 import { isMobileDevice, isWindowsPlatform, shouldDefaultCloudSpeech } from './platform';
 import { saveStateBackup } from './stateSync';
 
@@ -334,6 +337,27 @@ export function formatSmartYuan(units: number | undefined | null): string {
   return formatYuan(units, raw % 100 === 0 ? 2 : 4);
 }
 
+interface DirectHttpResponse {
+  status: number;
+  contentType: string;
+  bodyText?: string | null;
+  bodyBytes?: number[] | null;
+}
+
+function isTauriRuntime(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+function shouldUseDirectRustTransport(baseUrl: string): boolean {
+  if (!isTauriRuntime()) return false;
+  const lower = baseUrl.trim().toLowerCase();
+  return (
+    lower.startsWith('https://lirio.deltae.tech') ||
+    lower.startsWith('http://127.0.0.1:') ||
+    lower.startsWith('http://localhost:')
+  );
+}
+
 async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const st = getAccountState();
   const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
@@ -344,25 +368,59 @@ async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   if (st.token) {
     headers.Authorization = `Bearer ${st.token}`;
   }
-  let resp: Response;
-  try {
-    resp = await fetch(`${base}${path}`, { ...opts, headers });
-  } catch {
-    throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
+
+  let status = 0;
+  let data: Record<string, unknown> = {};
+
+  let handledDirect = false;
+  if (shouldUseDirectRustTransport(base) && (typeof opts.body === 'string' || opts.body === undefined)) {
+    try {
+      const directResp = await invoke<DirectHttpResponse>('lirio_direct_request', {
+        method: (opts.method || 'GET').toUpperCase(),
+        url: `${base}${path}`,
+        headers,
+        bodyText: typeof opts.body === 'string' ? opts.body : null,
+        bodyBytes: null,
+        timeoutSecs: 45,
+      });
+      status = directResp.status;
+      if (directResp.bodyText) {
+        try {
+          data = JSON.parse(directResp.bodyText) as Record<string, unknown>;
+        } catch {
+          data = {};
+        }
+      }
+      handledDirect = true;
+    } catch {
+      handledDirect = false;
+    }
   }
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    if (resp.status === 401 && st.token && !path.startsWith('/api/auth/login')) {
+
+  if (!handledDirect) {
+    let resp: Response;
+    try {
+      resp = await fetch(`${base}${path}`, { ...opts, headers });
+    } catch {
+      throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
+    }
+    status = resp.status;
+    data = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
+  }
+
+  if (status < 200 || status >= 300) {
+    if (status === 401 && st.token && !path.startsWith('/api/auth/login')) {
       updateAccountState({
         token: null,
         user: null,
         entitlement: null,
         devices: [],
         aiMode: 'byok',
-        lastAuthNotice: data?.error || '登录状态已失效，请重新登录。',
+        lastAuthNotice:
+          typeof data?.error === 'string' ? data.error : '登录状态已失效，请重新登录。',
       });
     }
-    throw new Error(data?.error || `请求失败 (${resp.status})`);
+    throw new Error(typeof data?.error === 'string' ? data.error : `请求失败 (${status})`);
   }
   return data as T;
 }
@@ -589,6 +647,75 @@ export async function proxyChatStream(
     throw new Error('当前处于「Lirio 云端账号」模式，请先点击右上角头像或设置登录账号。');
   }
   const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  const t0 = performance.now();
+
+  if (shouldUseDirectRustTransport(base)) {
+    const streamId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let unlisten: (() => void) | null = null;
+    let receivedDelta = false;
+    try {
+      unlisten = await listen<{
+        streamId: string;
+        delta?: string | null;
+        error?: string | null;
+        status?: number | null;
+      }>('lirio-chat-stream', (event) => {
+        const p = event.payload;
+        if (!p || p.streamId !== streamId) return;
+        if (typeof p.delta === 'string' && p.delta.length > 0) {
+          receivedDelta = true;
+          onDelta(p.delta);
+        }
+      });
+
+      const res = await invoke<{ status: number; content: string }>('lirio_direct_chat_stream', {
+        streamId,
+        url: `${base}/api/ai/chat/stream`,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream, application/json',
+          Authorization: `Bearer ${st.token}`,
+        },
+        bodyText: JSON.stringify(opts),
+      });
+      recordDiagEvent({ stage: 'llm', route: 'direct-sse', durationMs: performance.now() - t0, ok: true });
+      return String(res.content || '').trim();
+    } catch (err) {
+      const msg = String(err);
+      const httpMatch = msg.match(/^HTTP_(\d+):([\s\S]*)$/);
+      if (httpMatch) {
+        const code = Number(httpMatch[1]);
+        const detail = httpMatch[2] || `请求失败 (${code})`;
+        if (code === 401) handleUnauthorized(401, st, detail);
+        if (code !== 404) {
+          recordDiagEvent({
+            stage: 'llm',
+            route: 'direct-sse',
+            durationMs: performance.now() - t0,
+            ok: false,
+            error: detail,
+          });
+          throw new Error(detail);
+        }
+      } else if (receivedDelta) {
+        recordDiagEvent({
+          stage: 'llm',
+          route: 'direct-sse',
+          durationMs: performance.now() - t0,
+          ok: false,
+          error: msg,
+        });
+        throw new Error(msg);
+      }
+      // Transport failure before first delta or 404: fall through to WebView fetch / non-stream fallback
+    } finally {
+      unlisten?.();
+    }
+  }
+
   let resp: Response;
   try {
     resp = await fetch(`${base}/api/ai/chat/stream`, {
@@ -600,13 +727,21 @@ export async function proxyChatStream(
       },
       body: JSON.stringify(opts),
     });
-  } catch {
+  } catch (err) {
+    recordDiagEvent({
+      stage: 'llm',
+      route: 'webview-sse',
+      durationMs: performance.now() - t0,
+      ok: false,
+      error: String(err),
+    });
     throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
   }
 
   if (resp.status === 404) {
     const full = await proxyChat(opts);
     if (full) onDelta(full);
+    recordDiagEvent({ stage: 'llm', route: 'fallback-chat', durationMs: performance.now() - t0, ok: true });
     return full;
   }
 
@@ -614,7 +749,9 @@ export async function proxyChatStream(
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
     handleUnauthorized(resp.status, st, data?.error);
-    throw new Error(data?.error || `请求失败 (${resp.status})`);
+    const errMsg = data?.error || `请求失败 (${resp.status})`;
+    recordDiagEvent({ stage: 'llm', route: 'webview-sse', durationMs: performance.now() - t0, ok: false, error: errMsg });
+    throw new Error(errMsg);
   }
 
   if (!ct.includes('text/event-stream') || !resp.body) {
@@ -622,6 +759,7 @@ export async function proxyChatStream(
     if (data.user) updateAccountState({ user: data.user });
     const full = String(data.content || '').trim();
     if (full) onDelta(full);
+    recordDiagEvent({ stage: 'llm', route: 'webview-json', durationMs: performance.now() - t0, ok: true });
     return full;
   }
 
@@ -649,6 +787,7 @@ export async function proxyChatStream(
         continue;
       }
       if (evt.error) {
+        recordDiagEvent({ stage: 'llm', route: 'webview-sse', durationMs: performance.now() - t0, ok: false, error: evt.error });
         throw new Error(evt.error);
       }
       if (typeof evt.delta === 'string' && evt.delta.length > 0) {
@@ -661,6 +800,7 @@ export async function proxyChatStream(
     }
   }
 
+  recordDiagEvent({ stage: 'llm', route: 'webview-sse', durationMs: performance.now() - t0, ok: true });
   return (finalContent || assembled).trim();
 }
 
@@ -690,31 +830,77 @@ export async function proxyTts(text: string, accent: Accent, voice?: string, fea
     throw new Error('请先登录 Lirio 账号后再使用云端语音。');
   }
   const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  const t0 = performance.now();
+  const payload = JSON.stringify({ text, accent, voice, feature });
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'audio/mpeg, application/json',
+    Authorization: `Bearer ${st.token}`,
+  };
+
+  if (shouldUseDirectRustTransport(base)) {
+    try {
+      const directResp = await invoke<DirectHttpResponse>('lirio_direct_request', {
+        method: 'POST',
+        url: `${base}/api/ai/tts`,
+        headers,
+        bodyText: payload,
+        bodyBytes: null,
+        timeoutSecs: 30,
+      });
+      if (directResp.status >= 200 && directResp.status < 300) {
+        if (directResp.bodyBytes && directResp.bodyBytes.length > 0) {
+          recordDiagEvent({ stage: 'tts', route: 'direct-tts', durationMs: performance.now() - t0, ok: true });
+          return URL.createObjectURL(
+            new Blob([new Uint8Array(directResp.bodyBytes)], { type: directResp.contentType || 'audio/mpeg' }),
+          );
+        }
+        if (directResp.bodyText) {
+          const res = JSON.parse(directResp.bodyText) as { audioBase64: string; mime: string; user?: AccountUser };
+          if (res.user) updateAccountState({ user: res.user });
+          recordDiagEvent({ stage: 'tts', route: 'direct-tts', durationMs: performance.now() - t0, ok: true });
+          return base64ToBlobUrl(res.audioBase64, res.mime);
+        }
+      } else {
+        const errData = directResp.bodyText ? (JSON.parse(directResp.bodyText) as { error?: string }) : {};
+        handleUnauthorized(directResp.status, st, errData?.error);
+        const errMsg = errData?.error || `请求失败 (${directResp.status})`;
+        recordDiagEvent({ stage: 'tts', route: 'direct-tts', durationMs: performance.now() - t0, ok: false, error: errMsg });
+        throw new Error(errMsg);
+      }
+    } catch (err) {
+      if (err instanceof Error && !err.message.startsWith('直连请求失败')) {
+        throw err;
+      }
+    }
+  }
+
   let resp: Response;
   try {
     resp = await fetch(`${base}/api/ai/tts`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'audio/mpeg, application/json',
-        Authorization: `Bearer ${st.token}`,
-      },
-      body: JSON.stringify({ text, accent, voice, feature }),
+      headers,
+      body: payload,
     });
-  } catch {
+  } catch (err) {
+    recordDiagEvent({ stage: 'tts', route: 'webview-tts', durationMs: performance.now() - t0, ok: false, error: String(err) });
     throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
   }
   const ct = (resp.headers.get('content-type') || '').toLowerCase();
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
     handleUnauthorized(resp.status, st, data?.error);
-    throw new Error(data?.error || `请求失败 (${resp.status})`);
+    const errMsg = data?.error || `请求失败 (${resp.status})`;
+    recordDiagEvent({ stage: 'tts', route: 'webview-tts', durationMs: performance.now() - t0, ok: false, error: errMsg });
+    throw new Error(errMsg);
   }
   if (ct.startsWith('audio/')) {
+    recordDiagEvent({ stage: 'tts', route: 'webview-tts', durationMs: performance.now() - t0, ok: true });
     return URL.createObjectURL(await resp.blob());
   }
   const res = (await resp.json()) as { audioBase64: string; mime: string; user?: AccountUser };
   if (res.user) updateAccountState({ user: res.user });
+  recordDiagEvent({ stage: 'tts', route: 'webview-tts', durationMs: performance.now() - t0, ok: true });
   return base64ToBlobUrl(res.audioBase64, res.mime);
 }
 
@@ -725,28 +911,64 @@ export async function proxyTranscribe(wavBytes: Uint8Array, _feature = '云端�
   }
   const approxSec = Math.max(1, Math.round(wavBytes.length / 32000));
   const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  const t0 = performance.now();
+  const headers = {
+    'Content-Type': 'audio/wav',
+    'X-Audio-Duration': String(approxSec),
+    Authorization: `Bearer ${st.token}`,
+  };
+
+  if (shouldUseDirectRustTransport(base)) {
+    try {
+      const directResp = await invoke<DirectHttpResponse>('lirio_direct_request', {
+        method: 'POST',
+        url: `${base}/api/ai/transcribe`,
+        headers,
+        bodyText: null,
+        bodyBytes: Array.from(wavBytes),
+        timeoutSecs: 45,
+      });
+      const data = directResp.bodyText
+        ? (JSON.parse(directResp.bodyText) as { text?: string; error?: string; user?: AccountUser })
+        : {};
+      if (directResp.status < 200 || directResp.status >= 300) {
+        handleUnauthorized(directResp.status, st, data?.error);
+        const errMsg = data?.error || `请求失败 (${directResp.status})`;
+        recordDiagEvent({ stage: 'asr', route: 'direct-asr', durationMs: performance.now() - t0, ok: false, error: errMsg });
+        throw new Error(errMsg);
+      }
+      if (data.user) updateAccountState({ user: data.user });
+      recordDiagEvent({ stage: 'asr', route: 'direct-asr', durationMs: performance.now() - t0, ok: true });
+      return String(data.text || '').trim();
+    } catch (err) {
+      if (err instanceof Error && !err.message.startsWith('直连请求失败')) {
+        throw err;
+      }
+    }
+  }
+
   let resp: Response;
   try {
     const safeBytes = new Uint8Array(wavBytes.byteLength);
     safeBytes.set(wavBytes);
     resp = await fetch(`${base}/api/ai/transcribe`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'audio/wav',
-        'X-Audio-Duration': String(approxSec),
-        Authorization: `Bearer ${st.token}`,
-      },
+      headers,
       body: new Blob([safeBytes.buffer], { type: 'audio/wav' }),
     });
-  } catch {
+  } catch (err) {
+    recordDiagEvent({ stage: 'asr', route: 'webview-asr', durationMs: performance.now() - t0, ok: false, error: String(err) });
     throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     handleUnauthorized(resp.status, st, data?.error);
-    throw new Error(data?.error || `请求失败 (${resp.status})`);
+    const errMsg = data?.error || `请求失败 (${resp.status})`;
+    recordDiagEvent({ stage: 'asr', route: 'webview-asr', durationMs: performance.now() - t0, ok: false, error: errMsg });
+    throw new Error(errMsg);
   }
   if (data.user) updateAccountState({ user: data.user });
+  recordDiagEvent({ stage: 'asr', route: 'webview-asr', durationMs: performance.now() - t0, ok: true });
   return String(data.text || '').trim();
 }
 

@@ -3,6 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { loadCorpusState, lookupBuiltinWord, saveCorpusState, type Accent } from './corpusService';
 import { getAccountState, proxyChat, proxyChatStream, proxyTranscribe, proxyTts } from './accountService';
+import { recordDiagEvent } from './diagnostics';
 import { isMobileDevice, isWindowsPlatform } from './platform';
 import { saveStateBackup } from './stateSync';
 import ielts2026Q4Raw from '../data/ielts_speaking_2026_sep_dec.json';
@@ -768,11 +769,21 @@ export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
       console.warn('[ASR] pro cloud transcription failed, falling back to local:', cloudErr);
     }
   }
+  const tLocalAsr = performance.now();
   try {
-    return await invoke<string>('speak_transcribe', {
+    const res = await invoke<string>('speak_transcribe', {
       wavBytes: Array.from(wavBytes),
     });
+    recordDiagEvent({ stage: 'asr', route: 'local-whisper', durationMs: performance.now() - tLocalAsr, ok: true });
+    return res;
   } catch (localErr) {
+    recordDiagEvent({
+      stage: 'asr',
+      route: 'local-whisper',
+      durationMs: performance.now() - tLocalAsr,
+      ok: false,
+      error: String(localErr),
+    });
     if (acct.token) {
       return await proxyTranscribe(wavBytes, '云端语音识别');
     }
@@ -796,17 +807,30 @@ export async function synthesizeSpeech(
   const acct = getAccountState();
 
   const invokeFreeTts = async (): Promise<string> => {
-    const res = await invoke<TtsResult>('speak_tts', {
-      text,
-      accent: effectiveAccent,
-      provider: config.ttsProvider === 'macos' ? 'macos' : 'edge',
-      apiKey: null,
-      baseUrl: 'https://api.openai.com/v1',
-      model: config.speechModel || 'tts-1',
-      voice: voiceOverride?.edgeVoice || null,
-    });
-    const blob = new Blob([new Uint8Array(res.bytes)], { type: res.mime || 'audio/mpeg' });
-    return URL.createObjectURL(blob);
+    const tLocalTts = performance.now();
+    try {
+      const res = await invoke<TtsResult>('speak_tts', {
+        text,
+        accent: effectiveAccent,
+        provider: config.ttsProvider === 'macos' ? 'macos' : 'edge',
+        apiKey: null,
+        baseUrl: 'https://api.openai.com/v1',
+        model: config.speechModel || 'tts-1',
+        voice: voiceOverride?.edgeVoice || null,
+      });
+      recordDiagEvent({ stage: 'tts', route: res.source || 'local-edge', durationMs: performance.now() - tLocalTts, ok: true });
+      const blob = new Blob([new Uint8Array(res.bytes)], { type: res.mime || 'audio/mpeg' });
+      return URL.createObjectURL(blob);
+    } catch (err) {
+      recordDiagEvent({
+        stage: 'tts',
+        route: 'local-edge',
+        durationMs: performance.now() - tLocalTts,
+        ok: false,
+        error: String(err),
+      });
+      throw err;
+    }
   };
 
   if (acct.aiMode === 'pro_balance') {

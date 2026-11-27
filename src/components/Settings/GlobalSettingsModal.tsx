@@ -3,6 +3,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile } from '@tauri-apps/plugin-fs';
 import { open as openExternalUrl } from '@tauri-apps/plugin-shell';
 import { isMobileDevice } from '../../services/platform';
+import { collectSanitizedDiagnostics } from '../../services/diagnostics';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import type { Accent } from '../../services/corpusService';
 import {
@@ -191,6 +192,9 @@ export function GlobalSettingsModal({
   const [fbAttachmentContent, setFbAttachmentContent] = useState('');
   const [fbAttachmentSize, setFbAttachmentSize] = useState(0);
   const [fbBusy, setFbBusy] = useState(false);
+  const [fbIncludeDiag, setFbIncludeDiag] = useState(true);
+  const [fbDiagPreview, setFbDiagPreview] = useState<string | null>(null);
+  const [fbDiagLoading, setFbDiagLoading] = useState(false);
   const [fbList, setFbList] = useState<FeedbackItem[]>([]);
   const fbFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -545,9 +549,13 @@ export function GlobalSettingsModal({
       if (fbCatMeta.showSourceUrl && fbSourceUrl.trim()) {
         prefixes.push(`[来源链接：${fbSourceUrl.trim()}]`);
       }
-      const finalContent = prefixes.length
+      let finalContent = prefixes.length
         ? `${prefixes.join('\n')}\n${fbContent.trim()}`
         : fbContent.trim();
+      if (fbCategory === 'bug' && fbIncludeDiag) {
+        const diag = await collectSanitizedDiagnostics(updateState.currentVersion);
+        finalContent = `${finalContent}\n\n${diag.summaryText}`;
+      }
 
       const res = await submitFeedback({
         category: fbCategory,
@@ -564,6 +572,7 @@ export function GlobalSettingsModal({
       setFbAttachmentName('');
       setFbAttachmentContent('');
       setFbAttachmentSize(0);
+      setFbDiagPreview(null);
       setStatusMsg('已收到反馈，感谢你的建议');
     } catch (err) {
       setErrorMsg(String(err));
@@ -1511,6 +1520,44 @@ export function GlobalSettingsModal({
                       onChange={(e) => setFbContent(e.target.value)}
                     />
                   </div>
+
+                  {fbCategory === 'bug' && (
+                    <div className="feedback-diag-box">
+                      <div className="feedback-diag-row">
+                        <label className="feedback-diag-check">
+                          <input
+                            type="checkbox"
+                            checked={fbIncludeDiag}
+                            onChange={(e) => setFbIncludeDiag(e.target.checked)}
+                          />
+                          <span>附带脱敏环境诊断（系统 / 代理与网络延迟 / 模型配置，不含密钥与聊天内容）</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="feedback-diag-toggle"
+                          disabled={fbDiagLoading}
+                          onClick={async () => {
+                            if (fbDiagPreview !== null) {
+                              setFbDiagPreview(null);
+                              return;
+                            }
+                            setFbDiagLoading(true);
+                            try {
+                              const diag = await collectSanitizedDiagnostics(updateState.currentVersion);
+                              setFbDiagPreview(JSON.stringify(diag.data, null, 2));
+                            } finally {
+                              setFbDiagLoading(false);
+                            }
+                          }}
+                        >
+                          {fbDiagLoading ? '读取中…' : fbDiagPreview !== null ? '收起' : '查看内容'}
+                        </button>
+                      </div>
+                      {fbDiagPreview !== null && (
+                        <pre className="feedback-diag-preview">{fbDiagPreview}</pre>
+                      )}
+                    </div>
+                  )}
 
                   <input
                     ref={fbFileInputRef}

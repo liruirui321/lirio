@@ -4484,6 +4484,56 @@ textarea:focus { outline: none; }
   font-size: 12px;
   color: var(--accent-bright);
 }
+.feedback-diag-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.feedback-diag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.feedback-diag-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.feedback-diag-check input {
+  accent-color: var(--accent);
+}
+.feedback-diag-toggle {
+  border: 1px solid var(--line-strong);
+  background: var(--card-bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.feedback-diag-preview {
+  margin: 0;
+  max-height: 150px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .sync-status-card {
   border: 1px solid var(--line);
   background: var(--card-bg);

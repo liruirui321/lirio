@@ -45,6 +45,9 @@ pub fn run() {
             commands::speak::open_mic_settings,
             commands::state::app_state_load,
             commands::state::app_state_save,
+            commands::net::lirio_direct_request,
+            commands::net::lirio_direct_chat_stream,
+            commands::net::diagnose_environment,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
