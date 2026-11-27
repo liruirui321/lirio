@@ -132,6 +132,12 @@ export function openDatabase(dbPath = process.env.LIRIO_DB_PATH || path.join(__d
       byte_size INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS stream_asr_quota (
+      month_key TEXT PRIMARY KEY,
+      sessions INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   return db;
@@ -1031,4 +1037,50 @@ export function listUserSyncMeta(db) {
     deviceName: row.device_name || '',
     byteSize: Number(row.byte_size || 0),
   }));
+}
+
+function getBeijingMonthKey(now = new Date()) {
+  const bj = new Date(now.getTime() + 8 * 3600_000);
+  return `${bj.getUTCFullYear()}-${String(bj.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+export function getMonthlyStreamAsrQuota(db, now = new Date()) {
+  const monthKey = getBeijingMonthKey(now);
+  const row = db
+    .prepare('SELECT sessions FROM stream_asr_quota WHERE month_key = ?')
+    .get(monthKey);
+  return {
+    monthKey,
+    used: Number(row?.sessions || 0),
+  };
+}
+
+export function consumeMonthlyStreamAsrQuota(db, maxSessions, now = new Date()) {
+  const monthKey = getBeijingMonthKey(now);
+  const safeMax = Number(maxSessions);
+  if (!Number.isFinite(safeMax) || safeMax <= 0) {
+    return { allowed: true, monthKey, used: 0, limit: 0 };
+  }
+  const ts = now.getTime();
+  db.prepare(
+    `INSERT INTO stream_asr_quota (month_key, sessions, updated_at)
+     VALUES (?, 0, ?)
+     ON CONFLICT(month_key) DO NOTHING`,
+  ).run(monthKey, ts);
+  const upd = db
+    .prepare(
+      `UPDATE stream_asr_quota
+       SET sessions = sessions + 1, updated_at = ?
+       WHERE month_key = ? AND sessions < ?`,
+    )
+    .run(ts, monthKey, safeMax);
+  const row = db
+    .prepare('SELECT sessions FROM stream_asr_quota WHERE month_key = ?')
+    .get(monthKey);
+  return {
+    allowed: upd.changes > 0,
+    monthKey,
+    used: Number(row?.sessions || 0),
+    limit: safeMax,
+  };
 }

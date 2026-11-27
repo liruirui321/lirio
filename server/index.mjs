@@ -17,6 +17,7 @@ import {
   DEFAULT_TRIAL_UNITS,
   cancelOrder,
   confirmOrderAndIssueCode,
+  consumeMonthlyStreamAsrQuota,
   createFeedback,
   createOrder,
   createRedeemCodes,
@@ -63,7 +64,7 @@ import {
   isDeepSeekPeakBeijing,
 } from './pricing.mjs';
 import {
-  createSonioxStreamToken,
+  createStreamAsrToken,
   forwardChatCompletion,
   forwardChatCompletionStream,
   forwardTranscribe,
@@ -2281,22 +2282,41 @@ export function createLirioServer({ dbPath } = {}) {
         if (!authState) return;
         const user = authState.user;
 
-        const rpm = Math.max(1, Number(process.env.LIRIO_BETA_ASR_STREAM_RPM || 20));
-        const daily = Math.max(1, Number(process.env.LIRIO_BETA_ASR_STREAM_DAILY || 120));
+        const rpm = Math.max(1, Number(process.env.LIRIO_BETA_ASR_STREAM_RPM || 40));
+        const daily = Math.max(1, Number(process.env.LIRIO_BETA_ASR_STREAM_DAILY || 300));
         if (
           !consumeRateLimit(res, `asr-stream-rpm-u:${user.id}`, rpm, 60000, '实时语音授权过于频繁，请稍后再试。') ||
-          !consumeRateLimit(res, `asr-stream-rpm-ip:${clientIp}`, Math.max(rpm, 30), 60000, '当前网络实时语音授权过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `asr-stream-rpm-ip:${clientIp}`, Math.max(rpm, 60), 60000, '当前网络实时语音授权过于频繁，请稍后再试。') ||
           !consumeRateLimit(res, `asr-stream-day-u:${user.id}`, daily, 86400000, '今日实时语音识别次数已达上限，请明天再试。') ||
-          !consumeRateLimit(res, `asr-stream-day-ip:${clientIp}`, Math.max(daily, 200), 86400000, '当前网络今日实时语音识别次数已达上限，请明天再试。')
+          !consumeRateLimit(res, `asr-stream-day-ip:${clientIp}`, Math.max(daily, 500), 86400000, '当前网络今日实时语音识别次数已达上限，请明天再试。')
         ) {
           return;
         }
 
+        const monthlyMaxEnv = process.env.LIRIO_ASR_STREAM_MONTHLY_MAX_SESSIONS;
+        const monthlyMax =
+          monthlyMaxEnv !== undefined && monthlyMaxEnv !== '' ? Number(monthlyMaxEnv) : 900;
+        const quota = consumeMonthlyStreamAsrQuota(db, monthlyMax);
+        if (!quota.allowed) {
+          sendJson(res, 503, {
+            error: '本月实时语音额度已达上限，已自动切换兜底识别。',
+            quotaReached: true,
+            monthKey: quota.monthKey,
+            used: quota.used,
+            limit: quota.limit,
+          });
+          return;
+        }
+
         try {
-          const tokenRes = await createSonioxStreamToken({ userId: user.id });
-          sendJson(res, 200, { ok: true, ...tokenRes });
+          const tokenRes = await createStreamAsrToken({ userId: user.id });
+          sendJson(res, 200, {
+            ok: true,
+            ...tokenRes,
+            quota: { monthKey: quota.monthKey, used: quota.used, limit: quota.limit },
+          });
         } catch (err) {
-          if (err?.code === 'SONIOX_NOT_CONFIGURED') {
+          if (err?.code === 'SONIOX_NOT_CONFIGURED' || err?.code === 'STREAM_ASR_NOT_CONFIGURED') {
             sendJson(res, 503, { error: err.message, configured: false });
             return;
           }

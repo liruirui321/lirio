@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomInt, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,6 +24,9 @@ function redactSecretText(raw) {
   return String(raw || '')
     .replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***')
     .replace(/temp:[A-Za-z0-9._-]+/g, 'temp:***')
+    .replace(/snx_[A-Za-z0-9._-]+/g, 'snx_***')
+    .replace(/signature=[^&\s]+/gi, 'signature=***')
+    .replace(/secretid=[^&\s]+/gi, 'secretid=***')
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer ***')
     .replace(/https?:\/\/\S+/gi, '[upstream]');
 }
@@ -797,4 +800,89 @@ export async function createSonioxStreamToken({ userId } = {}) {
     expiresAt,
     expiresInSeconds,
   };
+}
+
+export function createTencentStreamToken({ userId } = {}) {
+  const appId = (process.env.LIRIO_TENCENT_ASR_APP_ID || '').trim();
+  const secretId = (process.env.LIRIO_TENCENT_ASR_SECRET_ID || '').trim();
+  const secretKey = (process.env.LIRIO_TENCENT_ASR_SECRET_KEY || '').trim();
+  const model = (process.env.LIRIO_TENCENT_ASR_MODEL || '16k_zh_large').trim();
+  const expiresInSeconds = Math.min(3600, Math.max(60, Number(process.env.LIRIO_TENCENT_ASR_TOKEN_TTL || 1800)));
+
+  if (!appId || !secretId || !secretKey) {
+    const err = new Error('服务器尚未配置腾讯云实时语音凭证（LIRIO_TENCENT_ASR_*）。');
+    err.code = 'STREAM_ASR_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const expired = timestamp + expiresInSeconds;
+  const nonce = randomInt(100000, 999999999);
+  const voiceId = userId
+    ? `${String(userId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 12)}_${randomUUID().replace(/-/g, '').slice(0, 16)}`
+    : randomUUID().replace(/-/g, '');
+
+  const params = {
+    engine_model_type: model,
+    expired: String(expired),
+    needvad: '1',
+    nonce: String(nonce),
+    secretid: secretId,
+    timestamp: String(timestamp),
+    voice_format: '1',
+    voice_id: voiceId,
+  };
+  const sortedKeys = Object.keys(params).sort();
+  const rawQuery = sortedKeys.map((k) => `${k}=${params[k]}`).join('&');
+  const signStr = `asr.cloud.tencent.com/asr/v2/${appId}?${rawQuery}`;
+  const signature = createHmac('sha1', secretKey).update(signStr).digest('base64');
+  const encodedQuery = sortedKeys.map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
+  const wsUrl = `wss://asr.cloud.tencent.com/asr/v2/${appId}?${encodedQuery}&signature=${encodeURIComponent(signature)}`;
+
+  return {
+    provider: 'tencent',
+    wsUrl,
+    model,
+    voiceId,
+    singleUse: true,
+    expiresAt: expired * 1000,
+    expiresInSeconds,
+  };
+}
+
+export async function createStreamAsrToken({ userId } = {}) {
+  const preferred = (process.env.LIRIO_STREAM_ASR_PROVIDER || '').trim().toLowerCase();
+  const tencentModel = (process.env.LIRIO_TENCENT_ASR_MODEL || '16k_zh_large').trim();
+  const hasTencent = Boolean(
+    (process.env.LIRIO_TENCENT_ASR_APP_ID || '').trim() &&
+      (process.env.LIRIO_TENCENT_ASR_SECRET_ID || '').trim() &&
+      (process.env.LIRIO_TENCENT_ASR_SECRET_KEY || '').trim(),
+  );
+  const hasSoniox = Boolean((process.env.LIRIO_SONIOX_API_KEY || process.env.SONIOX_API_KEY || '').trim());
+
+  if (isMockMode()) {
+    if (preferred === 'tencent') {
+      const expiresInSeconds = Math.min(3600, Math.max(60, Number(process.env.LIRIO_TENCENT_ASR_TOKEN_TTL || 1800)));
+      return {
+        provider: 'tencent',
+        wsUrl: 'wss://asr.cloud.tencent.com/asr/v2/1000000000?signature=mock',
+        model: tencentModel,
+        voiceId: 'mock-voice-id',
+        singleUse: true,
+        expiresAt: Date.now() + expiresInSeconds * 1000,
+        expiresInSeconds,
+      };
+    }
+    return createSonioxStreamToken({ userId });
+  }
+
+  if (preferred === 'tencent' || (!preferred && hasTencent)) {
+    return createTencentStreamToken({ userId });
+  }
+  if (preferred === 'soniox' || (!preferred && hasSoniox)) {
+    return createSonioxStreamToken({ userId });
+  }
+  const err = new Error('服务器尚未配置实时语音识别服务。');
+  err.code = 'STREAM_ASR_NOT_CONFIGURED';
+  throw err;
 }

@@ -857,7 +857,7 @@ try {
   const badStream = await req('POST', '/api/ai/chat/stream', { messages: [{ role: 'tool', content: 'x' }] }, cherryToken);
   assert.equal(badStream.status, 400);
 
-  // 21. Verify Soniox temporary streaming ASR token endpoint
+  // 21. Verify streaming ASR token endpoint (Soniox, Tencent, and monthly hard quota cap)
   const unauthAsrToken = await req('POST', '/api/ai/asr-stream-token', {});
   assert.equal(unauthAsrToken.status, 401);
   const asrTokenRes = await req('POST', '/api/ai/asr-stream-token', {}, cherryToken);
@@ -868,6 +868,32 @@ try {
   assert.equal(asrTokenRes.json.wsUrl, 'wss://stt-rt.soniox.com/transcribe-websocket');
   assert.equal(asrTokenRes.json.model, 'stt-rt-v6');
   assert.ok(asrTokenRes.json.expiresAt > Date.now());
+  assert.equal(asrTokenRes.json.quota.used, 1);
+
+  const prevProvider = process.env.LIRIO_STREAM_ASR_PROVIDER;
+  const prevMonthlyMax = process.env.LIRIO_ASR_STREAM_MONTHLY_MAX_SESSIONS;
+  try {
+    process.env.LIRIO_STREAM_ASR_PROVIDER = 'tencent';
+    process.env.LIRIO_ASR_STREAM_MONTHLY_MAX_SESSIONS = '2';
+    const tcRes = await req('POST', '/api/ai/asr-stream-token', {}, cherryToken);
+    assert.equal(tcRes.status, 200);
+    assert.equal(tcRes.json.provider, 'tencent');
+    assert.ok(String(tcRes.json.wsUrl || '').startsWith('wss://asr.cloud.tencent.com/asr/v2/'));
+    assert.equal(tcRes.json.singleUse, true);
+    assert.equal(tcRes.json.quota.used, 2);
+    assert.equal(tcRes.json.quota.limit, 2);
+
+    const quotaBlocked = await req('POST', '/api/ai/asr-stream-token', {}, cherryToken);
+    assert.equal(quotaBlocked.status, 503);
+    assert.equal(quotaBlocked.json.quotaReached, true);
+    assert.equal(quotaBlocked.json.used, 2);
+    assert.equal(quotaBlocked.json.limit, 2);
+  } finally {
+    if (prevProvider === undefined) delete process.env.LIRIO_STREAM_ASR_PROVIDER;
+    else process.env.LIRIO_STREAM_ASR_PROVIDER = prevProvider;
+    if (prevMonthlyMax === undefined) delete process.env.LIRIO_ASR_STREAM_MONTHLY_MAX_SESSIONS;
+    else process.env.LIRIO_ASR_STREAM_MONTHLY_MAX_SESSIONS = prevMonthlyMax;
+  }
 
   console.log('ALL LIRIO PRO SERVER TESTS PASSED (21/21)');
 } finally {

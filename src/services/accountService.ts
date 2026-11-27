@@ -1003,16 +1003,20 @@ export async function proxyTranscribe(wavBytes: Uint8Array, _feature = '云端�
   return String(data.text || '').trim();
 }
 
-export interface SonioxStreamToken {
-  provider: 'soniox';
-  apiKey: string;
+export interface StreamAsrToken {
+  provider: 'tencent' | 'soniox';
   wsUrl: string;
   model: string;
+  apiKey?: string;
+  voiceId?: string;
+  singleUse?: boolean;
   expiresAt: number;
   expiresInSeconds: number;
 }
 
-export async function fetchStreamAsrToken(): Promise<SonioxStreamToken | null> {
+export type SonioxStreamToken = StreamAsrToken;
+
+export async function fetchStreamAsrToken(): Promise<StreamAsrToken | null> {
   const st = getAccountState();
   if (!st.token) return null;
   const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
@@ -1022,14 +1026,16 @@ export async function fetchStreamAsrToken(): Promise<SonioxStreamToken | null> {
     Authorization: `Bearer ${st.token}`,
   };
 
-  const parseTokenResponse = (status: number, rawText: string | null | undefined, route: string): SonioxStreamToken | null => {
-    const data = rawText ? (JSON.parse(rawText) as Partial<SonioxStreamToken> & { error?: string }) : {};
+  const parseTokenResponse = (status: number, rawText: string | null | undefined, route: string): StreamAsrToken | null => {
+    const data = rawText ? (JSON.parse(rawText) as Partial<StreamAsrToken> & { error?: string }) : {};
     if (status === 401) {
       handleUnauthorized(401, st, data?.error);
       recordDiagEvent({ stage: 'asr', route, durationMs: performance.now() - t0, ok: false, error: '401' });
       return null;
     }
-    if (status < 200 || status >= 300 || !data?.apiKey || !data?.wsUrl) {
+    const provider: 'tencent' | 'soniox' = data?.provider === 'tencent' ? 'tencent' : 'soniox';
+    const hasValidAuth = provider === 'tencent' ? Boolean(data?.wsUrl) : Boolean(data?.apiKey && data?.wsUrl);
+    if (status < 200 || status >= 300 || !hasValidAuth) {
       recordDiagEvent({
         stage: 'asr',
         route,
@@ -1041,10 +1047,12 @@ export async function fetchStreamAsrToken(): Promise<SonioxStreamToken | null> {
     }
     recordDiagEvent({ stage: 'asr', route, durationMs: performance.now() - t0, ok: true });
     return {
-      provider: 'soniox',
-      apiKey: String(data.apiKey),
+      provider,
       wsUrl: String(data.wsUrl),
-      model: String(data.model || 'stt-rt-v6'),
+      model: String(data.model || (provider === 'tencent' ? '16k_zh_large' : 'stt-rt-v6')),
+      ...(data.apiKey ? { apiKey: String(data.apiKey) } : {}),
+      ...(data.voiceId ? { voiceId: String(data.voiceId) } : {}),
+      singleUse: Boolean(data.singleUse ?? provider === 'tencent'),
       expiresAt: Number(data.expiresAt) || Date.now() + 1800_000,
       expiresInSeconds: Number(data.expiresInSeconds) || 1800,
     };

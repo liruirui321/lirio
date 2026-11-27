@@ -10,7 +10,7 @@ import {
   proxyChatStream,
   proxyTranscribe,
   proxyTts,
-  type SonioxStreamToken,
+  type StreamAsrToken,
 } from './accountService';
 import { recordDiagEvent } from './diagnostics';
 import { isMobileDevice, isWindowsPlatform } from './platform';
@@ -789,53 +789,84 @@ export interface StreamAsrSession {
   cancel(): void;
 }
 
-let cachedSonioxToken: SonioxStreamToken | null = null;
-let cachedSonioxUserToken: string | null = null;
-let sonioxTokenInflight: Promise<SonioxStreamToken | null> | null = null;
-let sonioxRetryAfterMs = 0;
+let cachedStreamToken: StreamAsrToken | null = null;
+let cachedStreamUserToken: string | null = null;
+let streamTokenInflight: Promise<StreamAsrToken | null> | null = null;
+let streamRetryAfterMs = 0;
 
-async function getSonioxToken(forceRefresh = false): Promise<SonioxStreamToken | null> {
+function fetchOrReuseStreamToken(forceRefresh = false): Promise<StreamAsrToken | null> {
   const acct = getAccountState();
   if (!acct.token) {
-    cachedSonioxToken = null;
-    cachedSonioxUserToken = null;
-    return null;
+    cachedStreamToken = null;
+    cachedStreamUserToken = null;
+    return Promise.resolve(null);
   }
-  if (cachedSonioxUserToken !== acct.token) {
-    cachedSonioxUserToken = acct.token;
-    cachedSonioxToken = null;
-    sonioxRetryAfterMs = 0;
+  if (cachedStreamUserToken !== acct.token) {
+    cachedStreamUserToken = acct.token;
+    cachedStreamToken = null;
+    streamRetryAfterMs = 0;
   }
   const now = Date.now();
-  if (!forceRefresh && cachedSonioxToken && cachedSonioxToken.expiresAt - now > 90_000) {
-    return cachedSonioxToken;
+  if (!forceRefresh && cachedStreamToken && cachedStreamToken.expiresAt - now > 90_000) {
+    return Promise.resolve(cachedStreamToken);
   }
-  if (!forceRefresh && now < sonioxRetryAfterMs) {
-    return null;
+  if (!forceRefresh && now < streamRetryAfterMs) {
+    return Promise.resolve(null);
   }
-  if (sonioxTokenInflight) {
-    return sonioxTokenInflight;
+  if (streamTokenInflight) {
+    return streamTokenInflight;
   }
-  sonioxTokenInflight = (async () => {
+  streamTokenInflight = (async () => {
     try {
       const tok = await fetchStreamAsrToken();
       if (tok) {
-        cachedSonioxToken = tok;
-        sonioxRetryAfterMs = 0;
+        cachedStreamToken = tok;
+        streamRetryAfterMs = 0;
         return tok;
       }
-      sonioxRetryAfterMs = Date.now() + 30_000;
+      streamRetryAfterMs = Date.now() + 30_000;
       return null;
     } finally {
-      sonioxTokenInflight = null;
+      streamTokenInflight = null;
     }
   })();
-  return sonioxTokenInflight;
+  return streamTokenInflight;
+}
+
+async function consumeStreamToken(): Promise<StreamAsrToken | null> {
+  const tok = await fetchOrReuseStreamToken(false);
+  if (!tok) return null;
+  if (tok.singleUse) {
+    cachedStreamToken = null;
+    window.setTimeout(() => {
+      if (getAccountState().token) {
+        void fetchOrReuseStreamToken(false);
+      }
+    }, 80);
+  }
+  return tok;
 }
 
 export function warmupStreamAsr(): void {
   if (!getAccountState().token) return;
-  void getSonioxToken(false);
+  void fetchOrReuseStreamToken(false);
+}
+
+function joinTencentSegments(segments: Map<number, string>): string {
+  const keys = [...segments.keys()].sort((a, b) => a - b);
+  let out = '';
+  for (const k of keys) {
+    const seg = (segments.get(k) || '').trim();
+    if (!seg) continue;
+    if (!out) {
+      out = seg;
+    } else if (/[A-Za-z0-9]$/.test(out) && /^[A-Za-z0-9]/.test(seg)) {
+      out += ` ${seg}`;
+    } else {
+      out += seg;
+    }
+  }
+  return out.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
 export function createStreamAsrSession(opts: {
@@ -844,17 +875,22 @@ export function createStreamAsrSession(opts: {
 }): StreamAsrSession {
   const tStart = performance.now();
   let ws: WebSocket | null = null;
+  let activeProvider: 'tencent' | 'soniox' = 'soniox';
   let configSent = false;
   let finishing = false;
   let cancelled = false;
   let receivedAnyToken = false;
   let finalText = '';
   let nonFinalText = '';
+  const tencentSegments = new Map<number, string>();
   let lastDisplay = '';
   const pendingChunks: Uint8Array[] = [];
   let finishResolve: (() => void) | null = null;
 
-  const formatDisplay = () => (finalText + nonFinalText).replace(/[ \t]{2,}/g, ' ').trim();
+  const formatDisplay = () =>
+    activeProvider === 'tencent'
+      ? joinTencentSegments(tencentSegments)
+      : (finalText + nonFinalText).replace(/[ \t]{2,}/g, ' ').trim();
 
   const resolveFinish = () => {
     const fn = finishResolve;
@@ -885,8 +921,9 @@ export function createStreamAsrSession(opts: {
   };
 
   const readyPromise = (async (): Promise<boolean> => {
-    const tok = await getSonioxToken(false);
+    const tok = await consumeStreamToken();
     if (!tok || cancelled) return false;
+    activeProvider = tok.provider;
     return await new Promise<boolean>((resolve) => {
       if (cancelled) {
         resolve(false);
@@ -900,7 +937,10 @@ export function createStreamAsrSession(opts: {
       };
       let socket: WebSocket;
       try {
-        socket = new WebSocket(tok.wsUrl, ['soniox-api-key', tok.apiKey]);
+        socket =
+          tok.provider === 'tencent'
+            ? new WebSocket(tok.wsUrl)
+            : new WebSocket(tok.wsUrl, ['soniox-api-key', tok.apiKey || '']);
       } catch {
         settle(false);
         return;
@@ -921,15 +961,17 @@ export function createStreamAsrSession(opts: {
           return;
         }
         try {
-          socket.send(
-            JSON.stringify({
-              model: tok.model || 'stt-rt-v6',
-              audio_format: 'pcm_s16le',
-              sample_rate: 16000,
-              num_channels: 1,
-              language_hints: opts.languageHints || ['en', 'zh'],
-            }),
-          );
+          if (tok.provider === 'soniox') {
+            socket.send(
+              JSON.stringify({
+                model: tok.model || 'stt-rt-v6',
+                audio_format: 'pcm_s16le',
+                sample_rate: 16000,
+                num_channels: 1,
+                language_hints: opts.languageHints || ['en', 'zh'],
+              }),
+            );
+          }
           configSent = true;
           flushPending();
           settle(true);
@@ -941,6 +983,40 @@ export function createStreamAsrSession(opts: {
 
       socket.onmessage = (ev) => {
         if (cancelled) return;
+        if (tok.provider === 'tencent') {
+          let msg: {
+            code?: number;
+            message?: string;
+            final?: number;
+            result?: { slice_type?: number; index?: number; voice_text_str?: string };
+          };
+          try {
+            msg = JSON.parse(String(ev.data || '{}'));
+          } catch {
+            return;
+          }
+          if (typeof msg.code === 'number' && msg.code !== 0) {
+            closeSocket();
+            settle(false);
+            resolveFinish();
+            return;
+          }
+          if (msg.result && typeof msg.result.voice_text_str === 'string') {
+            receivedAnyToken = true;
+            const segIdx = typeof msg.result.index === 'number' ? msg.result.index : 0;
+            tencentSegments.set(segIdx, msg.result.voice_text_str);
+            const display = formatDisplay();
+            if (display && display !== lastDisplay) {
+              lastDisplay = display;
+              opts.onPartial?.(display);
+            }
+          }
+          if (msg.final === 1) {
+            resolveFinish();
+          }
+          return;
+        }
+
         let msg: {
           tokens?: Array<{ text?: string; is_final?: boolean }>;
           finished?: boolean;
@@ -954,7 +1030,7 @@ export function createStreamAsrSession(opts: {
         }
         if (msg.error_code || msg.error_message) {
           if (!receivedAnyToken) {
-            cachedSonioxToken = null;
+            cachedStreamToken = null;
           }
           closeSocket();
           settle(false);
@@ -987,8 +1063,8 @@ export function createStreamAsrSession(opts: {
 
       socket.onerror = () => {
         window.clearTimeout(openTimer);
-        if (!receivedAnyToken) {
-          cachedSonioxToken = null;
+        if (!receivedAnyToken && !tok.singleUse) {
+          cachedStreamToken = null;
         }
         settle(false);
         resolveFinish();
@@ -996,8 +1072,8 @@ export function createStreamAsrSession(opts: {
 
       socket.onclose = () => {
         window.clearTimeout(openTimer);
-        if (!finishing && !receivedAnyToken) {
-          cachedSonioxToken = null;
+        if (!finishing && !receivedAnyToken && !tok.singleUse) {
+          cachedStreamToken = null;
         }
         settle(false);
         resolveFinish();
@@ -1034,7 +1110,7 @@ export function createStreamAsrSession(opts: {
           window.setTimeout(resolve, 2500);
         });
         try {
-          ws.send('');
+          ws.send(activeProvider === 'tencent' ? JSON.stringify({ type: 'end' }) : '');
         } catch {}
         await donePromise;
       }
@@ -1043,7 +1119,7 @@ export function createStreamAsrSession(opts: {
       const result = formatDisplay();
       recordDiagEvent({
         stage: 'asr',
-        route: 'soniox-rt',
+        route: activeProvider === 'tencent' ? 'tencent-asr-rt' : 'soniox-rt',
         durationMs: performance.now() - tStart,
         ok: result.length > 0,
       });
