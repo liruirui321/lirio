@@ -31,7 +31,7 @@ export const SPEAK_LEVELS: SpeakLevelProfile[] = [
     label: 'L1',
     cefr: 'A1–A2',
     shortTitle: '高中基础',
-    tooltip: 'L1 初阶 · 高中核心词汇 · 简短直白口语（CEFR A1–A2）',
+    tooltip: '高中词汇 · 简单短句',
     reviewTarget: 'clear, idiomatic everyday High-School / A2–B1 spoken English (simple core words, zero obscure idioms)',
     promptRule: [
       '- Target Level: L1 (Chinese High School Baseline · CEFR A1–A2).',
@@ -45,7 +45,7 @@ export const SPEAK_LEVELS: SpeakLevelProfile[] = [
     label: 'L2',
     cefr: 'B1–B2',
     shortTitle: '四六级日常',
-    tooltip: 'L2 进阶 · 四六级高频词汇 · 自然地道日常口语（CEFR B1–B2）',
+    tooltip: '四六级 · 日常口语',
     reviewTarget: 'natural CET-4/CET-6 level conversational English (clear everyday collocations & common phrasal verbs)',
     promptRule: [
       '- Target Level: L2 (CET-4 / CET-6 Everyday Fluency · CEFR B1–B2).',
@@ -59,7 +59,7 @@ export const SPEAK_LEVELS: SpeakLevelProfile[] = [
     label: 'L3',
     cefr: 'B2–C1',
     shortTitle: '雅思高分',
-    tooltip: 'L3 熟手 · 雅思口语 7.5+ 词汇与地道搭配 · 流畅复合口语（CEFR B2–C1）',
+    tooltip: '雅思 · 地道表达',
     reviewTarget: 'polished IELTS Band 7.5–8.0 spoken English with natural idiomatic collocations and flexible syntax',
     promptRule: [
       '- Target Level: L3 (IELTS Band 7.0–8.0 Fluent Speaker · CEFR B2–C1).',
@@ -72,7 +72,7 @@ export const SPEAK_LEVELS: SpeakLevelProfile[] = [
     label: 'L4',
     cefr: 'C1–C2',
     shortTitle: '专八 / GRE',
-    tooltip: 'L4 高阶 · 专八 / GRE 精准词汇与地道修辞 · 母语级口语（CEFR C1–C2）',
+    tooltip: '专八 / GRE · 高阶口语',
     reviewTarget: 'sophisticated TEM-8 / GRE / native-speaker level spoken English with nuanced vocabulary, wit, and layered natural syntax',
     promptRule: [
       '- Target Level: L4 (TEM-8 / GRE / Educated Native Register · CEFR C1–C2).',
