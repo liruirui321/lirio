@@ -34,6 +34,7 @@ import {
   buildExaminerOpener,
   buildFullMockQueue,
   findLinkedPart3,
+  finishStreamAsr,
   formatIeltsPartLabel,
   generateCompanionReplyStream,
   generateExaminerReplyStream,
@@ -45,13 +46,16 @@ import {
   mergeMemory,
   parseIeltsQuestionBank,
   pickAndReadQuestionFile,
+  pushStreamAsrChunk,
   recordPracticedTopics,
   saveSpeakState,
   scoreShadowing,
+  startStreamAsr,
   subscribeSpeakState,
   synthesizeSpeech,
   transcribeVoice,
   warmupLocalTts,
+  warmupStreamAsr,
   type CallViewMode,
   type CompanionPersona,
   type CompanionPersonaId,
@@ -129,6 +133,7 @@ export function SpeakCompanion({
   }, [callActive, onCallActiveChange]);
   const [callPaused, setCallPaused] = useState<boolean>(false);
   const [callPhase, setCallPhase] = useState<CallPhase>('idle');
+  const [liveUserText, setLiveUserText] = useState<string>('');
   const [muted, setMuted] = useState<boolean>(false);
   const [micLevel, setMicLevel] = useState<number>(0);
   const [heardVoice, setHeardVoice] = useState<boolean>(false);
@@ -220,6 +225,9 @@ export function SpeakCompanion({
   const mutedRef = useRef<boolean>(muted);
   const callPausedRef = useRef<boolean>(callPaused);
   const recorderRef = useRef<VadVoiceRecorder | null>(null);
+  const streamSidRef = useRef<string>('');
+  const streamActiveRef = useRef<boolean>(false);
+  const streamPushChainRef = useRef<Promise<void>>(Promise.resolve());
   const shadowRecorderRef = useRef<VadVoiceRecorder | null>(null);
   const mockQueueRef = useRef<IeltsQuestionItem[]>([]);
   const mockStepRef = useRef<number>(0);
@@ -259,6 +267,7 @@ export function SpeakCompanion({
   }, [muted]);
   useEffect(() => {
     warmupLocalTts();
+    warmupStreamAsr();
   }, []);
 
   const updatePersisted = useCallback((updater: (prev: SpeakPersistedState) => SpeakPersistedState) => {
@@ -291,11 +300,36 @@ export function SpeakCompanion({
     pendingResolve?.();
   }, []);
 
+  const transcribeWithActiveStream = useCallback(async (wav: Uint8Array): Promise<string> => {
+    const sid = streamSidRef.current;
+    const hadStream = streamActiveRef.current && Boolean(sid);
+    streamActiveRef.current = false;
+    streamSidRef.current = '';
+    if (hadStream) {
+      try {
+        await streamPushChainRef.current.catch(() => {});
+        const streamed = (await finishStreamAsr(sid)).trim();
+        if (streamed) return streamed;
+      } catch {
+        // fallback to batch ASR below
+      }
+    }
+    return transcribeVoice(wav);
+  }, []);
+
   const stopRecorder = useCallback(async () => {
     const rec = recorderRef.current;
     recorderRef.current = null;
+    const sid = streamSidRef.current;
+    const hadStream = streamActiveRef.current && Boolean(sid);
+    streamActiveRef.current = false;
+    streamSidRef.current = '';
     setMicLevel(0);
     setHeardVoice(false);
+    setLiveUserText('');
+    if (hadStream) {
+      void finishStreamAsr(sid).catch(() => {});
+    }
     if (rec) await rec.cancel();
   }, []);
 
@@ -516,26 +550,55 @@ export function SpeakCompanion({
     const rec = new VadVoiceRecorder();
     rec.setMuted(mutedRef.current);
     recorderRef.current = rec;
+    const sid = `asr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    streamSidRef.current = sid;
+    streamActiveRef.current = true;
+    streamPushChainRef.current = Promise.resolve();
+    const streamReadyPromise = startStreamAsr(sid).then((ok) => {
+      if (!ok && streamSidRef.current === sid) {
+        streamActiveRef.current = false;
+      }
+      return ok;
+    });
     try {
       await rec.start({
         silenceMs,
         onLevel: (lvl) => setMicLevel(lvl),
         onSpeechDetected: () => setHeardVoice(true),
+        onAudioChunk: (pcm16k) => {
+          if (streamSidRef.current !== sid || !streamActiveRef.current) return;
+          streamPushChainRef.current = streamPushChainRef.current.then(async () => {
+            const ready = await streamReadyPromise;
+            if (!ready || streamSidRef.current !== sid || !streamActiveRef.current) return;
+            const partial = (await pushStreamAsrChunk(sid, pcm16k)).trim();
+            if (partial && streamSidRef.current === sid && callActiveRef.current && !callPausedRef.current) {
+              setLiveUserText(partial);
+            }
+          });
+        },
         onSpeechEnd: async (wav) => {
           if (!callActiveRef.current || callPausedRef.current) return;
           recorderRef.current = null;
           setMicLevel(0);
           setHeardVoice(false);
           if (wav.length < 400) {
+            if (streamActiveRef.current && streamSidRef.current === sid) {
+              streamActiveRef.current = false;
+              streamSidRef.current = '';
+              void finishStreamAsr(sid).catch(() => {});
+            }
+            setLiveUserText('');
             beginListeningTurn();
             return;
           }
           setCallPhase('transcribing');
           try {
-            const text = await transcribeVoice(wav);
+            const text = await transcribeWithActiveStream(wav);
+            setLiveUserText('');
             if (!callActiveRef.current || callPausedRef.current) return;
             await processUserTurnInCall(text);
           } catch (e) {
+            setLiveUserText('');
             if (!callActiveRef.current || callPausedRef.current) return;
             setStatusMsg(String(e));
             beginListeningTurn();
@@ -543,6 +606,12 @@ export function SpeakCompanion({
         },
       });
     } catch (e) {
+      if (streamActiveRef.current && streamSidRef.current === sid) {
+        streamActiveRef.current = false;
+        streamSidRef.current = '';
+        void finishStreamAsr(sid).catch(() => {});
+      }
+      setLiveUserText('');
       const msg = String(e);
       setStatusMsg(
         /NotAllowed|PermissionDenied|permission|denied/i.test(msg)
@@ -860,7 +929,8 @@ export function SpeakCompanion({
             if (!callActiveRef.current) return;
             if (wav.length >= 400) {
               try {
-                const text = await transcribeVoice(wav);
+                const text = await transcribeWithActiveStream(wav);
+                setLiveUserText('');
                 if (callActiveRef.current) await processUserTurnInCall(text);
               } catch (e) {
                 setStatusMsg(String(e));
@@ -1158,13 +1228,16 @@ export function SpeakCompanion({
         const wav = await rec.forceFinish();
         if (!callActiveRef.current || callPausedRef.current) return;
         if (wav.length < 400) {
+          setLiveUserText('');
           beginListeningTurn();
           return;
         }
-        const text = await transcribeVoice(wav);
+        const text = await transcribeWithActiveStream(wav);
+        setLiveUserText('');
         if (!callActiveRef.current || callPausedRef.current) return;
         await processUserTurnInCall(text);
       } catch (e) {
+        setLiveUserText('');
         setStatusMsg(String(e));
         if (callActiveRef.current && !callPausedRef.current) beginListeningTurn();
       }
@@ -1693,7 +1766,9 @@ export function SpeakCompanion({
               <span className="fluid-orb" />
             </button>
 
-            <div className="speak-orb-status">{phaseLabel}</div>
+            <div className="speak-orb-status">
+              {callPhase === 'listening' && liveUserText ? `“${liveUserText}”` : phaseLabel}
+            </div>
 
             {!callActive &&
               turns.length === 0 &&
@@ -1878,10 +1953,16 @@ export function SpeakCompanion({
                 <div className="speak-bubble ai pending">思考中…</div>
               </div>
             )}
+            {callPhase === 'listening' && liveUserText && (
+              <div className="speak-chat-row user">
+                <div className="speak-chat-meta">我 · 实时转写</div>
+                <div className="speak-bubble user pending">{liveUserText}</div>
+              </div>
+            )}
             {callPhase === 'transcribing' && (
               <div className="speak-chat-row user">
                 <div className="speak-chat-meta">我</div>
-                <div className="speak-bubble user pending">识别中…</div>
+                <div className="speak-bubble user pending">{liveUserText || '识别中…'}</div>
               </div>
             )}
             <div ref={chatEndRef} />

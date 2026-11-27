@@ -755,6 +755,60 @@ async function resampleToWav16k(chunks: Float32Array[], inputRate: number): Prom
   return encodePcm16Wav(data, targetRate);
 }
 
+function downsampleFloatToPcm16k(samples: Float32Array, inputRate: number): Uint8Array {
+  if (!samples.length) return new Uint8Array();
+  const targetRate = 16000;
+  const ratio = inputRate / targetRate;
+  const outLen = Math.max(1, Math.floor(samples.length / ratio));
+  const out = new Uint8Array(outLen * 2);
+  const view = new DataView(out.buffer);
+  for (let i = 0; i < outLen; i++) {
+    const srcPos = i * ratio;
+    const idx = Math.floor(srcPos);
+    const frac = srcPos - idx;
+    const a = samples[idx] ?? 0;
+    const b = samples[Math.min(idx + 1, samples.length - 1)] ?? a;
+    const v = Math.max(-1, Math.min(1, a + (b - a) * frac));
+    view.setInt16(i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return out;
+}
+
+export function warmupStreamAsr(): void {
+  if (isMobileDevice()) return;
+  void invoke('speak_stream_asr_warmup').catch(() => {});
+}
+
+export async function startStreamAsr(sessionId: string): Promise<boolean> {
+  if (isMobileDevice()) return false;
+  try {
+    return await invoke<boolean>('speak_stream_asr_start', { sid: sessionId });
+  } catch {
+    return false;
+  }
+}
+
+export async function pushStreamAsrChunk(sessionId: string, pcm16kBytes: Uint8Array): Promise<string> {
+  if (isMobileDevice() || pcm16kBytes.length === 0) return '';
+  try {
+    return await invoke<string>('speak_stream_asr_push', {
+      sid: sessionId,
+      pcmBase64: bytesToBase64(pcm16kBytes),
+    });
+  } catch {
+    return '';
+  }
+}
+
+export async function finishStreamAsr(sessionId: string): Promise<string> {
+  if (isMobileDevice()) return '';
+  try {
+    return await invoke<string>('speak_stream_asr_finish', { sid: sessionId });
+  } catch {
+    return '';
+  }
+}
+
 export class VadVoiceRecorder {
   private stream: MediaStream | null = null;
   private ctx: AudioContext | null = null;
@@ -770,15 +824,44 @@ export class VadVoiceRecorder {
   private finished = false;
   private muted = false;
   private noiseFloor = 0.006;
+  private pcmStreamChunks: Uint8Array[] = [];
+  private pcmStreamBytes = 0;
+  private onAudioChunk?: (pcm16kBytes: Uint8Array) => void;
 
   setMuted(m: boolean) {
     this.muted = m;
+  }
+
+  private emitBufferedPcm(force: boolean) {
+    const cb = this.onAudioChunk;
+    if (!cb) return;
+    const minBytes = force ? 2 : 5120; // ~160ms @ 16kHz PCM16
+    if (this.pcmStreamBytes < minBytes) return;
+    const merged = new Uint8Array(this.pcmStreamBytes);
+    let offset = 0;
+    for (const c of this.pcmStreamChunks) {
+      merged.set(c, offset);
+      offset += c.length;
+    }
+    this.pcmStreamChunks = [];
+    this.pcmStreamBytes = 0;
+    cb(merged);
+  }
+
+  private appendPcmSampleChunk(samples: Float32Array) {
+    if (!this.onAudioChunk) return;
+    const pcm = downsampleFloatToPcm16k(samples, this.inputRate);
+    if (!pcm.length) return;
+    this.pcmStreamChunks.push(pcm);
+    this.pcmStreamBytes += pcm.length;
+    this.emitBufferedPcm(false);
   }
 
   async start(opts: {
     silenceMs: number;
     onLevel: (level: number) => void;
     onSpeechDetected?: () => void;
+    onAudioChunk?: (pcm16kBytes: Uint8Array) => void;
     onSpeechEnd: (wav16k: Uint8Array) => void;
   }): Promise<void> {
     this.chunks = [];
@@ -786,6 +869,9 @@ export class VadVoiceRecorder {
     this.heardSpeech = false;
     this.finished = false;
     this.noiseFloor = 0.006;
+    this.pcmStreamChunks = [];
+    this.pcmStreamBytes = 0;
+    this.onAudioChunk = opts.onAudioChunk;
 
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -827,14 +913,17 @@ export class VadVoiceRecorder {
           this.heardSpeech = true;
           this.speechStartedAt = now;
           this.lastVoiceAt = now;
-          this.chunks.push(...this.preRoll);
+          const opening = this.preRoll;
           this.preRoll = [];
+          this.chunks.push(...opening);
+          for (const pr of opening) this.appendPcmSampleChunk(pr);
           opts.onSpeechDetected?.();
         } else {
           this.noiseFloor = Math.min(0.025, Math.max(0.004, this.noiseFloor * 0.85 + rms * 0.15));
         }
       } else {
         this.chunks.push(copy);
+        this.appendPcmSampleChunk(copy);
         if (rms >= continueThreshold) {
           this.lastVoiceAt = now;
         } else if (now - this.speechStartedAt >= minSpeechMs && now - this.lastVoiceAt >= opts.silenceMs) {
@@ -853,6 +942,7 @@ export class VadVoiceRecorder {
   private async finishAndEmit(cb: (wav16k: Uint8Array) => void) {
     if (this.finished) return;
     this.finished = true;
+    this.emitBufferedPcm(true);
     const captured = this.chunks;
     const rate = this.inputRate;
     await this.cleanup();
@@ -863,6 +953,7 @@ export class VadVoiceRecorder {
   async forceFinish(): Promise<Uint8Array> {
     if (this.finished) return new Uint8Array();
     this.finished = true;
+    this.emitBufferedPcm(true);
     const captured = this.heardSpeech ? this.chunks : [...this.preRoll, ...this.chunks];
     const rate = this.inputRate;
     await this.cleanup();
@@ -894,6 +985,9 @@ export class VadVoiceRecorder {
     this.ctx = null;
     this.chunks = [];
     this.preRoll = [];
+    this.pcmStreamChunks = [];
+    this.pcmStreamBytes = 0;
+    this.onAudioChunk = undefined;
   }
 }
 
