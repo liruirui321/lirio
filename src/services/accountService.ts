@@ -575,6 +575,95 @@ export async function proxyChat(opts: {
   return res.content;
 }
 
+export async function proxyChatStream(
+  opts: {
+    messages: Array<{ role: string; content: string }>;
+    temperature?: number;
+    maxTokens?: number;
+    feature?: string;
+  },
+  onDelta: (delta: string) => void,
+): Promise<string> {
+  const st = getAccountState();
+  if (!st.token) {
+    throw new Error('当前处于「Lirio 云端账号」模式，请先点击右上角头像或设置登录账号。');
+  }
+  const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  let resp: Response;
+  try {
+    resp = await fetch(`${base}/api/ai/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream, application/json',
+        Authorization: `Bearer ${st.token}`,
+      },
+      body: JSON.stringify(opts),
+    });
+  } catch {
+    throw new Error('无法连接 Lirio 服务，请检查网络连接后重试。');
+  }
+
+  if (resp.status === 404) {
+    const full = await proxyChat(opts);
+    if (full) onDelta(full);
+    return full;
+  }
+
+  const ct = (resp.headers.get('content-type') || '').toLowerCase();
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    handleUnauthorized(resp.status, st, data?.error);
+    throw new Error(data?.error || `请求失败 (${resp.status})`);
+  }
+
+  if (!ct.includes('text/event-stream') || !resp.body) {
+    const data = (await resp.json().catch(() => ({}))) as { content?: string; user?: AccountUser };
+    if (data.user) updateAccountState({ user: data.user });
+    const full = String(data.content || '').trim();
+    if (full) onDelta(full);
+    return full;
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let assembled = '';
+  let finalContent = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nlIdx;
+    while ((nlIdx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nlIdx).trim();
+      buf = buf.slice(nlIdx + 1);
+      if (!line || !line.startsWith('data:')) continue;
+      const raw = line.slice(5).trim();
+      if (!raw) continue;
+      let evt: { delta?: string; done?: boolean; content?: string; error?: string };
+      try {
+        evt = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (evt.error) {
+        throw new Error(evt.error);
+      }
+      if (typeof evt.delta === 'string' && evt.delta.length > 0) {
+        assembled += evt.delta;
+        onDelta(evt.delta);
+      }
+      if (evt.done && typeof evt.content === 'string') {
+        finalContent = evt.content;
+      }
+    }
+  }
+
+  return (finalContent || assembled).trim();
+}
+
 function base64ToBlobUrl(b64: string, mime: string): string {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);

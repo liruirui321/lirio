@@ -179,6 +179,117 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
   };
 }
 
+export async function forwardChatCompletionStream({ messages, temperature = 0.7, maxTokens, onDelta }) {
+  const provider = (process.env.LIRIO_LLM_PROVIDER || 'deepseek').toLowerCase();
+  const model = process.env.LIRIO_LLM_MODEL || DEFAULT_MODELS[provider] || 'deepseek-chat';
+  const baseUrl = (process.env.LIRIO_LLM_BASE_URL || DEFAULT_URLS[provider] || DEFAULT_URLS.deepseek).replace(/\/+$/, '');
+  const apiKey =
+    (process.env.LIRIO_LLM_API_KEY || '').trim() ||
+    (provider === 'deepseek' ? (process.env.DEEPSEEK_API_KEY || '').trim() : '');
+  const safeMaxTokens = Math.min(Math.max(64, Number(maxTokens) || 1200), 2048);
+
+  if (isMockMode()) {
+    const res = await forwardChatCompletion({ messages, temperature, maxTokens: safeMaxTokens });
+    const parts = res.content.match(/.{1,36}/g) || [res.content];
+    for (const part of parts) {
+      onDelta?.(part);
+    }
+    return res;
+  }
+
+  if (!apiKey) {
+    throw new Error('服务器尚未配置主文本 API Key（LIRIO_LLM_API_KEY），暂时无法使用官方 API 模式。');
+  }
+
+  const resp = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature,
+      max_tokens: safeMaxTokens,
+      stream: true,
+      stream_options: { include_usage: true },
+    }),
+  });
+
+  if (!resp.ok || !resp.body) {
+    const data = await resp.json().catch(() => ({}));
+    throw sanitizeUpstreamError(
+      'LLM-Stream',
+      `status=${resp.status} ${data?.error?.message || ''}`,
+      '上游 AI 服务暂时不可用，请稍后重试。',
+    );
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let fullContent = '';
+  let resolvedModel = model;
+  let usageData = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nlIdx;
+    while ((nlIdx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nlIdx).trim();
+      buf = buf.slice(nlIdx + 1);
+      if (!line || !line.startsWith('data:')) continue;
+      const raw = line.slice(5).trim();
+      if (!raw || raw === '[DONE]') continue;
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (parsed?.model) resolvedModel = parsed.model;
+      if (parsed?.usage) usageData = parsed.usage;
+      const delta = parsed?.choices?.[0]?.delta?.content;
+      if (typeof delta === 'string' && delta.length > 0) {
+        fullContent += delta;
+        onDelta?.(delta);
+      }
+    }
+  }
+
+  const content = fullContent.trim();
+  if (!content) {
+    throw new Error('上游 AI 服务未返回有效内容。');
+  }
+
+  const promptTokens = Number(usageData?.prompt_tokens) || estimateTokens(JSON.stringify(messages));
+  const completionTokens = Number(usageData?.completion_tokens) || estimateTokens(content);
+  const cacheHitTokens =
+    usageData?.prompt_cache_hit_tokens !== undefined
+      ? Number(usageData.prompt_cache_hit_tokens) || 0
+      : Number(usageData?.prompt_tokens_details?.cached_tokens) || 0;
+  const cacheMissTokens =
+    usageData?.prompt_cache_miss_tokens !== undefined
+      ? Number(usageData.prompt_cache_miss_tokens) || 0
+      : Math.max(0, promptTokens - cacheHitTokens);
+
+  return {
+    provider,
+    model: resolvedModel,
+    content,
+    usage: {
+      promptTokens,
+      completionTokens,
+      cacheHitTokens,
+      cacheMissTokens,
+      totalTokens: promptTokens + completionTokens,
+    },
+  };
+}
+
 const NEURAL_VOICE_BY_ACCENT = {
   uk: 'en-GB-SoniaNeural',
   us: 'en-US-AndrewMultilingualNeural',
@@ -576,7 +687,9 @@ export async function forwardTranscribe({ wavBuf, wavBase64, mimeType, durationS
   }
   const approxSec = Number(durationSec) > 0 ? Number(durationSec) : Math.max(1, Math.round(buf.length / 32000));
 
-  const asrModel = (process.env.LIRIO_ASR_MODEL || 'whisper-1').trim();
+  const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const defaultModel = baseUrl.includes('siliconflow') ? 'FunAudioLLM/SenseVoiceSmall' : 'whisper-1';
+  const asrModel = (process.env.LIRIO_ASR_MODEL || defaultModel).trim();
   const isSenseVoice = asrModel.includes('SenseVoiceSmall');
 
   if (isMockMode()) {
@@ -590,7 +703,6 @@ export async function forwardTranscribe({ wavBuf, wavBase64, mimeType, durationS
   }
 
   const apiKey = (process.env.LIRIO_SPEECH_API_KEY || '').trim();
-  const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
   if (!apiKey) {
     throw new Error('服务器尚未配置云端语音识别 API Key（LIRIO_SPEECH_API_KEY）。');
   }

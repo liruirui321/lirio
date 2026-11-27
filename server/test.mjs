@@ -834,7 +834,30 @@ try {
   const siteCors = await fetch(`${base}/api/health`, { headers: { Origin: 'https://lirio.deltae.tech' } });
   assert.equal(siteCors.headers.get('access-control-allow-origin'), 'https://lirio.deltae.tech');
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (19/19)');
+  // 20. Verify streaming SSE chat endpoint (/api/ai/chat/stream)
+  const streamRes = await fetch(`${base}/api/ai/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      Origin: 'tauri://localhost',
+      Authorization: `Bearer ${cherryToken}`,
+    },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: 'Say hello warmly.' }],
+    }),
+  });
+  assert.equal(streamRes.status, 200);
+  assert.ok((streamRes.headers.get('content-type') || '').includes('text/event-stream'));
+  assert.equal(streamRes.headers.get('access-control-allow-origin'), 'tauri://localhost');
+  const sseBody = await streamRes.text();
+  assert.ok(sseBody.includes('"delta":'));
+  assert.ok(sseBody.includes('"done":true'));
+
+  const badStream = await req('POST', '/api/ai/chat/stream', { messages: [{ role: 'tool', content: 'x' }] }, cherryToken);
+  assert.equal(badStream.status, 400);
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (20/20)');
 } finally {
   server.close();
 }

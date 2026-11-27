@@ -2,7 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { loadCorpusState, lookupBuiltinWord, saveCorpusState, type Accent } from './corpusService';
-import { getAccountState, proxyChat, proxyTranscribe, proxyTts } from './accountService';
+import { getAccountState, proxyChat, proxyChatStream, proxyTranscribe, proxyTts } from './accountService';
+import { isMobileDevice, isWindowsPlatform } from './platform';
 import { saveStateBackup } from './stateSync';
 import ielts2026Q4Raw from '../data/ielts_speaking_2026_sep_dec.json';
 
@@ -810,6 +811,17 @@ export async function synthesizeSpeech(
 
   if (acct.aiMode === 'pro_balance') {
     const cloudVoice = voiceOverride?.edgeVoice || voiceOverride?.openaiVoice || config.speechVoice;
+    const isMacDesktop = !isMobileDevice() && !isWindowsPlatform();
+    if (isMacDesktop) {
+      try {
+        return await invokeFreeTts();
+      } catch (localErr) {
+        if (acct.token) {
+          return await proxyTts(text, effectiveAccent, cloudVoice, '云端语音合成');
+        }
+        throw localErr;
+      }
+    }
     if (acct.proCloudSpeech) {
       try {
         return await proxyTts(text, effectiveAccent, cloudVoice, '云端语音合成');
@@ -1244,6 +1256,22 @@ async function callActiveLlm(
   return callCustomLlm(config, messages, temperature);
 }
 
+async function callActiveLlmStream(
+  config: SpeakConfig,
+  messages: { role: string; content: string }[],
+  temperature = 0.7,
+  feature = 'AI 对话',
+  onDelta: (delta: string) => void,
+): Promise<string> {
+  const acct = getAccountState();
+  if (acct.aiMode === 'pro_balance') {
+    return proxyChatStream({ messages, temperature, feature }, onDelta);
+  }
+  const full = await callCustomLlm(config, messages, temperature);
+  if (full) onDelta(full);
+  return full;
+}
+
 export async function testProviderConnection(config: SpeakConfig): Promise<string> {
   return callCustomLlm(
     config,
@@ -1273,9 +1301,55 @@ export async function generateCompanionReply(
   return callActiveLlm(config, messages, 0.75, '口语陪练');
 }
 
+export async function generateCompanionReplyStream(
+  config: SpeakConfig,
+  topicId: string,
+  turns: SpeakTurn[],
+  memory: UserMemoryProfile,
+  onDelta: (delta: string) => void,
+  customTopicGuide?: string,
+  persona?: CompanionPersona,
+): Promise<string> {
+  const topic = SPEAK_TOPICS.find((t) => t.id === topicId) || SPEAK_TOPICS[0];
+  const guide = customTopicGuide?.trim() ? customTopicGuide : topic.guide;
+  const system = buildCompanionSystemPrompt(guide, memory, persona);
+  const messages = [
+    { role: 'system', content: system },
+    ...turns.slice(-16).map((t) => ({ role: t.role, content: t.text })),
+  ];
+  return callActiveLlmStream(config, messages, 0.75, '口语陪练', onDelta);
+}
+
 export interface ExaminerReplyResult {
   text: string;
   action: 'continue' | 'next_part' | 'end_test';
+}
+
+export async function generateExaminerReplyStream(
+  config: SpeakConfig,
+  questionItem: IeltsQuestionItem,
+  stageTurns: SpeakTurn[],
+  onDelta: (delta: string) => void,
+  opts: ExaminerReplyOptions = {},
+): Promise<ExaminerReplyResult> {
+  const candidateAnswersInPart = stageTurns.filter((t) => t.role === 'user').length;
+  const system = buildExaminerSystemPrompt(questionItem, candidateAnswersInPart, opts);
+  const messages = [
+    { role: 'system', content: system },
+    ...stageTurns.slice(-18).map((t) => ({ role: t.role, content: t.text })),
+  ];
+  const raw = await callActiveLlmStream(config, messages, 0.45, '雅思考官', onDelta);
+  let action: 'continue' | 'next_part' | 'end_test' = 'continue';
+  if (/\[END_TEST\]/i.test(raw)) {
+    action = 'end_test';
+  } else if (/\[NEXT_PART\]/i.test(raw)) {
+    action = opts.hasNextPart ? 'next_part' : 'end_test';
+  }
+  const text = raw
+    .replace(/\s*\[(NEXT_PART|END_TEST)\]\s*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { text, action };
 }
 
 export async function generateExaminerReply(

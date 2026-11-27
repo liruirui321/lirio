@@ -33,8 +33,9 @@ import {
   buildFullMockQueue,
   findLinkedPart3,
   formatIeltsPartLabel,
-  generateCompanionReply,
-  generateExaminerReply,
+  generateCompanionReplyStream,
+  generateExaminerReplyStream,
+  type ExaminerReplyResult,
   generateSessionTakeaways,
   getCompanionPersona,
   getTopWordMistakesForSpeak,
@@ -343,6 +344,90 @@ export function SpeakCompanion({
   }, [subView, stopShadowRecorder]);
 
   // Pipelined sentence-by-sentence TTS for minimal first-byte latency; returns false if interrupted
+  const playSingleAudioUrl = useCallback(
+    async (url: string, seq: number): Promise<boolean> => {
+      if (seq !== playSeqRef.current || callPausedRef.current) {
+        URL.revokeObjectURL(url);
+        return false;
+      }
+
+      const out = getPlaybackOutput();
+      let playedViaWebAudio = false;
+      if (out) {
+        try {
+          const resp = await fetch(url);
+          const ab = await resp.arrayBuffer();
+          if (seq !== playSeqRef.current || callPausedRef.current) {
+            URL.revokeObjectURL(url);
+            return false;
+          }
+          const audioBuf = await out.ctx.decodeAudioData(ab);
+          if (seq !== playSeqRef.current || callPausedRef.current) {
+            URL.revokeObjectURL(url);
+            return false;
+          }
+          if (out.ctx.state === 'suspended') {
+            await out.ctx.resume().catch(() => {});
+          }
+          playedViaWebAudio = true;
+          await new Promise<void>((resolve) => {
+            const src = out.ctx.createBufferSource();
+            src.buffer = audioBuf;
+            src.connect(out.gain);
+            playbackSourceRef.current = src;
+            let settled = false;
+            const done = () => {
+              if (settled) return;
+              settled = true;
+              if (playResolveRef.current === done) playResolveRef.current = null;
+              if (playbackSourceRef.current === src) {
+                src.onended = null;
+                try {
+                  src.disconnect();
+                } catch {}
+                playbackSourceRef.current = null;
+              }
+              URL.revokeObjectURL(url);
+              resolve();
+            };
+            playResolveRef.current = done;
+            src.onended = done;
+            src.start(0);
+          });
+        } catch {
+          playedViaWebAudio = false;
+        }
+      }
+
+      if (!playedViaWebAudio) {
+        await new Promise<void>((resolve) => {
+          const audio = new Audio(url);
+          audio.volume = 1;
+          audioRef.current = audio;
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            if (playResolveRef.current === done) playResolveRef.current = null;
+            if (audioRef.current === audio) {
+              audio.onended = null;
+              audio.onerror = null;
+              audioRef.current = null;
+            }
+            URL.revokeObjectURL(url);
+            resolve();
+          };
+          playResolveRef.current = done;
+          audio.onended = done;
+          audio.onerror = done;
+          audio.play().catch(done);
+        });
+      }
+      return seq === playSeqRef.current && !callPausedRef.current;
+    },
+    [getPlaybackOutput],
+  );
+
   const playTtsAndWait = useCallback(
     async (text: string, opts?: { usePersonaVoice?: boolean }): Promise<boolean> => {
       stopAudio();
@@ -386,88 +471,12 @@ export function SpeakCompanion({
         } catch {
           continue;
         }
-        if (seq !== playSeqRef.current || callPausedRef.current) {
-          URL.revokeObjectURL(url);
-          return false;
-        }
-
-        const out = getPlaybackOutput();
-        let playedViaWebAudio = false;
-        if (out) {
-          try {
-            const resp = await fetch(url);
-            const ab = await resp.arrayBuffer();
-            if (seq !== playSeqRef.current || callPausedRef.current) {
-              URL.revokeObjectURL(url);
-              return false;
-            }
-            const audioBuf = await out.ctx.decodeAudioData(ab);
-            if (seq !== playSeqRef.current || callPausedRef.current) {
-              URL.revokeObjectURL(url);
-              return false;
-            }
-            if (out.ctx.state === 'suspended') {
-              await out.ctx.resume().catch(() => {});
-            }
-            playedViaWebAudio = true;
-            await new Promise<void>((resolve) => {
-              const src = out.ctx.createBufferSource();
-              src.buffer = audioBuf;
-              src.connect(out.gain);
-              playbackSourceRef.current = src;
-              let settled = false;
-              const done = () => {
-                if (settled) return;
-                settled = true;
-                if (playResolveRef.current === done) playResolveRef.current = null;
-                if (playbackSourceRef.current === src) {
-                  src.onended = null;
-                  try {
-                    src.disconnect();
-                  } catch {}
-                  playbackSourceRef.current = null;
-                }
-                URL.revokeObjectURL(url);
-                resolve();
-              };
-              playResolveRef.current = done;
-              src.onended = done;
-              src.start(0);
-            });
-          } catch {
-            playedViaWebAudio = false;
-          }
-        }
-
-        if (!playedViaWebAudio) {
-          await new Promise<void>((resolve) => {
-            const audio = new Audio(url);
-            audio.volume = 1;
-            audioRef.current = audio;
-            let settled = false;
-            const done = () => {
-              if (settled) return;
-              settled = true;
-              if (playResolveRef.current === done) playResolveRef.current = null;
-              if (audioRef.current === audio) {
-                audio.onended = null;
-                audio.onerror = null;
-                audioRef.current = null;
-              }
-              URL.revokeObjectURL(url);
-              resolve();
-            };
-            playResolveRef.current = done;
-            audio.onended = done;
-            audio.onerror = done;
-            audio.play().catch(done);
-          });
-        }
-        if (seq !== playSeqRef.current || callPausedRef.current) return false;
+        const ok = await playSingleAudioUrl(url, seq);
+        if (!ok) return false;
       }
       return seq === playSeqRef.current && !callPausedRef.current;
     },
-    [stopAudio, getPlaybackOutput],
+    [stopAudio, playSingleAudioUrl],
   );
 
   const beginListeningTurn = useCallback(async () => {
@@ -486,8 +495,8 @@ export function SpeakCompanion({
     const silenceMs = isPart2Monologue
       ? 4500
       : speakModeRef.current === 'companion'
-        ? Math.min(configRef.current.silenceMs || 1200, 1200)
-        : configRef.current.silenceMs || 1600;
+        ? Math.min(configRef.current.silenceMs || 850, 850)
+        : Math.min(configRef.current.silenceMs || 1200, 1200);
 
     const rec = new VadVoiceRecorder();
     rec.setMuted(mutedRef.current);
@@ -560,6 +569,151 @@ export function SpeakCompanion({
       }
 
       setCallPhase('thinking');
+      stopAudio();
+      const seq = playSeqRef.current;
+
+      const accent = configRef.current.accent;
+      const voiceOverride =
+        speakModeRef.current === 'companion'
+          ? {
+              accent: personaRef.current.accent,
+              edgeVoice: personaRef.current.edgeVoice,
+              openaiVoice: personaRef.current.openaiVoice,
+            }
+          : undefined;
+
+      const ttsQueue: Array<Promise<string>> = [];
+      let streamDone = false;
+      let wakeDrain: (() => void) | null = null;
+      const notifyDrain = () => {
+        const fn = wakeDrain;
+        wakeDrain = null;
+        fn?.();
+      };
+      const cleanupQueue = () => {
+        while (ttsQueue.length > 0) {
+          const p = ttsQueue.shift()!;
+          void p.then((u) => URL.revokeObjectURL(u)).catch(() => {});
+        }
+      };
+
+      const drainPromise = (async () => {
+        let switchedToSpeaking = false;
+        while (true) {
+          if (!callActiveRef.current || callPausedRef.current || seq !== playSeqRef.current) {
+            cleanupQueue();
+            return false;
+          }
+          if (ttsQueue.length === 0) {
+            if (streamDone) return true;
+            await new Promise<void>((r) => {
+              wakeDrain = r;
+            });
+            continue;
+          }
+          const nextUrlPromise = ttsQueue.shift()!;
+          let url: string;
+          try {
+            url = await nextUrlPromise;
+          } catch {
+            continue;
+          }
+          if (!callActiveRef.current || callPausedRef.current || seq !== playSeqRef.current) {
+            URL.revokeObjectURL(url);
+            cleanupQueue();
+            return false;
+          }
+          if (!switchedToSpeaking) {
+            switchedToSpeaking = true;
+            setCallPhase('ai_speaking');
+          }
+          const ok = await playSingleAudioUrl(url, seq);
+          if (!ok) {
+            cleanupQueue();
+            return false;
+          }
+        }
+      })();
+
+      const aiTurnId = `a-${Date.now()}`;
+      let streamedRaw = '';
+      let spokenBuffer = '';
+      let enqueuedCount = 0;
+
+      const enqueueChunk = (rawChunk: string) => {
+        if (!callActiveRef.current || callPausedRef.current || seq !== playSeqRef.current) return;
+        const cleanChunk = rawChunk
+          .replace(/\s*\[(NEXT_PART|END_TEST)\]\s*/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!cleanChunk || !/[A-Za-z0-9\u4e00-\u9fa5]/.test(cleanChunk)) return;
+        enqueuedCount++;
+        ttsQueue.push(synthesizeSpeech(cleanChunk, accent, voiceOverride));
+        notifyDrain();
+      };
+
+      const extractReadyChunks = (forceFlush: boolean) => {
+        while (true) {
+          let scannable = spokenBuffer;
+          let heldTail = '';
+          if (!forceFlush) {
+            const bracketIdx = spokenBuffer.lastIndexOf('[');
+            if (bracketIdx >= 0 && !spokenBuffer.slice(bracketIdx).includes(']')) {
+              scannable = spokenBuffer.slice(0, bracketIdx);
+              heldTail = spokenBuffer.slice(bracketIdx);
+            }
+          }
+          const sentMatch = scannable.match(/^([\s\S]*?[.!?。！？]+)(?:\s+|$)([\s\S]*)$/);
+          if (sentMatch && sentMatch[1].trim().length >= 2) {
+            enqueueChunk(sentMatch[1]);
+            spokenBuffer = sentMatch[2] + heldTail;
+            continue;
+          }
+          if (enqueuedCount === 0 && scannable.length >= 60) {
+            const clauseMatch = scannable.match(/^([\s\S]{25,}?[,;—，])\s+([\s\S]+)$/);
+            if (clauseMatch) {
+              enqueueChunk(clauseMatch[1]);
+              spokenBuffer = clauseMatch[2] + heldTail;
+              continue;
+            }
+          }
+          break;
+        }
+        if (forceFlush && spokenBuffer.trim()) {
+          enqueueChunk(spokenBuffer);
+          spokenBuffer = '';
+        }
+      };
+
+      const pushVisibleBubble = (rawText: string) => {
+        const display = rawText
+          .replace(/\s*\[(NEXT_PART|END_TEST)\]\s*/gi, ' ')
+          .replace(/\s*\[[A-Z_]*$/g, '')
+          .trim();
+        if (!display) return;
+        const curTurns = turnsRef.current;
+        const existingIdx = curTurns.findIndex((t) => t.id === aiTurnId);
+        const updatedTurn: SpeakTurn = {
+          id: aiTurnId,
+          role: 'assistant',
+          text: display,
+          timestamp: existingIdx >= 0 ? curTurns[existingIdx].timestamp : Date.now(),
+        };
+        const nextList =
+          existingIdx >= 0
+            ? curTurns.map((t, idx) => (idx === existingIdx ? updatedTurn : t))
+            : [...curTurns, updatedTurn];
+        turnsRef.current = nextList;
+        setTurns(nextList);
+      };
+
+      const onDelta = (delta: string) => {
+        if (!callActiveRef.current || seq !== playSeqRef.current) return;
+        streamedRaw += delta;
+        spokenBuffer += delta;
+        pushVisibleBubble(streamedRaw);
+        extractReadyChunks(false);
+      };
 
       try {
         const extCtx = externalContextRef.current;
@@ -571,39 +725,61 @@ export function SpeakCompanion({
         const hasNextPart =
           mockQueueRef.current.length > 0 && mockStepRef.current + 1 < mockQueueRef.current.length;
         const linkedPart2Topic = mockQueueRef.current.find((q) => q.part === 'part2')?.topic;
-        const examinerRes =
-          speakModeRef.current === 'examiner' && questionRef.current
-            ? await generateExaminerReply(configRef.current, questionRef.current, stageTurns, {
-                hasNextPart,
-                linkedPart2Topic,
-                part2UserExcerpt: part2MonologueRef.current || undefined,
-              })
-            : null;
-        const reply = examinerRes
-          ? examinerRes.text
-          : await generateCompanionReply(
-              configRef.current,
-              topicIdRef.current,
-              nextTurns,
-              incognitoRef.current ? EMPTY_USER_MEMORY : memoryRef.current,
-              customGuide,
-              personaRef.current,
-            );
-        if (!callActiveRef.current) return;
-        const aiTurn: SpeakTurn = {
-          id: `a-${Date.now()}`,
-          role: 'assistant',
-          text: reply,
-          timestamp: Date.now(),
-        };
-        const afterAi = [...turnsRef.current, aiTurn];
-        turnsRef.current = afterAi;
-        setTurns(afterAi);
-        if (callPausedRef.current) return;
+        let examinerRes: ExaminerReplyResult | null = null;
+        let reply = '';
+        try {
+          examinerRes =
+            speakModeRef.current === 'examiner' && questionRef.current
+              ? await generateExaminerReplyStream(
+                  configRef.current,
+                  questionRef.current,
+                  stageTurns,
+                  onDelta,
+                  {
+                    hasNextPart,
+                    linkedPart2Topic,
+                    part2UserExcerpt: part2MonologueRef.current || undefined,
+                  },
+                )
+              : null;
+          reply = examinerRes
+            ? examinerRes.text
+            : (
+                await generateCompanionReplyStream(
+                  configRef.current,
+                  topicIdRef.current,
+                  nextTurns,
+                  incognitoRef.current ? EMPTY_USER_MEMORY : memoryRef.current,
+                  onDelta,
+                  customGuide,
+                  personaRef.current,
+                )
+              )
+                .replace(/\s*\[(NEXT_PART|END_TEST)\]\s*/gi, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        } finally {
+          extractReadyChunks(true);
+          streamDone = true;
+          notifyDrain();
+        }
 
-        setCallPhase('ai_speaking');
-        const finished = await playTtsAndWait(reply);
-        if (!callActiveRef.current || !finished) return;
+        if (!callActiveRef.current || seq !== playSeqRef.current) {
+          await drainPromise;
+          return;
+        }
+        pushVisibleBubble(reply);
+        if (callPausedRef.current) {
+          await drainPromise;
+          return;
+        }
+
+        if (enqueuedCount === 0 && reply) {
+          ttsQueue.push(synthesizeSpeech(reply, accent, voiceOverride));
+          notifyDrain();
+        }
+        const finished = await drainPromise;
+        if (!callActiveRef.current || !finished || seq !== playSeqRef.current) return;
         if (examinerRes?.action === 'next_part' && mockStepRef.current + 1 < mockQueueRef.current.length) {
           await handleNextMockStageRef.current();
         } else if (examinerRes?.action === 'end_test') {
@@ -612,6 +788,10 @@ export function SpeakCompanion({
           beginListeningTurn();
         }
       } catch (e) {
+        streamDone = true;
+        notifyDrain();
+        cleanupQueue();
+        await drainPromise.catch(() => {});
         setStatusMsg(String(e));
         if (callActiveRef.current && !callPausedRef.current) {
           beginListeningTurn();
@@ -620,7 +800,7 @@ export function SpeakCompanion({
         }
       }
     },
-    [playTtsAndWait, beginListeningTurn],
+    [stopAudio, playSingleAudioUrl, beginListeningTurn],
   );
 
   // Part 2 60s prep countdown -> auto enter speaking listening mode

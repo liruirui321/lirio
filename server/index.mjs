@@ -62,7 +62,7 @@ import {
   getDeepSeekRatesPer1M,
   isDeepSeekPeakBeijing,
 } from './pricing.mjs';
-import { forwardChatCompletion, forwardTranscribe, forwardTts, warmupEdgeWorker } from './aiProxy.mjs';
+import { forwardChatCompletion, forwardChatCompletionStream, forwardTranscribe, forwardTts, warmupEdgeWorker } from './aiProxy.mjs';
 
 function isValidAccountId(raw) {
   const s = String(raw || '').trim();
@@ -2035,9 +2035,9 @@ export function createLirioServer({ dbPath } = {}) {
         return;
       }
 
-      if (req.method === 'POST' && pathname === '/api/ai/chat') {
+      const checkAndParseChatBody = async () => {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
-        if (!authState) return;
+        if (!authState) return null;
         const user = authState.user;
 
         const userRpm = Math.max(1, Number(process.env.LIRIO_BETA_CHAT_RPM || 20));
@@ -2052,13 +2052,13 @@ export function createLirioServer({ dbPath } = {}) {
           if (uTok.count >= userDailyTokens) {
             res.setHeader('Retry-After', String(uTok.retryAfterSec));
             sendJson(res, 429, { error: '今日免费公测对话额度已用完，请明天再试或填写自带 API Key。', retryAfterSec: uTok.retryAfterSec });
-            return;
+            return null;
           }
           const ipTok = getWindowUsage(`chat-tok-ip:${clientIp}`, 86400000);
           if (ipTok.count >= ipDailyTokens) {
             res.setHeader('Retry-After', String(ipTok.retryAfterSec));
             sendJson(res, 429, { error: '当前网络今日公测对话额度已达上限，请明天再试或填写自带 API Key。', retryAfterSec: ipTok.retryAfterSec });
-            return;
+            return null;
           }
         }
         if (
@@ -2067,27 +2067,34 @@ export function createLirioServer({ dbPath } = {}) {
           !consumeRateLimit(res, `chat-day-u:${user.id}`, userDailyReq, 86400000, '今日免费公测对话次数已达上限，请明天再试或使用自带 Key。') ||
           !consumeRateLimit(res, `chat-day-ip:${clientIp}`, ipDailyReq, 86400000, '当前网络今日对话次数已达上限，请明天再试。')
         ) {
-          return;
+          return null;
         }
 
         const body = await readJsonBody(req, 512 * 1024);
         if (!Array.isArray(body.messages) || body.messages.length === 0 || body.messages.length > 32) {
           sendJson(res, 400, { error: '对话消息数量需在 1–32 条之间。' });
-          return;
+          return null;
         }
         let totalChars = 0;
         for (const m of body.messages) {
           if (!m || typeof m !== 'object' || !['system', 'user', 'assistant'].includes(m.role) || typeof m.content !== 'string') {
             sendJson(res, 400, { error: '对话消息格式无效。' });
-            return;
+            return null;
           }
           totalChars += m.content.length;
           if (totalChars > 24000) {
             sendJson(res, 400, { error: '单次对话上下文过长（最多 24000 字符）。' });
-            return;
+            return null;
           }
         }
         const safeMaxTokens = Math.min(Math.max(64, Number(body.maxTokens) || 1200), 2048);
+        return { user, body, safeMaxTokens };
+      };
+
+      if (req.method === 'POST' && pathname === '/api/ai/chat') {
+        const ctx = await checkAndParseChatBody();
+        if (!ctx) return;
+        const { user, body, safeMaxTokens } = ctx;
 
         const aiRes = await forwardChatCompletion({
           messages: body.messages,
@@ -2110,6 +2117,55 @@ export function createLirioServer({ dbPath } = {}) {
           totalSpentUnits: user.totalSpentUnits,
           user,
         });
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/ai/chat/stream') {
+        const ctx = await checkAndParseChatBody();
+        if (!ctx) return;
+        const { user, body, safeMaxTokens } = ctx;
+
+        const sseHeaders = {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
+          'Vary': 'Origin',
+        };
+        if (corsOrigin) {
+          sseHeaders['Access-Control-Allow-Origin'] = corsOrigin;
+        }
+        res.writeHead(200, sseHeaders);
+        try {
+          const aiRes = await forwardChatCompletionStream({
+            messages: body.messages,
+            temperature: body.temperature ?? 0.7,
+            maxTokens: safeMaxTokens,
+            onDelta: (delta) => {
+              if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+              }
+            },
+          });
+          if (!rateLimitDisabled()) {
+            const usedTokens = Number(aiRes.usage?.totalTokens || 0);
+            if (usedTokens > 0) {
+              addWindowUsage(`chat-tok-u:${user.id}`, usedTokens, 86400000);
+              addWindowUsage(`chat-tok-ip:${clientIp}`, usedTokens, 86400000);
+            }
+          }
+          if (!res.writableEnded) {
+            res.write(
+              `data: ${JSON.stringify({ done: true, content: aiRes.content, model: aiRes.model, usage: aiRes.usage })}\n\n`,
+            );
+            res.end();
+          }
+        } catch (streamErr) {
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ error: sanitizePublicError(streamErr) })}\n\n`);
+            res.end();
+          }
+        }
         return;
       }
 
