@@ -126,15 +126,18 @@ pub struct ChatMessage {
 }
 
 fn find_edge_tts() -> Option<String> {
-    for cand in [
-        "/opt/homebrew/bin/edge-tts",
-        "/usr/local/bin/edge-tts",
-        "/Users/cherry/Library/Python/3.9/bin/edge-tts",
-        "/Users/cherry/Library/Python/3.11/bin/edge-tts",
-        "/Users/cherry/Library/Python/3.12/bin/edge-tts",
-    ] {
-        if std::path::Path::new(cand).is_file() {
-            return Some(cand.to_string());
+    let mut cands = vec![
+        "/opt/homebrew/bin/edge-tts".to_string(),
+        "/usr/local/bin/edge-tts".to_string(),
+    ];
+    if let Ok(home) = std::env::var("HOME") {
+        for py_ver in ["3.9", "3.10", "3.11", "3.12", "3.13"] {
+            cands.push(format!("{home}/Library/Python/{py_ver}/bin/edge-tts"));
+        }
+    }
+    for cand in cands {
+        if std::path::Path::new(&cand).is_file() {
+            return Some(cand);
         }
     }
     #[cfg(target_os = "windows")]

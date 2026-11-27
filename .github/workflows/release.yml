@@ -1,15 +1,12 @@
 name: Release All Platforms (macOS / Windows / Android / iOS)
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v0.5.2 or v0.5.2-win-android)'
+        description: 'Release tag (e.g. v0.5.3 or v0.5.3-win-android)'
         required: true
-        default: 'v0.5.2'
+        default: 'v0.5.3'
 
 permissions:
   contents: write

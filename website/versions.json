@@ -1,7 +1,7 @@
 {
   "appName": "Lirio",
-  "latestVersion": "0.5.2",
-  "releaseDate": "2026-11-26",
+  "latestVersion": "0.5.3",
+  "releaseDate": "2026-11-27",
   "releaseBaseUrl": "https://lirio.deltae.tech/releases",
   "priceYuan": 99,
   "platforms": {
@@ -10,9 +10,9 @@
       "arch": "Apple Silicon / Intel",
       "minOs": "macOS 12+",
       "format": ".dmg",
-      "version": "0.5.2",
-      "filename": "Lirio-0.5.2-macos.dmg",
-      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.2-macos.dmg",
+      "version": "0.5.3",
+      "filename": "Lirio-0.5.3-macos.dmg",
+      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.3-macos.dmg",
       "autoUpdate": true
     },
     "windows": {
@@ -20,9 +20,9 @@
       "arch": "64 位 (x64)",
       "minOs": "Windows 10 / 11",
       "format": ".exe",
-      "version": "0.5.2",
-      "filename": "Lirio-0.5.2-windows-x64-setup.exe",
-      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.2-windows-x64-setup.exe",
+      "version": "0.5.3",
+      "filename": "Lirio-0.5.3-windows-x64-setup.exe",
+      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.3-windows-x64-setup.exe",
       "autoUpdate": true
     },
     "android": {
@@ -30,9 +30,9 @@
       "arch": "ARM64 (Android 9+)",
       "minOs": "Android 9+",
       "format": ".apk",
-      "version": "0.5.2",
-      "filename": "Lirio-0.5.2-android.apk",
-      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.2-android.apk",
+      "version": "0.5.3",
+      "filename": "Lirio-0.5.3-android.apk",
+      "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.3-android.apk",
       "autoUpdate": true
     },
     "ios": {
@@ -42,13 +42,20 @@
       "format": "敬请期待",
       "statusNote": "敬请期待",
       "comingSoon": true,
-      "version": "0.5.2",
+      "version": "0.5.3",
       "filename": "",
       "downloadUrl": "",
       "autoUpdate": false
     }
   },
   "history": [
+    {
+      "version": "0.5.3",
+      "date": "2026-11-27",
+      "highlights": [
+        "极简图标化界面、我的上传独立仓库、拖拽导入与字幕行内精校、Tab 重播直入听写、全面安全加固与纯 Edge 神经语音"
+      ]
+    },
     {
       "version": "0.5.2",
       "date": "2026-11-26",

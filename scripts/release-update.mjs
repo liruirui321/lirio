@@ -31,7 +31,7 @@ const baseUrl = (
 ).replace(/\/+$/, '');
 const notes = parseArg('--notes') || `Lirio v${version}`;
 const shouldUpload = process.argv.includes('--upload');
-const remoteHost = process.env.LIRIO_DEPLOY_HOST || 'annealingtech';
+const remoteHost = (process.env.LIRIO_DEPLOY_HOST || '').trim();
 
 const keyPassPath =
   process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD_PATH || `${keyPath}.pass`;
@@ -119,6 +119,10 @@ if (copiedDmg) console.log(`  - ${outDmgName}`);
 console.log(`  - latest.json (url: ${manifest.platforms[platformKey].url})`);
 
 if (shouldUpload) {
+  if (!remoteHost) {
+    console.error('[release-update] Missing LIRIO_DEPLOY_HOST environment variable for --upload.');
+    process.exit(1);
+  }
   console.log(`[release-update] Uploading ${DIST_DIR}/ to ${remoteHost}:/opt/lirio/releases/ ...`);
   execFileSync('rsync', ['-avz', `${DIST_DIR}/`, `${remoteHost}:/opt/lirio/releases/`], {
     stdio: 'inherit',

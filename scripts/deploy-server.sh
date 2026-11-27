@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REMOTE_HOST="${LIRIO_DEPLOY_HOST:-annealingtech}"
-REMOTE_DIR="/opt/lirio/app"
+REMOTE_HOST="${LIRIO_DEPLOY_HOST:?Please set LIRIO_DEPLOY_HOST (e.g. user@your-server)}"
+REMOTE_DIR="${LIRIO_DEPLOY_DIR:-/opt/lirio/app}"
 
 echo "==> Syncing server/ and website/ to ${REMOTE_HOST}:${REMOTE_DIR} ..."
 rsync -avz --delete \

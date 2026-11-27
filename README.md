@@ -1,84 +1,63 @@
-# Aboboo Community for macOS
+# Lirio
 
-面向 macOS 的离线听写、跟读和词卡复习工具，基于 [hedon954/aboboo-mac](https://github.com/hedon954/aboboo-mac) 的 MIT 开源项目继续维护。
+跨端英语精听听写、雅思语料词本与 AI 口语陪练工具（支持 **macOS / Windows / Android**），基于 Tauri 2 + React + Rust 构建。
 
-**非官方社区实验版，不是官方 Aboboo 的 macOS 移植。** 目前不支持官方课件格式、账号同步和内置词典。社区项目使用独立的 `.abmac` 格式。
+- 官方网站与多端下载：[https://lirio.deltae.tech](https://lirio.deltae.tech)
+- GitHub Releases：[https://github.com/liruirui321/lirio/releases/latest](https://github.com/liruirui321/lirio/releases/latest)
 
-## 使用
+## 安装包下载（GitHub Releases）
 
-从本仓库 Releases 下载 Apple Silicon 版本，解压后把 `Aboboo Community.app` 放入“应用程序”。构建采用本地临时签名，尚无 Apple 开发者签名和公证。不要关闭系统的全局安全检查。
+| 平台 | 安装文件 | 说明 |
+| --- | --- | --- |
+| **macOS**（Apple Silicon） | `Lirio-x.y.z-macos.dmg` | 挂载后将 `Lirio.app` 拖入「应用程序」；内含本机 Whisper 离线语音识别模型与自动更新支持 |
+| **Windows**（x64） | `Lirio-x.y.z-windows-x64-setup.exe` | 双击安装运行；内置 Edge 神经语音与公测云端 AI 能力 |
+| **Android** | `Lirio-x.y.z-android.apk` | 已签名 APK，直接安装使用（Android 8.0+） |
 
-- 打开 MP3、WAV、M4A 等系统可解码的音频；OGG 等格式取决于系统解码支持。
-- 播放、暂停、拖动定位；各音轨可静音和调节音量。
-- 设置 A、B 两点循环跟读；支持 0.5–2× 速度。当前变速会改变音调，尚未实现保调变速。
-- 空格播放/暂停，Esc 停止，`[` 设置 A、`]` 设置 B（焦点在输入框、按钮或选择框内时不拦截键盘）。录音自动恢复 1×，录音时暂停循环，并禁止变速和定位。
-- 点击“跟读录音”，点击“保存录音”结束并加入音轨。首次录音需要麦克风权限。
-- “材料库”可一键打开已经准备好的音频，直接进入听写；每份材料独立保存进度与收藏。打开自己的音频并完成识别后，可点击“加入材料库”。公开安装包不含私人或版权考试音频。
-- “听写练习” → “自动提取字幕”：随应用附带的 Whisper small 模型在本机识别，生成词级时间戳，再由 Qwen2.5 0.5B 语言模型判断单句边界，不需要 API Key，音频不上传。识别显示分段进度并可取消，单次限两小时。
-- 听写采用接近经典 Aboboo 的蓝黑工作区：全音频／本句双波形、句子表格、错词栏和大听写区。点击总览波形选择句子，点击本句波形从该处重听。
-- 逐句播放、循环、隐藏答案、首字母提示、提交逐词批改、错句筛选；支持校正文本和起止时间、导入／导出 SRT。输入框内空格正常打字，输入框外空格播放／暂停；Option/Alt + P 随时播放／暂停，Tab 重播本句（Shift + Tab 切换焦点），Option/Alt + Space 下一句，Option/Alt + ← 上一句，⌘/Ctrl + Enter 提交。暂停后再次播放会从暂停处继续；“播放本句”从句首重听。
-- “收藏本句”保存句子卡；点击批改结果中错词／漏词旁的 ☆ 保存单词卡。在“收藏词卡”听原音、翻面、填写释义笔记，选择“再练一次”或“已掌握”，可筛选未掌握卡。收藏属于当前项目。
-- “保存项目”把原音、录音、听写进度和收藏词卡一起存入 `.abmac`；“打开项目”恢复。本机缓存便于继续练习，备份或换电脑请保存项目。
+> 如果 macOS 提示来自未公证开发者：可在右键点击 `Lirio.app` →「打开」，或在「系统设置 → 隐私与安全性」中选择「仍要打开」。
 
-自动字幕是机器参考文本，不是雅思官方答案，可能错词、漏词或分句不准；请使用校正功能。批改忽略大小写和标点，按词语比较，不判断语义等价。词卡释义可手动填写，目前不自动查词，也没有间隔重复排程。
+## 核心功能
 
-项目使用 JSON 和 Base64 内嵌音频，文件体积约比原始音频大三分之一，当前适合较短练习素材。不是无损编辑器，也不保证超长音频的内存表现。
+- **阶梯精听库（L1–L4）与「我的上传」独立仓库**：
+  - L1–L4 分级材料与播客内容统一按难度分级，点击「继续上次」整栏即可一键直达断点听写；
+  - 「我的上传」完全独立管理个人导入音频，支持弹窗拖拽（Drag & Drop）或点击上传 MP3 / M4A / WAV / MP4 / FLAC / OGG；
+  - AI 精校预览支持**点击任意英文原句或中文译文直接修改**，点别处即自动保存并写入 `.abmac` 工程。
+- **高效单句听写工作台**：
+  - 逐句波形定位、单句循环、`0.75×` 一键慢速重听、首字母提示、只看错句与整句/填词双模式；
+  - 看答案或批改出错后按 **`Tab` 重播**，立刻隐藏下方答案与批改区直接回到听写状态；
+  - `Enter` 提交批改、`Shift+Enter` 换行、`Esc` 显示/隐藏答案、`Command`（单按）切换下一句、`Option+P` 播放/暂停；
+  - 逐词批改并支持一键将错词/漏词加入「单词 → 错词本」、收藏经典句卡并沉淀提交轨迹分析。
+- **雅思词本与 AI 口语陪练**：
+  - 内置雅思高频语料词本与错词复练、导出；
+  - 口语陪练支持自由对话、真题模拟与表达润色，默认采用 Microsoft Edge 神经语音，支持本地与云端识别。
 
-如果文件在 OneDrive / iCloud 中只有云端占位，应用会提示先下载到本机。请选择下载完成的本地副本；仅看见文件名不代表内容已在本机。导入期间会显示读取或解码状态。
+## 隐私与安全设计
 
-## 本地开发
+- **客户端零硬编码密钥**：安装包内不含任何服务商明文 API Key；若你使用自带 Key（BYOK），密钥仅保存在本机，并在数据导出与云端同步时强制剥离。
+- **可独立自部署后端**：[server/](server/) 提供轻量 Node.js + SQLite 服务端，所有密钥仅通过服务器环境变量配置（参见 [server/.env.example](server/.env.example)），内置注册/请求限流、日配额限制、CORS 白名单、订单鉴权与上游报错脱敏。
 
-需要 Node.js 22+、Rust stable、CMake 和 Xcode Command Line Tools。完整应用包含约 181 MiB 语音模型和 644 MiB 语言模型，首次开发构建需要下载。
+## 本地开发与测试
+
+需要 Node.js 22+、Rust stable；桌面完整包如需内置本机离线 Whisper 语音识别模型，可先运行资源脚本。
 
 ```sh
-bash scripts/setup-asr.sh
-bash scripts/setup-llm.sh
 npm ci
 npm run tauri dev
-npm run tauri build -- --bundles app
 ```
 
-应用位于 `target/release/bundle/macos/`。
-
-前端行为测试（文件对话框与文件读写使用模拟 IPC，录音使用模拟麦克风）：
+运行后端自动化安全与接口测试：
 
 ```sh
-npx playwright install chromium
-npm run dev -- --host 127.0.0.1
-# 另一个终端
-npm test
+node server/test.mjs
 ```
 
-可通过 `CHROME_PATH` 指定本机 Chrome 可执行文件。测试覆盖音频导入、播放暂停、录音、听写批改、词卡翻面／笔记／掌握状态和项目保存重开。自动识别在浏览器测试中使用模拟结果；真实识别需在打包应用中验证。真实麦克风仍需人工验证。
+前端类型检查与 Rust 编译检查：
 
-## 维护范围
+```sh
+npx tsc --noEmit
+cd src-tauri && cargo check
+```
 
-修复版已处理项目音频丢失、录音保存、波形反馈触发定位、播放状态与权限配置等问题。已开始加入 A–B 循环、变速和快捷键，后续优先完善真实设备验证和保调变速。欢迎提交可复现的问题，注明 macOS 版本、芯片和音频格式。
+## 开源许可与致谢
 
-## 来源和许可
-
-MIT，原作者版权声明保留在 [LICENSE](LICENSE)。本仓库的初始源码来自上游 main 的快照，后续修改由本仓库单独维护；与 Aboboo 官方无隶属关系。
-
-离线识别采用 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 和 [Whisper](https://github.com/openai/whisper) small 量化模型（MIT）；发行包附带许可证。模型不提交到源码仓库，由构建脚本下载并校验 SHA-256。
-
-LLM 只返回句子边界编号，不改写原文；编号不合法或模型执行失败会回退到标点边界，并在参考来源中注明。完整句子的终止标点始终保留；不会为了限制句长在半句话处截断。重新拆分保留最近三次旧听写数据，文本相同的句子继承原进度。
-
-语言模型使用 [Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF)（Apache-2.0）与 [llama.cpp](https://github.com/ggml-org/llama.cpp)（MIT）。模型和运行库由构建脚本下载并校验，许可随应用分发。
-
-### 提交轨迹与分析
-
-每次提交先独立保存答案、参考文本、时间、次数及提示使用状态，再显示批改。顶部“提交轨迹分析”汇总漏写词、误写词和常见混淆，支持全部／首次／当前材料以及无提示筛选；点击词可查看对应历史答案。重复练习的进步按同一句、同一参考文本比较。
-
-旧版本只保存最后答案及部分备份；自动恢复可用的已提交快照并去重，时间标记为未知，不把尝试次数伪造成多条提交。统计采用逐词对齐，误写可能来自听辨、拼写或参考字幕错误。记录保存在应用数据目录的 `submissions` 中，仅包含文本；不会上传用户答案。外接盘材料库会忽略 macOS 的 AppleDouble 辅助文件。
-
-### 自定义听写布局
-
-拖动音频总览、本句波形、句子列表、词语侧栏、听写输入区和批改区之间的分隔条，可调整各区高度或宽度。尺寸自动保存在本机，重启后恢复。双击分隔条恢复该区域默认尺寸；点击“恢复布局”重置全部。分隔条获得焦点后可用方向键微调，Shift + 方向键加大步长，Enter 恢复默认。
-
-听写时，单独按下并松开 Command 切换下一句；Command + Enter 提交。Command 与其他按键或鼠标组合使用时不会切句，Option + Space 仍可切换下一句。
-
-切换“下一句”后会从新句句首自动播放，默认播放一次后停止；Command 单键、Option + Space 和下一句按钮行为一致。开启“循环本句”时按循环设置播放，Tab 可随时重听。
-
-### CLI 与智能体导入
-
-新增 [Aboboo CLI](cli/README.md)：`aboboo submit 音频路径或直链` 在后台完成下载、本地 Whisper 转写、DeepSeek API 单句切分和材料入库；`status` 查询进度、`retry` 恢复失败任务。支持 SRT/JSON 字幕和 JSON Lines 智能体通道，媒体与临时文件保存在指定 SSD。
+- 本项目基于 [MIT License](LICENSE) 开源；早期核心工作区源码延续自 [hedon954/aboboo-mac](https://github.com/hedon954/aboboo-mac)（MIT）。
+- 离线识别使用 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) / [Whisper](https://github.com/openai/whisper)（MIT），神经语音合成基于 Microsoft Edge TTS，部分音频工程与分词流程得益于开源社区项目。

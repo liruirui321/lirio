@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3 — 2026-11-27
+
+- 极简图标化界面、我的上传独立仓库、拖拽导入与字幕行内精校、Tab 重播直入听写、全面安全加固与纯 Edge 神经语音
+
+
 ## 0.4.0 — 2026-10-23
 
 - Add a local material library with one-click dictation and per-material progress/favorites.

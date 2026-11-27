@@ -23,7 +23,9 @@ FFMPEG = "/opt/homebrew/bin/ffmpeg"
 FFPROBE = "/opt/homebrew/bin/ffprobe"
 SAMPLE_RATE = 24000
 
-MATERIALS_DIR = pathlib.Path("/Users/cherry/AbobooMac/materials/graded_l1_l2")
+MATERIALS_DIR = pathlib.Path(
+    os.environ.get("LIRIO_MATERIALS_DIR", str(pathlib.Path.home() / "LirioMaterials" / "graded_l1_l2"))
+)
 LIBRARY_DIR = pathlib.Path.home() / "Library/Application Support/local.aboboo.community/library"
 
 MATERIALS = [
