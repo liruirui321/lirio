@@ -2,7 +2,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { loadCorpusState, lookupBuiltinWord, saveCorpusState, type Accent } from './corpusService';
-import { bytesToBase64, getAccountState, proxyChat, proxyChatStream, proxyTranscribe, proxyTts } from './accountService';
+import {
+  bytesToBase64,
+  fetchStreamAsrToken,
+  getAccountState,
+  proxyChat,
+  proxyChatStream,
+  proxyTranscribe,
+  proxyTts,
+  type SonioxStreamToken,
+} from './accountService';
 import { recordDiagEvent } from './diagnostics';
 import { isMobileDevice, isWindowsPlatform } from './platform';
 import { saveStateBackup } from './stateSync';
@@ -774,39 +783,279 @@ function downsampleFloatToPcm16k(samples: Float32Array, inputRate: number): Uint
   return out;
 }
 
+export interface StreamAsrSession {
+  push(pcm16kBytes: Uint8Array): void;
+  finish(): Promise<string>;
+  cancel(): void;
+}
+
+let cachedSonioxToken: SonioxStreamToken | null = null;
+let cachedSonioxUserToken: string | null = null;
+let sonioxTokenInflight: Promise<SonioxStreamToken | null> | null = null;
+let sonioxRetryAfterMs = 0;
+
+async function getSonioxToken(forceRefresh = false): Promise<SonioxStreamToken | null> {
+  const acct = getAccountState();
+  if (!acct.token) {
+    cachedSonioxToken = null;
+    cachedSonioxUserToken = null;
+    return null;
+  }
+  if (cachedSonioxUserToken !== acct.token) {
+    cachedSonioxUserToken = acct.token;
+    cachedSonioxToken = null;
+    sonioxRetryAfterMs = 0;
+  }
+  const now = Date.now();
+  if (!forceRefresh && cachedSonioxToken && cachedSonioxToken.expiresAt - now > 90_000) {
+    return cachedSonioxToken;
+  }
+  if (!forceRefresh && now < sonioxRetryAfterMs) {
+    return null;
+  }
+  if (sonioxTokenInflight) {
+    return sonioxTokenInflight;
+  }
+  sonioxTokenInflight = (async () => {
+    try {
+      const tok = await fetchStreamAsrToken();
+      if (tok) {
+        cachedSonioxToken = tok;
+        sonioxRetryAfterMs = 0;
+        return tok;
+      }
+      sonioxRetryAfterMs = Date.now() + 30_000;
+      return null;
+    } finally {
+      sonioxTokenInflight = null;
+    }
+  })();
+  return sonioxTokenInflight;
+}
+
 export function warmupStreamAsr(): void {
-  if (isMobileDevice()) return;
-  void invoke('speak_stream_asr_warmup').catch(() => {});
+  if (!getAccountState().token) return;
+  void getSonioxToken(false);
 }
 
-export async function startStreamAsr(sessionId: string): Promise<boolean> {
-  if (isMobileDevice()) return false;
-  try {
-    return await invoke<boolean>('speak_stream_asr_start', { sid: sessionId });
-  } catch {
-    return false;
-  }
-}
+export function createStreamAsrSession(opts: {
+  onPartial?: (text: string) => void;
+  languageHints?: string[];
+}): StreamAsrSession {
+  const tStart = performance.now();
+  let ws: WebSocket | null = null;
+  let configSent = false;
+  let finishing = false;
+  let cancelled = false;
+  let receivedAnyToken = false;
+  let finalText = '';
+  let nonFinalText = '';
+  let lastDisplay = '';
+  const pendingChunks: Uint8Array[] = [];
+  let finishResolve: (() => void) | null = null;
 
-export async function pushStreamAsrChunk(sessionId: string, pcm16kBytes: Uint8Array): Promise<string> {
-  if (isMobileDevice() || pcm16kBytes.length === 0) return '';
-  try {
-    return await invoke<string>('speak_stream_asr_push', {
-      sid: sessionId,
-      pcmBase64: bytesToBase64(pcm16kBytes),
+  const formatDisplay = () => (finalText + nonFinalText).replace(/[ \t]{2,}/g, ' ').trim();
+
+  const resolveFinish = () => {
+    const fn = finishResolve;
+    finishResolve = null;
+    fn?.();
+  };
+
+  const closeSocket = () => {
+    if (!ws) return;
+    try {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    } catch {}
+    ws = null;
+  };
+
+  const flushPending = () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !configSent) return;
+    while (pendingChunks.length > 0) {
+      const chunk = pendingChunks.shift()!;
+      ws.send(chunk);
+    }
+  };
+
+  const readyPromise = (async (): Promise<boolean> => {
+    const tok = await getSonioxToken(false);
+    if (!tok || cancelled) return false;
+    return await new Promise<boolean>((resolve) => {
+      if (cancelled) {
+        resolve(false);
+        return;
+      }
+      let settled = false;
+      const settle = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        resolve(ok);
+      };
+      let socket: WebSocket;
+      try {
+        socket = new WebSocket(tok.wsUrl, ['soniox-api-key', tok.apiKey]);
+      } catch {
+        settle(false);
+        return;
+      }
+      ws = socket;
+      const openTimer = window.setTimeout(() => {
+        if (!settled) {
+          closeSocket();
+          settle(false);
+        }
+      }, 4500);
+
+      socket.onopen = () => {
+        window.clearTimeout(openTimer);
+        if (cancelled) {
+          closeSocket();
+          settle(false);
+          return;
+        }
+        try {
+          socket.send(
+            JSON.stringify({
+              model: tok.model || 'stt-rt-v6',
+              audio_format: 'pcm_s16le',
+              sample_rate: 16000,
+              num_channels: 1,
+              language_hints: opts.languageHints || ['en', 'zh'],
+            }),
+          );
+          configSent = true;
+          flushPending();
+          settle(true);
+        } catch {
+          closeSocket();
+          settle(false);
+        }
+      };
+
+      socket.onmessage = (ev) => {
+        if (cancelled) return;
+        let msg: {
+          tokens?: Array<{ text?: string; is_final?: boolean }>;
+          finished?: boolean;
+          error_code?: number | string;
+          error_message?: string;
+        };
+        try {
+          msg = JSON.parse(String(ev.data || '{}'));
+        } catch {
+          return;
+        }
+        if (msg.error_code || msg.error_message) {
+          if (!receivedAnyToken) {
+            cachedSonioxToken = null;
+          }
+          closeSocket();
+          settle(false);
+          resolveFinish();
+          return;
+        }
+        if (Array.isArray(msg.tokens) && msg.tokens.length > 0) {
+          receivedAnyToken = true;
+          let stepNonFinal = '';
+          for (const tk of msg.tokens) {
+            const txt = typeof tk?.text === 'string' ? tk.text : '';
+            if (!txt || /^<(end|fin)>$/i.test(txt.trim())) continue;
+            if (tk.is_final) {
+              finalText += txt;
+            } else {
+              stepNonFinal += txt;
+            }
+          }
+          nonFinalText = stepNonFinal;
+          const display = formatDisplay();
+          if (display && display !== lastDisplay) {
+            lastDisplay = display;
+            opts.onPartial?.(display);
+          }
+        }
+        if (msg.finished) {
+          resolveFinish();
+        }
+      };
+
+      socket.onerror = () => {
+        window.clearTimeout(openTimer);
+        if (!receivedAnyToken) {
+          cachedSonioxToken = null;
+        }
+        settle(false);
+        resolveFinish();
+      };
+
+      socket.onclose = () => {
+        window.clearTimeout(openTimer);
+        if (!finishing && !receivedAnyToken) {
+          cachedSonioxToken = null;
+        }
+        settle(false);
+        resolveFinish();
+      };
     });
-  } catch {
-    return '';
-  }
-}
+  })();
 
-export async function finishStreamAsr(sessionId: string): Promise<string> {
-  if (isMobileDevice()) return '';
-  try {
-    return await invoke<string>('speak_stream_asr_finish', { sid: sessionId });
-  } catch {
-    return '';
-  }
+  return {
+    push(pcm16kBytes: Uint8Array) {
+      if (cancelled || finishing || pcm16kBytes.length === 0) return;
+      if (ws && ws.readyState === WebSocket.OPEN && configSent) {
+        ws.send(pcm16kBytes);
+        return;
+      }
+      if (pendingChunks.length < 200) {
+        pendingChunks.push(pcm16kBytes);
+      }
+    },
+    async finish(): Promise<string> {
+      if (cancelled) return '';
+      finishing = true;
+      const connected = await Promise.race([
+        readyPromise,
+        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 1500)),
+      ]);
+      if (cancelled) {
+        closeSocket();
+        return '';
+      }
+      if (connected && ws && ws.readyState === WebSocket.OPEN) {
+        flushPending();
+        const donePromise = new Promise<void>((resolve) => {
+          finishResolve = resolve;
+          window.setTimeout(resolve, 2500);
+        });
+        try {
+          ws.send('');
+        } catch {}
+        await donePromise;
+      }
+      closeSocket();
+      pendingChunks.length = 0;
+      const result = formatDisplay();
+      recordDiagEvent({
+        stage: 'asr',
+        route: 'soniox-rt',
+        durationMs: performance.now() - tStart,
+        ok: result.length > 0,
+      });
+      return result;
+    },
+    cancel() {
+      cancelled = true;
+      pendingChunks.length = 0;
+      resolveFinish();
+      closeSocket();
+    },
+  };
 }
 
 export class VadVoiceRecorder {
@@ -835,7 +1084,7 @@ export class VadVoiceRecorder {
   private emitBufferedPcm(force: boolean) {
     const cb = this.onAudioChunk;
     if (!cb) return;
-    const minBytes = force ? 2 : 5120; // ~160ms @ 16kHz PCM16
+    const minBytes = force ? 2 : 3840; // ~120ms @ 16kHz PCM16
     if (this.pcmStreamBytes < minBytes) return;
     const merged = new Uint8Array(this.pcmStreamBytes);
     let offset = 0;
@@ -876,9 +1125,9 @@ export class VadVoiceRecorder {
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
       },
     });
     this.ctx = new AudioContext();
@@ -916,8 +1165,8 @@ export class VadVoiceRecorder {
           const opening = this.preRoll;
           this.preRoll = [];
           this.chunks.push(...opening);
-          for (const pr of opening) this.appendPcmSampleChunk(pr);
           opts.onSpeechDetected?.();
+          for (const pr of opening) this.appendPcmSampleChunk(pr);
         } else {
           this.noiseFloor = Math.min(0.025, Math.max(0.004, this.noiseFloor * 0.85 + rms * 0.15));
         }

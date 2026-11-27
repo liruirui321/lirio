@@ -23,6 +23,7 @@ const DEFAULT_MODELS = {
 function redactSecretText(raw) {
   return String(raw || '')
     .replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***')
+    .replace(/temp:[A-Za-z0-9._-]+/g, 'temp:***')
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer ***')
     .replace(/https?:\/\/\S+/gi, '[upstream]');
 }
@@ -729,5 +730,71 @@ export async function forwardTranscribe({ wavBuf, wavBase64, mimeType, durationS
     isFree: usedModel.includes('SenseVoiceSmall'),
     durationSec: approxSec,
     text,
+  };
+}
+
+export async function createSonioxStreamToken({ userId } = {}) {
+  const apiKey = (process.env.LIRIO_SONIOX_API_KEY || process.env.SONIOX_API_KEY || '').trim();
+  const model = (process.env.LIRIO_SONIOX_MODEL || 'stt-rt-v6').trim();
+  const wsUrl = (process.env.LIRIO_SONIOX_WS_URL || 'wss://stt-rt.soniox.com/transcribe-websocket').trim();
+  const expiresInSeconds = Math.min(3600, Math.max(60, Number(process.env.LIRIO_SONIOX_TOKEN_TTL || 1800)));
+
+  if (isMockMode()) {
+    return {
+      provider: 'soniox',
+      apiKey: 'temp:mock-soniox-key',
+      wsUrl,
+      model,
+      expiresAt: Date.now() + expiresInSeconds * 1000,
+      expiresInSeconds,
+    };
+  }
+
+  if (!apiKey) {
+    const err = new Error('服务器尚未配置 Soniox 实时语音密钥（LIRIO_SONIOX_API_KEY）。');
+    err.code = 'SONIOX_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const body = {
+    usage_type: 'transcribe_websocket',
+    expires_in_seconds: expiresInSeconds,
+    single_use: false,
+    max_session_duration_seconds: 300,
+  };
+  if (userId) {
+    body.client_reference_id = String(userId).slice(0, 64);
+  }
+
+  const resp = await fetch('https://api.soniox.com/v1/auth/temporary-api-key', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || !data?.api_key) {
+    throw sanitizeUpstreamError(
+      'Soniox-Auth',
+      `status=${resp.status} ${data?.message || data?.error || ''}`,
+      '实时语音识别授权暂时不可用，请稍后重试。',
+    );
+  }
+
+  const parsedExpires = data?.expires_at ? Date.parse(String(data.expires_at)) : 0;
+  const expiresAt = Number.isFinite(parsedExpires) && parsedExpires > Date.now()
+    ? parsedExpires
+    : Date.now() + expiresInSeconds * 1000;
+
+  return {
+    provider: 'soniox',
+    apiKey: String(data.api_key),
+    wsUrl,
+    model,
+    expiresAt,
+    expiresInSeconds,
   };
 }

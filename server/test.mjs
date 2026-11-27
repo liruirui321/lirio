@@ -857,7 +857,19 @@ try {
   const badStream = await req('POST', '/api/ai/chat/stream', { messages: [{ role: 'tool', content: 'x' }] }, cherryToken);
   assert.equal(badStream.status, 400);
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (20/20)');
+  // 21. Verify Soniox temporary streaming ASR token endpoint
+  const unauthAsrToken = await req('POST', '/api/ai/asr-stream-token', {});
+  assert.equal(unauthAsrToken.status, 401);
+  const asrTokenRes = await req('POST', '/api/ai/asr-stream-token', {}, cherryToken);
+  assert.equal(asrTokenRes.status, 200);
+  assert.equal(asrTokenRes.json.ok, true);
+  assert.equal(asrTokenRes.json.provider, 'soniox');
+  assert.ok(String(asrTokenRes.json.apiKey || '').startsWith('temp:'));
+  assert.equal(asrTokenRes.json.wsUrl, 'wss://stt-rt.soniox.com/transcribe-websocket');
+  assert.equal(asrTokenRes.json.model, 'stt-rt-v6');
+  assert.ok(asrTokenRes.json.expiresAt > Date.now());
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (21/21)');
 } finally {
   server.close();
 }

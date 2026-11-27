@@ -62,7 +62,14 @@ import {
   getDeepSeekRatesPer1M,
   isDeepSeekPeakBeijing,
 } from './pricing.mjs';
-import { forwardChatCompletion, forwardChatCompletionStream, forwardTranscribe, forwardTts, warmupEdgeWorker } from './aiProxy.mjs';
+import {
+  createSonioxStreamToken,
+  forwardChatCompletion,
+  forwardChatCompletionStream,
+  forwardTranscribe,
+  forwardTts,
+  warmupEdgeWorker,
+} from './aiProxy.mjs';
 
 function isValidAccountId(raw) {
   const s = String(raw || '').trim();
@@ -1264,6 +1271,7 @@ export function createLirioServer({ dbPath } = {}) {
                 '/api/ai/chat',
                 '/api/ai/tts',
                 '/api/ai/transcribe',
+                '/api/ai/asr-stream-token',
               ],
             },
             headOnly,
@@ -2265,6 +2273,35 @@ export function createLirioServer({ dbPath } = {}) {
           totalSpentUnits: user.totalSpentUnits,
           user,
         });
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/ai/asr-stream-token') {
+        const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
+        if (!authState) return;
+        const user = authState.user;
+
+        const rpm = Math.max(1, Number(process.env.LIRIO_BETA_ASR_STREAM_RPM || 20));
+        const daily = Math.max(1, Number(process.env.LIRIO_BETA_ASR_STREAM_DAILY || 120));
+        if (
+          !consumeRateLimit(res, `asr-stream-rpm-u:${user.id}`, rpm, 60000, '实时语音授权过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `asr-stream-rpm-ip:${clientIp}`, Math.max(rpm, 30), 60000, '当前网络实时语音授权过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `asr-stream-day-u:${user.id}`, daily, 86400000, '今日实时语音识别次数已达上限，请明天再试。') ||
+          !consumeRateLimit(res, `asr-stream-day-ip:${clientIp}`, Math.max(daily, 200), 86400000, '当前网络今日实时语音识别次数已达上限，请明天再试。')
+        ) {
+          return;
+        }
+
+        try {
+          const tokenRes = await createSonioxStreamToken({ userId: user.id });
+          sendJson(res, 200, { ok: true, ...tokenRes });
+        } catch (err) {
+          if (err?.code === 'SONIOX_NOT_CONFIGURED') {
+            sendJson(res, 503, { error: err.message, configured: false });
+            return;
+          }
+          throw err;
+        }
         return;
       }
 

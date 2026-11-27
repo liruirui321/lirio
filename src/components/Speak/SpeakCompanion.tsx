@@ -33,8 +33,8 @@ import {
   buildCompanionOpener,
   buildExaminerOpener,
   buildFullMockQueue,
+  createStreamAsrSession,
   findLinkedPart3,
-  finishStreamAsr,
   formatIeltsPartLabel,
   generateCompanionReplyStream,
   generateExaminerReplyStream,
@@ -46,11 +46,9 @@ import {
   mergeMemory,
   parseIeltsQuestionBank,
   pickAndReadQuestionFile,
-  pushStreamAsrChunk,
   recordPracticedTopics,
   saveSpeakState,
   scoreShadowing,
-  startStreamAsr,
   subscribeSpeakState,
   synthesizeSpeech,
   transcribeVoice,
@@ -69,6 +67,7 @@ import {
   type SpeakPersistedState,
   type SpeakSessionRecord,
   type SpeakTurn,
+  type StreamAsrSession,
   type UserMemoryProfile,
 } from '../../services/speakService';
 
@@ -225,9 +224,7 @@ export function SpeakCompanion({
   const mutedRef = useRef<boolean>(muted);
   const callPausedRef = useRef<boolean>(callPaused);
   const recorderRef = useRef<VadVoiceRecorder | null>(null);
-  const streamSidRef = useRef<string>('');
-  const streamActiveRef = useRef<boolean>(false);
-  const streamPushChainRef = useRef<Promise<void>>(Promise.resolve());
+  const streamSessionRef = useRef<StreamAsrSession | null>(null);
   const shadowRecorderRef = useRef<VadVoiceRecorder | null>(null);
   const mockQueueRef = useRef<IeltsQuestionItem[]>([]);
   const mockStepRef = useRef<number>(0);
@@ -301,14 +298,11 @@ export function SpeakCompanion({
   }, []);
 
   const transcribeWithActiveStream = useCallback(async (wav: Uint8Array): Promise<string> => {
-    const sid = streamSidRef.current;
-    const hadStream = streamActiveRef.current && Boolean(sid);
-    streamActiveRef.current = false;
-    streamSidRef.current = '';
-    if (hadStream) {
+    const sess = streamSessionRef.current;
+    streamSessionRef.current = null;
+    if (sess) {
       try {
-        await streamPushChainRef.current.catch(() => {});
-        const streamed = (await finishStreamAsr(sid)).trim();
+        const streamed = (await sess.finish()).trim();
         if (streamed) return streamed;
       } catch {
         // fallback to batch ASR below
@@ -320,15 +314,13 @@ export function SpeakCompanion({
   const stopRecorder = useCallback(async () => {
     const rec = recorderRef.current;
     recorderRef.current = null;
-    const sid = streamSidRef.current;
-    const hadStream = streamActiveRef.current && Boolean(sid);
-    streamActiveRef.current = false;
-    streamSidRef.current = '';
+    const sess = streamSessionRef.current;
+    streamSessionRef.current = null;
     setMicLevel(0);
     setHeardVoice(false);
     setLiveUserText('');
-    if (hadStream) {
-      void finishStreamAsr(sid).catch(() => {});
+    if (sess) {
+      sess.cancel();
     }
     if (rec) await rec.cancel();
   }, []);
@@ -550,31 +542,27 @@ export function SpeakCompanion({
     const rec = new VadVoiceRecorder();
     rec.setMuted(mutedRef.current);
     recorderRef.current = rec;
-    const sid = `asr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    streamSidRef.current = sid;
-    streamActiveRef.current = true;
-    streamPushChainRef.current = Promise.resolve();
-    const streamReadyPromise = startStreamAsr(sid).then((ok) => {
-      if (!ok && streamSidRef.current === sid) {
-        streamActiveRef.current = false;
-      }
-      return ok;
-    });
+    streamSessionRef.current?.cancel();
+    streamSessionRef.current = null;
     try {
       await rec.start({
         silenceMs,
         onLevel: (lvl) => setMicLevel(lvl),
-        onSpeechDetected: () => setHeardVoice(true),
-        onAudioChunk: (pcm16k) => {
-          if (streamSidRef.current !== sid || !streamActiveRef.current) return;
-          streamPushChainRef.current = streamPushChainRef.current.then(async () => {
-            const ready = await streamReadyPromise;
-            if (!ready || streamSidRef.current !== sid || !streamActiveRef.current) return;
-            const partial = (await pushStreamAsrChunk(sid, pcm16k)).trim();
-            if (partial && streamSidRef.current === sid && callActiveRef.current && !callPausedRef.current) {
-              setLiveUserText(partial);
-            }
+        onSpeechDetected: () => {
+          setHeardVoice(true);
+          if (streamSessionRef.current) return;
+          const sess = createStreamAsrSession({
+            languageHints: ['en', 'zh'],
+            onPartial: (partial) => {
+              if (streamSessionRef.current === sess && callActiveRef.current && !callPausedRef.current) {
+                setLiveUserText(partial);
+              }
+            },
           });
+          streamSessionRef.current = sess;
+        },
+        onAudioChunk: (pcm16k) => {
+          streamSessionRef.current?.push(pcm16k);
         },
         onSpeechEnd: async (wav) => {
           if (!callActiveRef.current || callPausedRef.current) return;
@@ -582,11 +570,8 @@ export function SpeakCompanion({
           setMicLevel(0);
           setHeardVoice(false);
           if (wav.length < 400) {
-            if (streamActiveRef.current && streamSidRef.current === sid) {
-              streamActiveRef.current = false;
-              streamSidRef.current = '';
-              void finishStreamAsr(sid).catch(() => {});
-            }
+            streamSessionRef.current?.cancel();
+            streamSessionRef.current = null;
             setLiveUserText('');
             beginListeningTurn();
             return;
@@ -606,11 +591,9 @@ export function SpeakCompanion({
         },
       });
     } catch (e) {
-      if (streamActiveRef.current && streamSidRef.current === sid) {
-        streamActiveRef.current = false;
-        streamSidRef.current = '';
-        void finishStreamAsr(sid).catch(() => {});
-      }
+      const danglingSess = streamSessionRef.current as StreamAsrSession | null;
+      danglingSess?.cancel();
+      streamSessionRef.current = null;
       setLiveUserText('');
       const msg = String(e);
       setStatusMsg(
@@ -995,6 +978,7 @@ export function SpeakCompanion({
       setCallActive(true);
       setSubView('call');
       warmDirectConnection();
+      warmupStreamAsr();
 
       setCallPhase('ai_speaking');
       let finished = true;
@@ -1316,6 +1300,7 @@ export function SpeakCompanion({
       setCallActive(true);
       setSubView('call');
       warmDirectConnection();
+      warmupStreamAsr();
       await beginListeningTurn();
     },
     [stopAudio, stopRecorder, updatePersisted, beginListeningTurn],

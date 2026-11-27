@@ -1003,6 +1003,87 @@ export async function proxyTranscribe(wavBytes: Uint8Array, _feature = '云端�
   return String(data.text || '').trim();
 }
 
+export interface SonioxStreamToken {
+  provider: 'soniox';
+  apiKey: string;
+  wsUrl: string;
+  model: string;
+  expiresAt: number;
+  expiresInSeconds: number;
+}
+
+export async function fetchStreamAsrToken(): Promise<SonioxStreamToken | null> {
+  const st = getAccountState();
+  if (!st.token) return null;
+  const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  const t0 = performance.now();
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${st.token}`,
+  };
+
+  const parseTokenResponse = (status: number, rawText: string | null | undefined, route: string): SonioxStreamToken | null => {
+    const data = rawText ? (JSON.parse(rawText) as Partial<SonioxStreamToken> & { error?: string }) : {};
+    if (status === 401) {
+      handleUnauthorized(401, st, data?.error);
+      recordDiagEvent({ stage: 'asr', route, durationMs: performance.now() - t0, ok: false, error: '401' });
+      return null;
+    }
+    if (status < 200 || status >= 300 || !data?.apiKey || !data?.wsUrl) {
+      recordDiagEvent({
+        stage: 'asr',
+        route,
+        durationMs: performance.now() - t0,
+        ok: false,
+        error: data?.error || `status=${status}`,
+      });
+      return null;
+    }
+    recordDiagEvent({ stage: 'asr', route, durationMs: performance.now() - t0, ok: true });
+    return {
+      provider: 'soniox',
+      apiKey: String(data.apiKey),
+      wsUrl: String(data.wsUrl),
+      model: String(data.model || 'stt-rt-v6'),
+      expiresAt: Number(data.expiresAt) || Date.now() + 1800_000,
+      expiresInSeconds: Number(data.expiresInSeconds) || 1800,
+    };
+  };
+
+  if (shouldUseDirectRustTransport(base)) {
+    try {
+      const directResp = await invoke<DirectHttpResponse>('lirio_direct_request', {
+        method: 'POST',
+        url: `${base}/api/ai/asr-stream-token`,
+        headers,
+        bodyText: '{}',
+        bodyBytes: null,
+        bodyBase64: null,
+        timeoutSecs: 10,
+      });
+      return parseTokenResponse(directResp.status, directResp.bodyText, 'direct-asr-token');
+    } catch (err) {
+      if (err instanceof Error && !err.message.startsWith('直连请求失败')) {
+        recordDiagEvent({ stage: 'asr', route: 'direct-asr-token', durationMs: performance.now() - t0, ok: false, error: String(err) });
+        return null;
+      }
+    }
+  }
+
+  try {
+    const resp = await fetch(`${base}/api/ai/asr-stream-token`, {
+      method: 'POST',
+      headers,
+      body: '{}',
+    });
+    const rawText = await resp.text().catch(() => '');
+    return parseTokenResponse(resp.status, rawText, 'webview-asr-token');
+  } catch (err) {
+    recordDiagEvent({ stage: 'asr', route: 'webview-asr-token', durationMs: performance.now() - t0, ok: false, error: String(err) });
+    return null;
+  }
+}
+
 export interface CommunityConfig {
   qqGroupNumber: string;
   qqGroupName: string;
