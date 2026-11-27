@@ -12,7 +12,9 @@ pub fn resolve_kokoro_voice(requested_voice: Option<&str>) -> (&'static str, &'s
 #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
 mod native {
     use super::resolve_kokoro_voice;
-    use misaki_rs::{Language, G2P};
+    use misaki_rs::fallback::FallbackError;
+    use misaki_rs::lexicon::PhonemeEntry;
+    use misaki_rs::{Fallback, Language, Lexicon, G2P};
     use ort::session::{builder::GraphOptimizationLevel, Session};
     use ort::value::Tensor;
     use std::collections::HashMap;
@@ -32,6 +34,354 @@ mod native {
         g2p_gb: G2P,
         voices: HashMap<&'static str, Vec<f32>>,
         warmed: bool,
+    }
+
+    struct LirioOovFallback {
+        british: bool,
+        alt_lexicon: Lexicon,
+    }
+
+    impl LirioOovFallback {
+        fn new(british: bool) -> Self {
+            let alt_lang = if british {
+                Language::EnglishUS
+            } else {
+                Language::EnglishGB
+            };
+            Self {
+                british,
+                alt_lexicon: Lexicon::new(alt_lang),
+            }
+        }
+
+        fn lookup_custom(lower: &str, british: bool) -> Option<&'static str> {
+            match lower {
+                "clara" => Some(if british { "klˈɑːɹə" } else { "klˈɛɹə" }),
+                "noah" => Some(if british { "nˈQə" } else { "nˈOə" }),
+                "oliver" => Some(if british { "ˈɒlɪvə" } else { "ˈɑlɪvɚ" }),
+                "lirio" => Some(if british { "lˈɪɹiQ" } else { "lˈɪɹiO" }),
+                "ielts" => Some("ˈIɛlts"),
+                "toefl" => Some("tˈOfəl"),
+                "cet" => Some("sˌiˌitˈi"),
+                "gre" => Some("ʤˌiˌɑɹˈi"),
+                "tem" => Some("tˌiˌiˈɛm"),
+                "wechat" => Some("wˈiʧæt"),
+                "tiktok" => Some("tˈɪktɑk"),
+                "deepseek" => Some("dˈipsik"),
+                "chatgpt" => Some("ʧˌætʤipitˈi"),
+                "kokoro" => Some(if british { "kəkˈɔːɹQ" } else { "kəkˈɔɹO" }),
+                "aboboo" => Some(if british { "ɑbˈQbu" } else { "ɑbˈObu" }),
+                "github" => Some("ɡˈɪthʌb"),
+                "beijing" => Some("bˌAʤˈɪŋ"),
+                "shanghai" => Some("ʃˌæŋhˈI"),
+                "shenzhen" => Some("ʃˈɛnʤɛn"),
+                "guangzhou" => Some(if british { "ɡwˈɑŋʤQ" } else { "ɡwˈɑŋʤO" }),
+                "chengdu" => Some("ʧˈɛŋdu"),
+                "hangzhou" => Some(if british { "hˈɑŋʤQ" } else { "hˈɑŋʤO" }),
+                "nanjing" => Some("nˈænʤɪŋ"),
+                "wuhan" => Some("wˈuhɑn"),
+                "chongqing" => Some("ʧˈɔŋʧɪŋ"),
+                "suzhou" => Some(if british { "sˈuʤQ" } else { "sˈuʤO" }),
+                "xian" => Some("ʃˈiɑn"),
+                _ => None,
+            }
+        }
+
+        fn extract_lexicon_entry(entry: &PhonemeEntry) -> Option<String> {
+            match entry {
+                PhonemeEntry::Simple(s) => (!s.is_empty()).then(|| s.clone()),
+                PhonemeEntry::Tagged(map) => {
+                    if let Some(Some(s)) = map.get("DEFAULT") {
+                        if !s.is_empty() {
+                            return Some(s.clone());
+                        }
+                    }
+                    map.values().flatten().find(|s| !s.is_empty()).cloned()
+                }
+            }
+        }
+
+        fn lookup_lexicon(lex: &Lexicon, word: &str) -> Option<String> {
+            let lower = word.to_ascii_lowercase();
+            let mut title = String::with_capacity(lower.len());
+            let mut chars = lower.chars();
+            if let Some(first) = chars.next() {
+                title.push(first.to_ascii_uppercase());
+                title.push_str(chars.as_str());
+            }
+            for key in [word, lower.as_str(), title.as_str()] {
+                if let Some(entry) = lex.golds.get(key) {
+                    if let Some(p) = Self::extract_lexicon_entry(entry) {
+                        return Some(p);
+                    }
+                }
+                if let Some(entry) = lex.silvers.get(key) {
+                    if let Some(p) = Self::extract_lexicon_entry(entry) {
+                        return Some(p);
+                    }
+                }
+            }
+            None
+        }
+
+        fn is_vowel(b: u8) -> bool {
+            matches!(b, b'a' | b'e' | b'i' | b'o' | b'u' | b'y')
+        }
+
+        fn rule_based_g2p(lower: &str, british: bool) -> String {
+            let b = lower.as_bytes();
+            let len = b.len();
+            let mut out = String::with_capacity(len * 2 + 2);
+            let mut stressed = false;
+            let mut i = 0;
+
+            fn push_vowel(dst: &mut String, stressed: &mut bool, ph: &str) {
+                if !*stressed {
+                    dst.push('ˈ');
+                    *stressed = true;
+                }
+                dst.push_str(ph);
+            }
+
+            while i < len {
+                let rem = &lower[i..];
+                if rem.starts_with("tion") || rem.starts_with("sion") {
+                    out.push('ʃ');
+                    push_vowel(&mut out, &mut stressed, "ən");
+                    i += 4;
+                    continue;
+                }
+                if rem.starts_with("igh") {
+                    push_vowel(&mut out, &mut stressed, "I");
+                    i += 3;
+                    continue;
+                }
+                if rem.starts_with("tch") {
+                    out.push('ʧ');
+                    i += 3;
+                    continue;
+                }
+                if rem.starts_with("ch") {
+                    out.push('ʧ');
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("sh") {
+                    out.push('ʃ');
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("th") {
+                    out.push('θ');
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("ph") {
+                    out.push('f');
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("wh") {
+                    out.push('w');
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("ck") {
+                    out.push('k');
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("ng") {
+                    out.push('ŋ');
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("qu") {
+                    out.push_str("kw");
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("ee") || rem.starts_with("ea") {
+                    push_vowel(&mut out, &mut stressed, "i");
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("oo") {
+                    push_vowel(&mut out, &mut stressed, "u");
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("ou") || rem.starts_with("ow") {
+                    push_vowel(&mut out, &mut stressed, "W");
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("oi") || rem.starts_with("oy") {
+                    push_vowel(&mut out, &mut stressed, "ɔI");
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("ai") || rem.starts_with("ay") {
+                    push_vowel(&mut out, &mut stressed, "A");
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("au") || rem.starts_with("aw") {
+                    push_vowel(&mut out, &mut stressed, "ɔ");
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("ar") {
+                    let prev_vowel_follows = i + 2 < len && Self::is_vowel(b[i + 2]);
+                    if prev_vowel_follows {
+                        push_vowel(&mut out, &mut stressed, "ɛ");
+                        out.push('ɹ');
+                    } else {
+                        push_vowel(&mut out, &mut stressed, if british { "ɑː" } else { "ɑɹ" });
+                    }
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("er") || rem.starts_with("ir") || rem.starts_with("ur") {
+                    push_vowel(&mut out, &mut stressed, if british { "ɜː" } else { "ɚ" });
+                    i += 2;
+                    continue;
+                }
+                if rem.starts_with("or") {
+                    push_vowel(&mut out, &mut stressed, if british { "ɔː" } else { "ɔɹ" });
+                    i += 2;
+                    continue;
+                }
+
+                // Silent trailing 'e' on multi-syllable/CVCe words
+                if i + 1 == len && b[i] == b'e' && stressed && !lower.ends_with("le") {
+                    i += 1;
+                    continue;
+                }
+
+                // Doubled consonant collapses to single sound
+                if i + 1 < len && b[i] == b[i + 1] && !Self::is_vowel(b[i]) {
+                    i += 1;
+                    continue;
+                }
+
+                // Magic silent-e lengthening: <V><C>e at end of word
+                let is_cvce = i + 3 == len
+                    && len >= 4
+                    && !Self::is_vowel(b[i + 1])
+                    && b[i + 2] == b'e';
+
+                match b[i] {
+                    b'a' => {
+                        if is_cvce {
+                            push_vowel(&mut out, &mut stressed, "A");
+                        } else if i + 1 == len {
+                            push_vowel(&mut out, &mut stressed, "ə");
+                        } else {
+                            push_vowel(&mut out, &mut stressed, "æ");
+                        }
+                    }
+                    b'e' => push_vowel(&mut out, &mut stressed, "ɛ"),
+                    b'i' => push_vowel(&mut out, &mut stressed, if is_cvce { "I" } else { "ɪ" }),
+                    b'o' => {
+                        if is_cvce || i + 1 == len {
+                            push_vowel(&mut out, &mut stressed, if british { "Q" } else { "O" });
+                        } else {
+                            push_vowel(&mut out, &mut stressed, if british { "ɒ" } else { "ɑ" });
+                        }
+                    }
+                    b'u' => push_vowel(&mut out, &mut stressed, if is_cvce { "ju" } else { "ʌ" }),
+                    b'y' => {
+                        if i == 0 {
+                            out.push('j');
+                        } else if stressed {
+                            out.push('i');
+                        } else {
+                            push_vowel(&mut out, &mut stressed, "ɪ");
+                        }
+                    }
+                    b'b' => out.push('b'),
+                    b'c' => {
+                        let soft = i + 1 < len && matches!(b[i + 1], b'e' | b'i' | b'y');
+                        out.push(if soft { 's' } else { 'k' });
+                    }
+                    b'd' => out.push('d'),
+                    b'f' => out.push('f'),
+                    b'g' => {
+                        let soft = i + 1 < len && matches!(b[i + 1], b'e' | b'i' | b'y');
+                        out.push(if soft { 'ʤ' } else { 'ɡ' });
+                    }
+                    b'h' => out.push('h'),
+                    b'j' => out.push('ʤ'),
+                    b'k' => out.push('k'),
+                    b'l' => out.push('l'),
+                    b'm' => out.push('m'),
+                    b'n' => out.push('n'),
+                    b'p' => out.push('p'),
+                    b'q' => out.push('k'),
+                    b'r' => out.push('ɹ'),
+                    b's' => out.push('s'),
+                    b't' => out.push('t'),
+                    b'v' => out.push('v'),
+                    b'w' => out.push('w'),
+                    b'x' => out.push_str("ks"),
+                    b'z' => out.push('z'),
+                    _ => {}
+                }
+                i += 1;
+            }
+            out
+        }
+
+        fn phonemize_clean_word(&self, clean: &str) -> String {
+            let lower = clean.to_ascii_lowercase();
+            if let Some(p) = Self::lookup_custom(&lower, self.british) {
+                return p.to_string();
+            }
+            if let Some(p) = Self::lookup_lexicon(&self.alt_lexicon, clean) {
+                return p;
+            }
+            Self::rule_based_g2p(&lower, self.british)
+        }
+    }
+
+    impl Fallback for LirioOovFallback {
+        fn phonemize(&self, word: &str) -> Result<String, FallbackError> {
+            if !word.chars().any(|c| c.is_ascii_alphabetic()) {
+                return Ok(String::new());
+            }
+            let normalized = word.replace('’', "'");
+            let trimmed = normalized.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+            if trimmed.is_empty() {
+                return Ok(String::new());
+            }
+
+            if let Some(stem) = trimmed
+                .strip_suffix("'s")
+                .or_else(|| trimmed.strip_suffix("'S"))
+            {
+                if !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                    let mut ph = self.phonemize_clean_word(stem);
+                    if let Some(last) = ph.chars().last() {
+                        if matches!(last, 's' | 'z' | 'ʃ' | 'ʒ' | 'ʧ' | 'ʤ') {
+                            ph.push_str("ɪz");
+                        } else if matches!(last, 'p' | 't' | 'k' | 'f' | 'θ') {
+                            ph.push('s');
+                        } else {
+                            ph.push('z');
+                        }
+                    }
+                    return Ok(ph);
+                }
+            }
+
+            Ok(self.phonemize_clean_word(trimmed))
+        }
+    }
+
+    pub(crate) fn build_g2p(lang: Language) -> G2P {
+        let british = lang == Language::EnglishGB;
+        G2P::with_fallback(lang, Some(Box::new(LirioOovFallback::new(british))))
     }
 
     static ENGINE: OnceLock<Mutex<Option<KokoroEngine>>> = OnceLock::new();
@@ -339,8 +689,8 @@ mod native {
             (session, voices)
         };
 
-        let g2p_us = G2P::new(Language::EnglishUS);
-        let g2p_gb = G2P::new(Language::EnglishGB);
+        let g2p_us = build_g2p(Language::EnglishUS);
+        let g2p_gb = build_g2p(Language::EnglishGB);
 
         Ok(KokoroEngine {
             session,
@@ -458,8 +808,8 @@ mod native {
         }
         Ok(KokoroEngine {
             session,
-            g2p_us: G2P::new(Language::EnglishUS),
-            g2p_gb: G2P::new(Language::EnglishGB),
+            g2p_us: build_g2p(Language::EnglishUS),
+            g2p_gb: build_g2p(Language::EnglishGB),
             voices,
             warmed: false,
         })
@@ -518,12 +868,61 @@ mod tests {
 
     #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
     #[test]
+    fn oov_fallback_covers_clara_personas_and_unseen_words() {
+        use super::native::{build_g2p, phoneme_to_token};
+        use misaki_rs::Language;
+
+        let g2p_us = build_g2p(Language::EnglishUS);
+        let (ph_clara, _) = g2p_us
+            .g2p("Hi! It's Clara. How was your day today?")
+            .expect("g2p clara");
+        assert!(
+            !ph_clara.contains('❓'),
+            "Clara must not produce unknown token: {ph_clara}"
+        );
+        assert!(
+            ph_clara.contains("klˈɛɹə"),
+            "Expected US IPA for Clara in {ph_clara}"
+        );
+        assert!(ph_clara
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .all(|c| phoneme_to_token(c).is_some()));
+
+        let (ph_entities, _) = g2p_us
+            .g2p("I'm Noah from Lirio preparing for IELTS in Beijing and Chengdu.")
+            .expect("g2p entities");
+        assert!(!ph_entities.contains('❓'), "entities: {ph_entities}");
+        assert!(ph_entities
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .all(|c| phoneme_to_token(c).is_some()));
+
+        let g2p_gb = build_g2p(Language::EnglishGB);
+        let (ph_gb, _) = g2p_gb
+            .g2p("Hi! It's Clara and Oliver talking about Lirio.")
+            .expect("g2p gb");
+        assert!(!ph_gb.contains('❓'), "gb: {ph_gb}");
+
+        let (ph_unseen, _) = g2p_us.g2p("Hi Zelora!").expect("g2p unseen");
+        assert!(!ph_unseen.contains('❓'), "unseen: {ph_unseen}");
+        assert!(ph_unseen
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .all(|c| phoneme_to_token(c).is_some()));
+
+        let (ph_sym, _) = g2p_us.g2p("— #").expect("g2p symbols");
+        assert!(!ph_sym.contains('❓'), "symbols: {ph_sym}");
+    }
+
+    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
+    #[test]
     fn native_g2p_wav_and_optional_onnx_bench() {
         use super::native::{
-            encode_wav_pcm16_24k, infer_engine, phoneme_to_token, split_phoneme_tokens,
+            build_g2p, encode_wav_pcm16_24k, infer_engine, phoneme_to_token, split_phoneme_tokens,
             test_init_from_dir,
         };
-        use misaki_rs::{Language, G2P};
+        use misaki_rs::Language;
         use std::path::PathBuf;
         use std::time::Instant;
 
@@ -535,7 +934,7 @@ mod tests {
         assert_eq!(&wav[8..12], b"WAVE");
         assert_eq!(wav.len(), 44 + 6);
 
-        let g2p_us = G2P::new(Language::EnglishUS);
+        let g2p_us = build_g2p(Language::EnglishUS);
         let (ph_us, _) = g2p_us.g2p("Oh nice! How did you find that spot?").unwrap();
         let wins = split_phoneme_tokens(&ph_us, 500);
         assert!(!wins.is_empty() && !wins[0].is_empty());
