@@ -2,8 +2,98 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
+
+fn direct_http_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(10))
+            .timeout_read(Duration::from_secs(45))
+            .max_idle_connections_per_host(8)
+            .build()
+    })
+}
+
+fn direct_probe_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(6))
+            .timeout_read(Duration::from_secs(8))
+            .max_idle_connections_per_host(4)
+            .build()
+    })
+}
+
+fn direct_stream_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(12))
+            .timeout_read(Duration::from_secs(60))
+            .max_idle_connections_per_host(6)
+            .build()
+    })
+}
+
+pub(crate) fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
+    let mut vals: Vec<u8> = Vec::with_capacity(input.len());
+    let mut pad = 0usize;
+    let mut seen_pad = false;
+    for b in input.bytes() {
+        if b.is_ascii_whitespace() {
+            continue;
+        }
+        if b == b'=' {
+            seen_pad = true;
+            pad += 1;
+            continue;
+        }
+        if seen_pad {
+            return Err("Base64 格式无效：填充符位置错误".into());
+        }
+        let v = match b {
+            b'A'..=b'Z' => b - b'A',
+            b'a'..=b'z' => b - b'a' + 26,
+            b'0'..=b'9' => b - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return Err("Base64 包含非法字符".into()),
+        };
+        vals.push(v);
+    }
+    if vals.is_empty() && pad == 0 {
+        return Ok(Vec::new());
+    }
+    if pad > 2 || (pad > 0 && (vals.len() + pad) % 4 != 0) || vals.len() % 4 == 1 {
+        return Err("Base64 长度无效".into());
+    }
+    let mut out = Vec::with_capacity((vals.len() * 3) / 4);
+    let mut i = 0;
+    while i + 4 <= vals.len() {
+        let n = ((vals[i] as u32) << 18)
+            | ((vals[i + 1] as u32) << 12)
+            | ((vals[i + 2] as u32) << 6)
+            | (vals[i + 3] as u32);
+        out.push(((n >> 16) & 0xff) as u8);
+        out.push(((n >> 8) & 0xff) as u8);
+        out.push((n & 0xff) as u8);
+        i += 4;
+    }
+    let rem = vals.len() - i;
+    if rem == 2 {
+        let n = ((vals[i] as u32) << 18) | ((vals[i + 1] as u32) << 12);
+        out.push(((n >> 16) & 0xff) as u8);
+    } else if rem == 3 {
+        let n = ((vals[i] as u32) << 18) | ((vals[i + 1] as u32) << 12) | ((vals[i + 2] as u32) << 6);
+        out.push(((n >> 16) & 0xff) as u8);
+        out.push(((n >> 8) & 0xff) as u8);
+    }
+    Ok(out)
+}
 
 fn validate_lirio_url(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
@@ -43,24 +133,31 @@ pub async fn lirio_direct_request(
     headers: Option<HashMap<String, String>>,
     body_text: Option<String>,
     body_bytes: Option<Vec<u8>>,
+    body_base64: Option<String>,
     timeout_secs: Option<u64>,
 ) -> Result<DirectHttpResponse, String> {
     let clean_url = validate_lirio_url(&url)?;
     let timeout = timeout_secs.unwrap_or(45).clamp(3, 120);
     let method_upper = method.trim().to_ascii_uppercase();
     let hdrs = headers.unwrap_or_default();
+    let decoded_body = match body_base64 {
+        Some(b64) if !b64.is_empty() => Some(decode_base64(&b64)?),
+        _ => None,
+    };
 
     tauri::async_runtime::spawn_blocking(move || {
-        // Explicit direct builder ignores OS HTTP/HTTPS/SOCKS proxy settings.
-        let agent = ureq::AgentBuilder::new()
-            .timeout(Duration::from_secs(timeout))
-            .build();
+        // Explicit direct pooled agent ignores OS HTTP/HTTPS/SOCKS proxy settings while reusing TLS connections.
+        let agent = if timeout <= 10 {
+            direct_probe_agent()
+        } else {
+            direct_http_agent()
+        };
         let mut req = agent.request(&method_upper, &clean_url);
         for (k, v) in hdrs {
             req = req.set(&k, &v);
         }
 
-        let outcome = if let Some(bytes) = body_bytes {
+        let outcome = if let Some(bytes) = decoded_body.or(body_bytes) {
             req.send_bytes(&bytes)
         } else if let Some(txt) = body_text {
             req.send_string(&txt)
@@ -139,11 +236,7 @@ pub async fn lirio_direct_chat_stream(
     let hdrs = headers.unwrap_or_default();
 
     tauri::async_runtime::spawn_blocking(move || {
-        let agent = ureq::AgentBuilder::new()
-            .timeout_connect(Duration::from_secs(12))
-            .timeout_read(Duration::from_secs(60))
-            .build();
-        let mut req = agent.post(&clean_url);
+        let mut req = direct_stream_agent().post(&clean_url);
         for (k, v) in hdrs {
             req = req.set(&k, &v);
         }
@@ -399,10 +492,7 @@ pub async fn diagnose_environment(
         let (direct_health_ok, direct_health_status, direct_health_ms, direct_health_error) =
             if let Some(target_url) = valid_url {
                 let t0 = Instant::now();
-                let agent = ureq::AgentBuilder::new()
-                    .timeout(Duration::from_secs(6))
-                    .build();
-                match agent.get(&target_url).call() {
+                match direct_probe_agent().get(&target_url).call() {
                     Ok(r) => (
                         r.status() < 400,
                         Some(r.status()),
@@ -440,4 +530,31 @@ pub async fn diagnose_environment(
     })
     .await
     .map_err(|e| format!("诊断任务中断：{e}"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_base64;
+
+    #[test]
+    fn decode_base64_empty_and_padded() {
+        assert_eq!(decode_base64("").unwrap(), b"");
+        assert_eq!(decode_base64("TQ==").unwrap(), b"M");
+        assert_eq!(decode_base64("TWE=").unwrap(), b"Ma");
+        assert_eq!(decode_base64("TWFu").unwrap(), b"Man");
+        assert_eq!(decode_base64("SGVsbG8sIExpcmlvIQ==").unwrap(), b"Hello, Lirio!");
+    }
+
+    #[test]
+    fn decode_base64_unpadded_and_binary() {
+        assert_eq!(decode_base64("TQ").unwrap(), b"M");
+        assert_eq!(decode_base64("TWE").unwrap(), b"Ma");
+        assert_eq!(decode_base64("AP+AAQ==").unwrap(), &[0u8, 255, 128, 1]);
+    }
+
+    #[test]
+    fn decode_base64_rejects_invalid_chars() {
+        assert!(decode_base64("@@@@").is_err());
+        assert!(decode_base64("A").is_err());
+    }
 }

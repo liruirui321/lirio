@@ -1,16 +1,23 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::{Mutex, OnceLock};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tauri::Manager;
 
-fn build_http_agent(timeout_secs: u64) -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(timeout_secs))
-        .build()
+fn build_http_agent(_timeout_secs: u64) -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(10))
+            .timeout_read(Duration::from_secs(45))
+            .max_idle_connections_per_host(6)
+            .build()
+    })
 }
 
 fn configure_hidden_cmd(cmd: &mut Command) -> &mut Command {
@@ -24,38 +31,63 @@ fn configure_hidden_cmd(cmd: &mut Command) -> &mut Command {
 
 use super::corpus::CorpusAudioResult;
 
-struct EdgeWorker {
-    child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+type PendingEdgeMap = Arc<Mutex<HashMap<u64, mpsc::Sender<Result<(), String>>>>>;
+
+struct ConcurrentEdgeWorker {
+    stdin: Mutex<ChildStdin>,
+    child: Mutex<Child>,
+    pending: PendingEdgeMap,
+    alive: Arc<AtomicBool>,
+    next_id: AtomicU64,
 }
 
-static EDGE_WORKER: OnceLock<Mutex<Option<EdgeWorker>>> = OnceLock::new();
+impl ConcurrentEdgeWorker {
+    fn kill_process(&self) {
+        self.alive.store(false, Ordering::SeqCst);
+        if let Ok(mut c) = self.child.lock() {
+            let _ = c.kill();
+        }
+    }
+}
+
+static EDGE_WORKER: OnceLock<Mutex<Option<Arc<ConcurrentEdgeWorker>>>> = OnceLock::new();
 
 const EDGE_WORKER_PY: &str = r#"
 import sys, json, asyncio, edge_tts
 
-async def synth(text, voice, out_path):
-    comm = edge_tts.Communicate(text, voice)
-    await comm.save(out_path)
+async def handle(req):
+    rid = req.get("id")
+    try:
+        comm = edge_tts.Communicate(req["text"], req["voice"])
+        await comm.save(req["out"])
+        print(json.dumps({"id": rid, "ok": True}), flush=True)
+    except Exception as e:
+        print(json.dumps({"id": rid, "ok": False, "err": str(e).replace("\n", " ")}), flush=True)
 
 async def main():
-    loop = asyncio.get_event_loop()
-    for line in sys.stdin:
+    loop = asyncio.get_running_loop()
+    tasks = set()
+    while True:
+        line = await loop.run_in_executor(None, sys.stdin.readline)
+        if not line:
+            break
         line = line.strip()
         if not line:
             continue
         try:
             req = json.loads(line)
-            await synth(req["text"], req["voice"], req["out"])
-            print("OK", flush=True)
-        except Exception as e:
-            print("ERR:" + str(e).replace("\n", " "), flush=True)
+        except Exception:
+            continue
+        t = asyncio.create_task(handle(req))
+        tasks.add(t)
+        t.add_done_callback(tasks.discard)
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 asyncio.run(main())
 "#;
 
-fn spawn_edge_worker() -> Option<EdgeWorker> {
+fn spawn_edge_worker() -> Option<Arc<ConcurrentEdgeWorker>> {
     let mut child = ["python3", "python"]
         .into_iter()
         .find_map(|py| {
@@ -69,37 +101,132 @@ fn spawn_edge_worker() -> Option<EdgeWorker> {
                 .ok()
         })?;
     let stdin = child.stdin.take()?;
-    let stdout = BufReader::new(child.stdout.take()?);
-    Some(EdgeWorker { child, stdin, stdout })
+    let stdout = child.stdout.take()?;
+    let pending: PendingEdgeMap = Arc::new(Mutex::new(HashMap::new()));
+    let alive = Arc::new(AtomicBool::new(true));
+
+    let pending_reader = Arc::clone(&pending);
+    let alive_reader = Arc::clone(&alive);
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) else {
+                        continue;
+                    };
+                    let Some(id) = val.get("id").and_then(|v| v.as_u64()) else {
+                        continue;
+                    };
+                    let ok = val.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let res = if ok {
+                        Ok(())
+                    } else {
+                        Err(val
+                            .get("err")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("神经语音合成失败")
+                            .to_string())
+                    };
+                    if let Ok(mut map) = pending_reader.lock() {
+                        if let Some(tx) = map.remove(&id) {
+                            let _ = tx.send(res);
+                        }
+                    }
+                }
+            }
+        }
+        alive_reader.store(false, Ordering::SeqCst);
+        if let Ok(mut map) = pending_reader.lock() {
+            for (_, tx) in map.drain() {
+                let _ = tx.send(Err("神经语音进程已退出".into()));
+            }
+        }
+    });
+
+    Some(Arc::new(ConcurrentEdgeWorker {
+        stdin: Mutex::new(stdin),
+        child: Mutex::new(child),
+        pending,
+        alive,
+        next_id: AtomicU64::new(1),
+    }))
+}
+
+fn get_or_spawn_edge_worker() -> Option<Arc<ConcurrentEdgeWorker>> {
+    let lock = EDGE_WORKER.get_or_init(|| Mutex::new(None));
+    let mut guard = lock.lock().ok()?;
+    let stale = guard
+        .as_ref()
+        .map(|w| !w.alive.load(Ordering::SeqCst))
+        .unwrap_or(true);
+    if stale {
+        *guard = spawn_edge_worker();
+    }
+    guard.as_ref().map(Arc::clone)
+}
+
+fn reset_edge_worker_if_same(target: &Arc<ConcurrentEdgeWorker>) {
+    target.kill_process();
+    if let Some(lock) = EDGE_WORKER.get() {
+        if let Ok(mut guard) = lock.lock() {
+            if guard.as_ref().is_some_and(|w| Arc::ptr_eq(w, target)) {
+                *guard = None;
+            }
+        }
+    }
 }
 
 fn synth_via_persistent_edge_worker(text: &str, voice: &str, out_path: &std::path::Path) -> Result<Vec<u8>, String> {
-    let lock = EDGE_WORKER.get_or_init(|| Mutex::new(None));
-    let mut guard = lock.lock().map_err(|_| "TTS 锁异常".to_string())?;
-
+    let mut last_err = String::from("神经语音合成失败");
     for _attempt in 0..2 {
-        if guard.is_none() {
-            *guard = spawn_edge_worker();
-        }
-        let Some(worker) = guard.as_mut() else {
+        let Some(worker) = get_or_spawn_edge_worker() else {
             return Err("无法启动神经语音进程".into());
         };
+        let id = worker.next_id.fetch_add(1, Ordering::Relaxed);
         let payload = serde_json::json!({
+            "id": id,
             "text": text,
             "voice": voice,
             "out": out_path.to_string_lossy(),
         })
         .to_string();
 
-        if writeln!(worker.stdin, "{payload}").is_err() || worker.stdin.flush().is_err() {
-            let _ = worker.child.kill();
-            *guard = None;
+        let (tx, rx) = mpsc::channel();
+        {
+            let mut map = worker
+                .pending
+                .lock()
+                .map_err(|_| "TTS 队列锁异常".to_string())?;
+            map.insert(id, tx);
+        }
+
+        let write_ok = {
+            let mut stdin_guard = worker
+                .stdin
+                .lock()
+                .map_err(|_| "TTS 输入锁异常".to_string())?;
+            writeln!(stdin_guard, "{payload}").is_ok() && stdin_guard.flush().is_ok()
+        };
+
+        if !write_ok {
+            if let Ok(mut map) = worker.pending.lock() {
+                map.remove(&id);
+            }
+            reset_edge_worker_if_same(&worker);
+            let _ = fs::remove_file(out_path);
             continue;
         }
 
-        let mut resp = String::new();
-        match worker.stdout.read_line(&mut resp) {
-            Ok(n) if n > 0 && resp.trim() == "OK" => {
+        match rx.recv_timeout(Duration::from_secs(15)) {
+            Ok(Ok(())) => {
                 if let Ok(bytes) = fs::read(out_path) {
                     let _ = fs::remove_file(out_path);
                     if bytes.len() > 300 {
@@ -109,14 +236,26 @@ fn synth_via_persistent_edge_worker(text: &str, voice: &str, out_path: &std::pat
                 let _ = fs::remove_file(out_path);
                 return Err("神经语音输出为空".into());
             }
-            _ => {
-                let _ = worker.child.kill();
-                *guard = None;
+            Ok(Err(e)) => {
                 let _ = fs::remove_file(out_path);
+                last_err = e;
+                if !worker.alive.load(Ordering::SeqCst) {
+                    reset_edge_worker_if_same(&worker);
+                    continue;
+                }
+                return Err(last_err);
+            }
+            Err(_) => {
+                if let Ok(mut map) = worker.pending.lock() {
+                    map.remove(&id);
+                }
+                let _ = fs::remove_file(out_path);
+                reset_edge_worker_if_same(&worker);
+                last_err = "神经语音合成超时".into();
             }
         }
     }
-    Err("神经语音合成失败".into())
+    Err(last_err)
 }
 
 #[derive(Deserialize, Serialize)]
@@ -167,14 +306,26 @@ fn find_edge_tts() -> Option<String> {
 #[tauri::command]
 pub async fn speak_transcribe(
     app: tauri::AppHandle,
-    wav_bytes: Vec<u8>,
+    wav_bytes: Option<Vec<u8>>,
+    wav_base64: Option<String>,
+    language: Option<String>,
     provider: Option<String>,
     api_key: Option<String>,
     base_url: Option<String>,
 ) -> Result<String, String> {
+    let wav_bytes = if let Some(b64) = wav_base64 {
+        super::net::decode_base64(&b64)?
+    } else {
+        wav_bytes.unwrap_or_default()
+    };
     if wav_bytes.len() < 100 {
         return Err("录音内容为空，请重新说话。".into());
     }
+    let whisper_lang = language
+        .as_deref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "en".to_string());
     let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
     let use_openai = provider.as_deref() == Some("openai");
 
@@ -268,7 +419,7 @@ pub async fn speak_transcribe(
             .arg(&model)
             .arg("-f")
             .arg(&wav_path)
-            .args(["-l", "auto", "-bs", "1", "-bo", "1", "-t", &threads, "-np", "-nt", "-otxt", "-of"])
+            .args(["-l", &whisper_lang, "-bs", "1", "-bo", "1", "-t", &threads, "-np", "-nt", "-otxt", "-of"])
             .arg(&out_base)
             .stdout(Stdio::null())
             .stderr(Stdio::null())

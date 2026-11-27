@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { warmDirectConnection } from '../../services/accountService';
 import { setNativeKeepScreenOn } from '../../services/platform';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import {
@@ -497,8 +498,8 @@ export function SpeakCompanion({
     const silenceMs = isPart2Monologue
       ? 4500
       : speakModeRef.current === 'companion'
-        ? Math.min(configRef.current.silenceMs || 850, 850)
-        : Math.min(configRef.current.silenceMs || 1200, 1200);
+        ? Math.min(configRef.current.silenceMs || 650, 650)
+        : Math.min(configRef.current.silenceMs || 950, 950);
 
     const rec = new VadVoiceRecorder();
     rec.setMuted(mutedRef.current);
@@ -671,8 +672,8 @@ export function SpeakCompanion({
             spokenBuffer = sentMatch[2] + heldTail;
             continue;
           }
-          if (enqueuedCount === 0 && scannable.length >= 60) {
-            const clauseMatch = scannable.match(/^([\s\S]{25,}?[,;—，])\s+([\s\S]+)$/);
+          if (enqueuedCount === 0 && scannable.length >= 28) {
+            const clauseMatch = scannable.match(/^([\s\S]{16,}?[,;:—–，])\s+([\s\S]+)$/);
             if (clauseMatch) {
               enqueueChunk(clauseMatch[1]);
               spokenBuffer = clauseMatch[2] + heldTail;
@@ -911,6 +912,7 @@ export function SpeakCompanion({
       callActiveRef.current = true;
       setCallActive(true);
       setSubView('call');
+      warmDirectConnection();
 
       setCallPhase('ai_speaking');
       let finished = true;
@@ -1228,6 +1230,7 @@ export function SpeakCompanion({
       callActiveRef.current = true;
       setCallActive(true);
       setSubView('call');
+      warmDirectConnection();
       await beginListeningTurn();
     },
     [stopAudio, stopRecorder, updatePersisted, beginListeningTurn],

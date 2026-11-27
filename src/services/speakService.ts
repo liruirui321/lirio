@@ -2,13 +2,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { loadCorpusState, lookupBuiltinWord, saveCorpusState, type Accent } from './corpusService';
-import { getAccountState, proxyChat, proxyChatStream, proxyTranscribe, proxyTts } from './accountService';
+import { bytesToBase64, getAccountState, proxyChat, proxyChatStream, proxyTranscribe, proxyTts } from './accountService';
 import { recordDiagEvent } from './diagnostics';
 import { isMobileDevice, isWindowsPlatform } from './platform';
 import { saveStateBackup } from './stateSync';
 import ielts2026Q4Raw from '../data/ielts_speaking_2026_sep_dec.json';
 
-export type ProviderId = 'deepseek' | 'gemini' | 'openai' | 'ollama' | 'local';
+export type ProviderId = 'deepseek' | 'gemini' | 'openai' | 'local';
 export type TtsProviderId = 'edge' | 'openai' | 'macos';
 export type AsrProviderId = 'local_whisper' | 'openai';
 export type SpeakMode = 'companion' | 'examiner';
@@ -308,7 +308,6 @@ export const PROVIDER_META: { id: ProviderId; label: string; hint: string }[] = 
   { id: 'deepseek', label: 'DeepSeek', hint: '高性价比，中文与中英混说理解极佳' },
   { id: 'gemini', label: 'Gemini', hint: '响应极快，口语表达地道自然' },
   { id: 'openai', label: 'GPT (OpenAI)', hint: '对话细腻，考官模拟稳健' },
-  { id: 'ollama', label: '本地 Ollama', hint: '本机大模型服务，免费隐私' },
 ];
 
 export const SPEAK_TOPICS = [
@@ -384,7 +383,6 @@ const DEFAULT_CONFIG: SpeakConfig = {
     deepseek: { baseUrl: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat' },
     gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKey: '', model: 'gemini-2.5-flash' },
     openai: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' },
-    ollama: { baseUrl: 'http://127.0.0.1:11434/v1', apiKey: 'ollama', model: 'qwen2.5:7b' },
   },
   accent: 'uk',
   silenceMs: 1800,
@@ -446,10 +444,12 @@ export function loadSpeakState(): SpeakPersistedState {
         deepseek: { ...DEFAULT_CONFIG.providers.deepseek, ...(rawCfg.providers?.deepseek || {}) },
         gemini: { ...DEFAULT_CONFIG.providers.gemini, ...(rawCfg.providers?.gemini || {}) },
         openai: { ...DEFAULT_CONFIG.providers.openai, ...(rawCfg.providers?.openai || {}) },
-        ollama: { ...DEFAULT_CONFIG.providers.ollama, ...(rawCfg.providers?.ollama || {}) },
       };
-      const legacyPid = rawCfg.activeProvider as ProviderId | undefined;
-      const legacyProf = legacyPid && legacyPid !== 'local' ? providers[legacyPid] : providers.deepseek;
+      const legacyPid = rawCfg.activeProvider as string | undefined;
+      const resolvedPid: ProviderId =
+        legacyPid && legacyPid in providers ? (legacyPid as ProviderId) : DEFAULT_CONFIG.activeProvider;
+      const legacyProf =
+        resolvedPid !== 'local' ? providers[resolvedPid as keyof typeof providers] : providers.deepseek;
       const textMode: 'api' | 'local' = 'api';
       const speechMode: 'local' | 'api' =
         rawCfg.speechMode === 'api' || (!rawCfg.speechMode && rawCfg.ttsProvider === 'openai') ? 'api' : 'local';
@@ -712,7 +712,35 @@ async function resampleToWav16k(chunks: Float32Array[], inputRate: number): Prom
   src.connect(offline.destination);
   src.start(0);
   const rendered = await offline.startRendering();
-  const data = new Float32Array(rendered.getChannelData(0));
+  let data: Float32Array = new Float32Array(rendered.getChannelData(0));
+  // Trim leading & trailing silence in 20ms frames (keep 120ms edge padding) to speed up ASR.
+  const frameSize = 320;
+  let clipPeak = 0;
+  for (let i = 0; i < data.length; i++) {
+    const abs = Math.abs(data[i]);
+    if (abs > clipPeak) clipPeak = abs;
+  }
+  const trimThresh = Math.min(0.025, Math.max(0.008, clipPeak * 0.12));
+  let firstActive = -1;
+  let lastActive = -1;
+  for (let start = 0; start < data.length; start += frameSize) {
+    const end = Math.min(data.length, start + frameSize);
+    let sq = 0;
+    for (let j = start; j < end; j++) sq += data[j] * data[j];
+    const frameRms = Math.sqrt(sq / Math.max(1, end - start));
+    if (frameRms >= trimThresh) {
+      if (firstActive < 0) firstActive = start;
+      lastActive = end;
+    }
+  }
+  if (firstActive >= 0 && lastActive > firstActive) {
+    const padSamples = 1920; // 120ms @ 16kHz
+    const trimStart = Math.max(0, firstActive - padSamples);
+    const trimEnd = Math.min(data.length, lastActive + padSamples);
+    if (trimEnd - trimStart >= 4800) {
+      data = data.subarray(trimStart, trimEnd);
+    }
+  }
   let peak = 0;
   for (let i = 0; i < data.length; i++) {
     const abs = Math.abs(data[i]);
@@ -741,6 +769,7 @@ export class VadVoiceRecorder {
   private lastVoiceAt = 0;
   private finished = false;
   private muted = false;
+  private noiseFloor = 0.006;
 
   setMuted(m: boolean) {
     this.muted = m;
@@ -756,6 +785,7 @@ export class VadVoiceRecorder {
     this.preRoll = [];
     this.heardSpeech = false;
     this.finished = false;
+    this.noiseFloor = 0.006;
 
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -770,7 +800,6 @@ export class VadVoiceRecorder {
     this.source = this.ctx.createMediaStreamSource(this.stream);
     this.processor = this.ctx.createScriptProcessor(4096, 1, 1);
 
-    const speechThreshold = 0.014;
     const minSpeechMs = 450;
 
     this.processor.onaudioprocess = (ev) => {
@@ -788,21 +817,25 @@ export class VadVoiceRecorder {
 
       const copy = new Float32Array(ch);
       const now = Date.now();
+      const startThreshold = Math.max(0.014, this.noiseFloor * 2.6);
+      const continueThreshold = Math.max(0.010, this.noiseFloor * 1.9);
 
       if (!this.heardSpeech) {
         this.preRoll.push(copy);
         if (this.preRoll.length > 4) this.preRoll.shift();
-        if (rms >= speechThreshold) {
+        if (rms >= startThreshold) {
           this.heardSpeech = true;
           this.speechStartedAt = now;
           this.lastVoiceAt = now;
           this.chunks.push(...this.preRoll);
           this.preRoll = [];
           opts.onSpeechDetected?.();
+        } else {
+          this.noiseFloor = Math.min(0.025, Math.max(0.004, this.noiseFloor * 0.85 + rms * 0.15));
         }
       } else {
         this.chunks.push(copy);
-        if (rms >= speechThreshold * 0.75) {
+        if (rms >= continueThreshold) {
           this.lastVoiceAt = now;
         } else if (now - this.speechStartedAt >= minSpeechMs && now - this.lastVoiceAt >= opts.silenceMs) {
           this.finishAndEmit(opts.onSpeechEnd);
@@ -864,7 +897,7 @@ export class VadVoiceRecorder {
   }
 }
 
-export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
+export async function transcribeVoice(wavBytes: Uint8Array, language: 'en' | 'auto' = 'en'): Promise<string> {
   const acct = getAccountState();
   if (acct.aiMode === 'pro_balance' && acct.proCloudSpeech && acct.token) {
     try {
@@ -876,7 +909,9 @@ export async function transcribeVoice(wavBytes: Uint8Array): Promise<string> {
   const tLocalAsr = performance.now();
   try {
     const res = await invoke<string>('speak_transcribe', {
-      wavBytes: Array.from(wavBytes),
+      wavBytes: null,
+      wavBase64: bytesToBase64(wavBytes),
+      language,
     });
     recordDiagEvent({ stage: 'asr', route: 'local-whisper', durationMs: performance.now() - tLocalAsr, ok: true });
     return res;

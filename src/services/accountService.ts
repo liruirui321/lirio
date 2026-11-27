@@ -348,6 +348,34 @@ function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
+export function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x4000;
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    parts.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+  }
+  return btoa(parts.join(''));
+}
+
+let lastDirectWarmAt = 0;
+export function warmDirectConnection(): void {
+  const st = getAccountState();
+  const base = (st.serverUrl || DEFAULT_STATE.serverUrl).replace(/\/+$/, '');
+  if (!shouldUseDirectRustTransport(base)) return;
+  const now = Date.now();
+  if (now - lastDirectWarmAt < 20_000) return;
+  lastDirectWarmAt = now;
+  void invoke('lirio_direct_request', {
+    method: 'GET',
+    url: `${base}/api/health`,
+    headers: {},
+    bodyText: null,
+    bodyBytes: null,
+    bodyBase64: null,
+    timeoutSecs: 6,
+  }).catch(() => {});
+}
+
 function shouldUseDirectRustTransport(baseUrl: string): boolean {
   if (!isTauriRuntime()) return false;
   const lower = baseUrl.trim().toLowerCase();
@@ -381,6 +409,7 @@ async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
         headers,
         bodyText: typeof opts.body === 'string' ? opts.body : null,
         bodyBytes: null,
+        bodyBase64: null,
         timeoutSecs: 45,
       });
       status = directResp.status;
@@ -846,6 +875,7 @@ export async function proxyTts(text: string, accent: Accent, voice?: string, fea
         headers,
         bodyText: payload,
         bodyBytes: null,
+        bodyBase64: null,
         timeoutSecs: 30,
       });
       if (directResp.status >= 200 && directResp.status < 300) {
@@ -925,7 +955,8 @@ export async function proxyTranscribe(wavBytes: Uint8Array, _feature = '云端�
         url: `${base}/api/ai/transcribe`,
         headers,
         bodyText: null,
-        bodyBytes: Array.from(wavBytes),
+        bodyBytes: null,
+        bodyBase64: bytesToBase64(wavBytes),
         timeoutSecs: 45,
       });
       const data = directResp.bodyText
