@@ -25,6 +25,7 @@ import {
 import {
   COMPANION_PERSONAS,
   EMPTY_USER_MEMORY,
+  SPEAK_LEVELS,
   SPEAK_TOPICS,
   VadVoiceRecorder,
   addPhraseToWordModule,
@@ -57,6 +58,7 @@ import {
   type IeltsQuestionItem,
   type ShadowingResult,
   type SpeakConfig,
+  type SpeakLevel,
   type SpeakMode,
   type SpeakPersistedState,
   type SpeakSessionRecord,
@@ -890,6 +892,7 @@ export function SpeakCompanion({
         opener = buildCompanionOpener(personaRef.current, topicIdRef.current, memoryRef.current, {
           incognito: incognitoRef.current,
           lastSession: latestCompanionSessionRef.current || undefined,
+          speakLevel: configRef.current.speakLevel || 'L2',
         });
       }
 
@@ -1554,6 +1557,32 @@ export function SpeakCompanion({
                 </button>
               </>
             )}
+            <div className="speak-level-pill" role="radiogroup" aria-label="对话词汇与句式阶梯难度">
+              {SPEAK_LEVELS.map((lv) => {
+                const activeLevel: SpeakLevel = config.speakLevel || 'L2';
+                const isSelected = activeLevel === lv.id;
+                return (
+                  <button
+                    key={lv.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    className={isSelected ? 'active' : ''}
+                    title={lv.tooltip}
+                    onClick={() => {
+                      const nextCfg = { ...configRef.current, speakLevel: lv.id };
+                      configRef.current = nextCfg;
+                      updatePersisted((prev) => ({
+                        ...prev,
+                        config: { ...prev.config, speakLevel: lv.id },
+                      }));
+                    }}
+                  >
+                    {lv.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

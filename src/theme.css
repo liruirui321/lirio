@@ -600,6 +600,36 @@ textarea:focus { outline: none; }
   gap: 8px;
   flex-wrap: wrap;
 }
+.speak-level-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--pill-bg);
+}
+.speak-level-pill button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .16s cubic-bezier(0.23, 1, 0.32, 1), color .16s ease, transform .14s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.speak-level-pill button:hover {
+  color: var(--text-strong);
+}
+.speak-level-pill button:active {
+  transform: scale(0.96);
+}
+.speak-level-pill button.active {
+  background: var(--accent);
+  color: #fff;
+}
 .speak-top-actions {
   display: flex;
   align-items: center;

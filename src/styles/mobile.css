@@ -406,6 +406,15 @@ html[data-mobile="true"] .speak-topbar {
   flex-wrap: wrap;
 }
 
+html[data-mobile="true"] .speak-level-pill {
+  flex-shrink: 0;
+}
+
+html[data-mobile="true"] .speak-level-pill button {
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+
 html[data-mobile="true"] .speak-top-actions > button[aria-label="设置"] {
   display: none;
 }

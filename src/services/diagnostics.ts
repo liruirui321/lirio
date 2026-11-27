@@ -115,6 +115,7 @@ export async function collectSanitizedDiagnostics(
       asrProvider: speakCfg.asrProvider || 'local_whisper',
       hasCustomSpeechKey: Boolean((speakCfg.speechApiKey || '').trim()),
       silenceMs: speakCfg.silenceMs,
+      speakLevel: speakCfg.speakLevel || 'L2',
     },
     environment: rustEnv
       ? {

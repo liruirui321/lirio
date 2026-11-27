@@ -12,7 +12,103 @@ export type ProviderId = 'deepseek' | 'gemini' | 'openai' | 'ollama' | 'local';
 export type TtsProviderId = 'edge' | 'openai' | 'macos';
 export type AsrProviderId = 'local_whisper' | 'openai';
 export type SpeakMode = 'companion' | 'examiner';
+export type SpeakLevel = 'L1' | 'L2' | 'L3' | 'L4';
 export type CompanionPersonaId = 'clara' | 'noah' | 'oliver';
+
+export interface SpeakLevelProfile {
+  id: SpeakLevel;
+  label: string;
+  cefr: string;
+  shortTitle: string;
+  tooltip: string;
+  reviewTarget: string;
+  promptRule: string;
+}
+
+export const SPEAK_LEVELS: SpeakLevelProfile[] = [
+  {
+    id: 'L1',
+    label: 'L1',
+    cefr: 'A1–A2',
+    shortTitle: '高中基础',
+    tooltip: 'L1 初阶 · 高中核心词汇 · 简短直白口语（CEFR A1–A2）',
+    reviewTarget: 'clear, idiomatic everyday High-School / A2–B1 spoken English (simple core words, zero obscure idioms)',
+    promptRule: [
+      '- Target Level: L1 (Chinese High School Baseline · CEFR A1–A2).',
+      '- Lexical Ceiling: Use ONLY high-frequency everyday words inside the top ~2,500–3,500 common vocabulary (e.g., happy, busy, tired, kind, problem, decide, plan, favorite). STRICTLY AVOID idioms, rare phrasal verbs, academic words, CET-6/IELTS/GRE vocabulary, or figurative slang.',
+      '- Syntax & Pacing: Keep sentences short, warm, and crystal clear (about 6–12 words per sentence). Prefer simple present, simple past, and "going to / want to". Use at most one simple connector ("and", "but", "because", "so"). Always use spoken contractions ("I\'m", "don\'t", "it\'s").',
+      '- Style Example -> Good: "Oh nice! Did you go with your friends? How was the food?" | Avoid: "That sounds like a quintessential culinary excursion."',
+    ].join('\n'),
+  },
+  {
+    id: 'L2',
+    label: 'L2',
+    cefr: 'B1–B2',
+    shortTitle: '四六级日常',
+    tooltip: 'L2 进阶 · 四六级高频词汇 · 自然地道日常口语（CEFR B1–B2）',
+    reviewTarget: 'natural CET-4/CET-6 level conversational English (clear everyday collocations & common phrasal verbs)',
+    promptRule: [
+      '- Target Level: L2 (CET-4 / CET-6 Everyday Fluency · CEFR B1–B2).',
+      '- Lexical Ceiling: Stick to active CET-4/CET-6 everyday vocabulary (~4,500–6,000 words) and transparent, high-frequency phrasal verbs ("figure out", "end up", "hang out", "look forward to", "get used to"). Avoid obscure C2, literary, or GRE words.',
+      '- Syntax & Pacing: Use natural everyday spoken compound and clear complex sentences (~10–18 words), everyday clauses ("when", "if", "because", "which", "even though"), and casual spoken markers ("honestly", "actually", "pretty much", "kind of").',
+      '- Style Example -> Good: "That actually sounds super relaxing—how did you end up finding that spot?"',
+    ].join('\n'),
+  },
+  {
+    id: 'L3',
+    label: 'L3',
+    cefr: 'B2–C1',
+    shortTitle: '雅思高分',
+    tooltip: 'L3 熟手 · 雅思口语 7.5+ 词汇与地道搭配 · 流畅复合口语（CEFR B2–C1）',
+    reviewTarget: 'polished IELTS Band 7.5–8.0 spoken English with natural idiomatic collocations and flexible syntax',
+    promptRule: [
+      '- Target Level: L3 (IELTS Band 7.0–8.0 Fluent Speaker · CEFR B2–C1).',
+      '- Lexical Ceiling: Use natural IELTS high-band spoken vocabulary, vivid collocations, and authentic idiomatic expressions ("strike a balance", "take a toll on", "off the beaten track", "wrap my head around", "down-to-earth") that fit everyday speech effortlessly.',
+      '- Syntax & Pacing: Use fluid, varied spoken structures—natural concessions ("even though...", "then again"), cleft emphasis ("what surprised me was..."), and soft hedging ("I\'d say", "tends to")—while keeping a crisp conversational rhythm.',
+    ].join('\n'),
+  },
+  {
+    id: 'L4',
+    label: 'L4',
+    cefr: 'C1–C2',
+    shortTitle: '专八 / GRE',
+    tooltip: 'L4 高阶 · 专八 / GRE 精准词汇与地道修辞 · 母语级口语（CEFR C1–C2）',
+    reviewTarget: 'sophisticated TEM-8 / GRE / native-speaker level spoken English with nuanced vocabulary, wit, and layered natural syntax',
+    promptRule: [
+      '- Target Level: L4 (TEM-8 / GRE / Educated Native Register · CEFR C1–C2).',
+      '- Lexical Ceiling: Freely deploy high-precision TEM-8 / GRE-tier verbs, nuanced modifiers, subtle irony/understatement, and rich idioms woven naturally into speech (e.g., "pragmatic", "ubiquitous", "double-edged", "counterintuitive", "nuanced", "fleeting", " silver lining", "take something with a pinch of salt").',
+      '- Syntax & Pacing: Speak with educated native cadence—mix punchy reactions with layered clauses, nuanced hedging ("it\'s tempting to assume, though..."), and subtle rhetorical contrast.',
+      '- CRITICAL ANTI-ESSAY GUARDRAIL: Even at L4, NEVER sound like a written essay, academic paper, or GRE reading passage. Always use spoken contractions and conversational transitions ("That said,", "To be fair,", "Funny enough,")—NEVER stiff written linkers like "Furthermore", "Moreover", "In conclusion", "Nevertheless", or "Thus".',
+    ].join('\n'),
+  },
+];
+
+const SPEAK_LEVEL_MAP: Record<SpeakLevel, SpeakLevelProfile> = {
+  L1: SPEAK_LEVELS[0],
+  L2: SPEAK_LEVELS[1],
+  L3: SPEAK_LEVELS[2],
+  L4: SPEAK_LEVELS[3],
+};
+
+export function getSpeakLevelProfile(level?: SpeakLevel): SpeakLevelProfile {
+  return SPEAK_LEVEL_MAP[level || 'L2'] || SPEAK_LEVELS[1];
+}
+
+function buildSpeakLevelPromptBlock(level: SpeakLevel | undefined, mode: SpeakMode): string {
+  const profile = getSpeakLevelProfile(level);
+  const modeGuidance =
+    mode === 'examiner'
+      ? profile.id === 'L1' || profile.id === 'L2'
+        ? `- Examiner Calibration: Strictly keep all examiner reactions, probes, and transitions inside ${profile.id} lexical/syntax limits. If an item on the Official Question Sheet uses harder wording, keep the exact question order & meaning while gently rephrasing difficult words into natural ${profile.id} spoken English so the candidate understands comfortably.`
+        : `- Examiner Calibration: Maintain authentic official IELTS examiner register calibrated to ${profile.id} (${profile.cefr}) spoken vocabulary and follow-up depth.`
+      : `- Stealth Recasting Calibration: When the user hesitates, mixes Chinese, or makes a grammar slip, naturally model the corrected English back inside your reply strictly within ${profile.id} vocabulary limits.`;
+  return [
+    `Spoken Complexity & Vocabulary Ladder (${profile.id} · ${profile.shortTitle} · ${profile.cefr}):`,
+    profile.promptRule,
+    modeGuidance,
+    '- Spoken Register Universal Rule: Always sound like natural live voice conversation—never textbook prose, never lecture grammar, and keep contractions natural.',
+  ].join('\n');
+}
 export type CallViewMode = 'chat' | 'phone';
 export type IeltsPart = 'warmup' | 'part1' | 'part2' | 'part3';
 export type IeltsCategory = 'new' | 'core' | 'retained' | 'overseas';
@@ -40,6 +136,7 @@ export interface SpeakConfig {
   speechBaseUrl?: string;
   speechModel?: string;
   speechVoice?: string;
+  speakLevel?: SpeakLevel;
 }
 
 export interface UserMemoryProfile {
@@ -303,6 +400,7 @@ const DEFAULT_CONFIG: SpeakConfig = {
   speechBaseUrl: 'https://api.openai.com/v1',
   speechModel: 'tts-1',
   speechVoice: 'alloy',
+  speakLevel: 'L2',
 };
 
 export const EMPTY_USER_MEMORY: UserMemoryProfile = {
@@ -355,6 +453,11 @@ export function loadSpeakState(): SpeakPersistedState {
       const textMode: 'api' | 'local' = 'api';
       const speechMode: 'local' | 'api' =
         rawCfg.speechMode === 'api' || (!rawCfg.speechMode && rawCfg.ttsProvider === 'openai') ? 'api' : 'local';
+      const rawLevel = rawCfg.speakLevel;
+      const speakLevel: SpeakLevel =
+        rawLevel === 'L1' || rawLevel === 'L2' || rawLevel === 'L3' || rawLevel === 'L4'
+          ? rawLevel
+          : 'L2';
 
       const activePersonaId: CompanionPersonaId = COMPANION_PERSONAS.some((p) => p.id === parsed.activePersonaId)
         ? parsed.activePersonaId
@@ -372,6 +475,7 @@ export function loadSpeakState(): SpeakPersistedState {
           textModel: rawCfg.textModel ?? legacyProf?.model ?? DEFAULT_CONFIG.textModel,
           speechMode,
           speechModel: rawCfg.speechModel || DEFAULT_CONFIG.speechModel,
+          speakLevel,
         },
         memory: { ...DEFAULT_MEMORY, ...(parsed.memory || {}) },
         sessions,
@@ -1125,9 +1229,18 @@ export function buildCompanionOpener(
   persona: CompanionPersona,
   topicId: string,
   memory: UserMemoryProfile,
-  opts?: { incognito?: boolean; lastSession?: SpeakSessionRecord },
+  opts?: { incognito?: boolean; lastSession?: SpeakSessionRecord; speakLevel?: SpeakLevel },
 ): string {
   const fallbackTopic = SPEAK_TOPICS.find((t) => t.id === topicId) || SPEAK_TOPICS[0];
+  if (opts?.speakLevel === 'L1') {
+    const l1ByTopic: Record<string, string> = {
+      daily: `Hi! It's ${persona.name}. How was your day today? Did anything nice happen?`,
+      weekend: `Hey! It's ${persona.name}. What do you want to do this weekend?`,
+      work_study: `Hi! It's ${persona.name}. How is work or school going for you this week?`,
+      travel: `Hey! It's ${persona.name}. Tell me about a nice place you visited before!`,
+    };
+    if (l1ByTopic[topicId]) return l1ByTopic[topicId];
+  }
   if (opts?.incognito) {
     return persona.openers[topicId] || fallbackTopic.opener;
   }
@@ -1156,6 +1269,7 @@ function buildCompanionSystemPrompt(
   topicGuide: string,
   memory: UserMemoryProfile,
   persona?: CompanionPersona,
+  speakLevel: SpeakLevel = 'L2',
 ): string {
   const identity = persona
     ? `Your name is ${persona.name}. ${persona.stylePrompt}`
@@ -1163,12 +1277,13 @@ function buildCompanionSystemPrompt(
   return [
     `${identity} You are on a live phone call inside Lirio.`,
     `Context: ${topicGuide}`,
+    buildSpeakLevelPromptBlock(speakLevel, 'companion'),
     formatMemoryForPrompt(memory),
     'Rules:',
     '1. Speak like a real friend on a voice call—NOT a teacher, textbook, or customer support bot.',
     '2. Start or respond with natural spoken reactions when fitting ("Oh nice,", "Right,", "Honestly,", "Wait—") and keep every spoken turn tight (1 to 2 crisp, natural sentences plus a light follow-up).',
     '3. The user may code-switch (mix Chinese words/phrases into English when stuck). NEVER interrupt, scold, or lecture about grammar.',
-    '4. Understand their Chinese+English meaning seamlessly, react genuinely, and naturally weave the idiomatic English phrasing into your reply.',
+    '4. Understand their Chinese+English meaning seamlessly, react genuinely, and naturally weave the idiomatic English phrasing into your reply (within the target Speak Level above).',
     '5. Output plain spoken English only (no markdown, no bullets, no emojis, no stage directions).',
   ]
     .filter(Boolean)
@@ -1185,6 +1300,7 @@ function buildExaminerSystemPrompt(
   questionItem: IeltsQuestionItem,
   candidateAnswersInPart: number,
   opts: ExaminerReplyOptions = {},
+  speakLevel: SpeakLevel = 'L2',
 ): string {
   const totalQs = questionItem.prompts.length;
   const promptList = questionItem.prompts.map((q, i) => `${i + 1}. ${q}`).join('\n');
@@ -1234,6 +1350,7 @@ function buildExaminerSystemPrompt(
   return [
     'You are a certified, professional IELTS Speaking Examiner conducting an authentic official speaking test.',
     partRule,
+    buildSpeakLevelPromptBlock(speakLevel, 'examiner'),
     `Topic: ${questionItem.topic}`,
     `Official Question Sheet:\n${promptList}`,
     'Strict Examiner Protocol:',
@@ -1317,7 +1434,7 @@ export async function generateCompanionReply(
 ): Promise<string> {
   const topic = SPEAK_TOPICS.find((t) => t.id === topicId) || SPEAK_TOPICS[0];
   const guide = customTopicGuide?.trim() ? customTopicGuide : topic.guide;
-  const system = buildCompanionSystemPrompt(guide, memory, persona);
+  const system = buildCompanionSystemPrompt(guide, memory, persona, config.speakLevel || 'L2');
   const messages = [
     { role: 'system', content: system },
     ...turns.slice(-16).map((t) => ({ role: t.role, content: t.text })),
@@ -1336,7 +1453,7 @@ export async function generateCompanionReplyStream(
 ): Promise<string> {
   const topic = SPEAK_TOPICS.find((t) => t.id === topicId) || SPEAK_TOPICS[0];
   const guide = customTopicGuide?.trim() ? customTopicGuide : topic.guide;
-  const system = buildCompanionSystemPrompt(guide, memory, persona);
+  const system = buildCompanionSystemPrompt(guide, memory, persona, config.speakLevel || 'L2');
   const messages = [
     { role: 'system', content: system },
     ...turns.slice(-16).map((t) => ({ role: t.role, content: t.text })),
@@ -1357,7 +1474,12 @@ export async function generateExaminerReplyStream(
   opts: ExaminerReplyOptions = {},
 ): Promise<ExaminerReplyResult> {
   const candidateAnswersInPart = stageTurns.filter((t) => t.role === 'user').length;
-  const system = buildExaminerSystemPrompt(questionItem, candidateAnswersInPart, opts);
+  const system = buildExaminerSystemPrompt(
+    questionItem,
+    candidateAnswersInPart,
+    opts,
+    config.speakLevel || 'L2',
+  );
   const messages = [
     { role: 'system', content: system },
     ...stageTurns.slice(-18).map((t) => ({ role: t.role, content: t.text })),
@@ -1383,7 +1505,12 @@ export async function generateExaminerReply(
   opts: ExaminerReplyOptions = {},
 ): Promise<ExaminerReplyResult> {
   const candidateAnswersInPart = stageTurns.filter((t) => t.role === 'user').length;
-  const system = buildExaminerSystemPrompt(questionItem, candidateAnswersInPart, opts);
+  const system = buildExaminerSystemPrompt(
+    questionItem,
+    candidateAnswersInPart,
+    opts,
+    config.speakLevel || 'L2',
+  );
   const messages = [
     { role: 'system', content: system },
     ...stageTurns.slice(-18).map((t) => ({ role: t.role, content: t.text })),
@@ -1475,24 +1602,27 @@ export async function generateSessionTakeaways(
     .map((t) => `${t.role === 'user' ? 'Candidate' : mode === 'examiner' ? 'Examiner' : 'Partner'}: ${t.text}`)
     .join('\n');
 
+  const levelProfile = getSpeakLevelProfile(config.speakLevel);
   const system =
     mode === 'examiner'
       ? [
           'You are a Senior Certified IELTS Speaking Examiner evaluating a mock speaking test transcript.',
           'Assess strictly against the 4 official IELTS Speaking Band Descriptors: Fluency & Coherence, Lexical Resource, Grammatical Range & Accuracy, and Pronunciation/Delivery.',
+          `Target spoken polish level selected by the learner: ${levelProfile.id} (${levelProfile.shortTitle}, ${levelProfile.cefr}) -> ${levelProfile.reviewTarget}.`,
           'Also produce BOTH:',
-          '1) "qaPolishes": for EVERY question asked by the Examiner that the Candidate answered, provide a polished Band 7.5–8.5 spoken answer ("polished") that keeps the Candidate\'s own core idea, plus a concise Chinese tip ("tip", <=25 chars).',
-          '2) "takeaways": 3 to 5 reusable idiomatic expressions/upgrades grounded in what the Candidate said, plus durable memory notes.',
+          `1) "qaPolishes": for EVERY question asked by the Examiner that the Candidate answered, provide a natural spoken demonstration ("polished") calibrated to ${levelProfile.id} (${levelProfile.reviewTarget}) that keeps the Candidate's own core idea, plus a concise Chinese tip ("tip", <=25 chars).`,
+          `2) "takeaways": 3 to 5 reusable natural spoken expressions/upgrades matched to ${levelProfile.id} grounded in what the Candidate said, plus durable memory notes.`,
           'Return ONLY valid JSON with this exact schema (no markdown fences):',
-          '{"summary":"用2句专业温和的中文总结本次模考表现与最核心提分点","ieltsScore":{"overall":"6.5","fluency":{"band":"6.5","note":"简短中文点评"},"lexical":{"band":"6.5","note":"简短中文点评"},"grammar":{"band":"6.5","note":"简短中文点评"},"pronunciation":{"band":"6.5","note":"基于表达节奏与句式自然度的中文提示"}},"qaPolishes":[{"question":"考官原问","userSaid":"考生原答要点","polished":"保留考生观点但更地道流利的7.5-8.5分完整口语示范回答","tip":"一句话中文点拨"}],"takeaways":[{"said":"考生原话","native":"7.5+分更地道自然的表达","phrase":"核心高分短语/搭配","zh":"中文意思","why":"一句话说明提分逻辑"}],"memory":{"aboutMe":["新了解到的背景或目标"],"habits":["暴露出的高频口语习惯或失分点"],"recurringTopics":["本次考察话题"],"targetPhrases":["核心高分短语"]}}',
+          '{"summary":"用2句专业温和的中文总结本次模考表现与最核心提分点","ieltsScore":{"overall":"6.5","fluency":{"band":"6.5","note":"简短中文点评"},"lexical":{"band":"6.5","note":"简短中文点评"},"grammar":{"band":"6.5","note":"简短中文点评"},"pronunciation":{"band":"6.5","note":"基于表达节奏与句式自然度的中文提示"}},"qaPolishes":[{"question":"考官原问","userSaid":"考生原答要点","polished":"保留考生观点但更地道流利的示范口语回答","tip":"一句话中文点拨"}],"takeaways":[{"said":"考生原话","native":"更地道自然的口语表达","phrase":"核心短语/搭配","zh":"中文意思","why":"一句话说明提分逻辑"}],"memory":{"aboutMe":["新了解到的背景或目标"],"habits":["暴露出的高频口语习惯或失分点"],"recurringTopics":["本次考察话题"],"targetPhrases":["核心短语"]}}',
         ].join('\n')
       : [
           'You are a warm, perceptive personal bilingual English coach reviewing a voice call.',
           'Focus on places where the user code-switched into Chinese, hesitated, or used Chinglish / stiff phrasing.',
-          'Provide "qaPolishes" for each main Partner prompt the user answered (preserving their personal meaning in natural native English), plus "takeaways" and personal memory.',
+          `Target spoken polish level selected by the learner: ${levelProfile.id} (${levelProfile.shortTitle}, ${levelProfile.cefr}) -> ${levelProfile.reviewTarget}.`,
+          `Provide "qaPolishes" for each main Partner prompt the user answered (preserving their personal meaning in natural ${levelProfile.id} spoken English), plus "takeaways" calibrated to ${levelProfile.id} and personal memory.`,
           existingMemory.habits.length ? `Known habits so far: ${existingMemory.habits.join('; ')}` : '',
           'Return ONLY valid JSON with this exact schema (no markdown fences):',
-          '{"summary":"用2句温和简洁的中文总结本次对话亮点与流利度表现","qaPolishes":[{"question":"对方的问题","userSaid":"用户原回答","polished":"更地道自然的母语者整句改写（保留原意）","tip":"一句话中文点拨"}],"takeaways":[{"said":"用户原话","native":"母语者更地道的整句说法","phrase":"值得记忆的核心短语","zh":"核心短语中文意思","why":"一句话中文点拨"}],"memory":{"aboutMe":["新了解到的用户背景/目标"],"habits":["观察到的用户表达习惯或卡壳模式"],"recurringTopics":["本次聊到的核心话题"],"targetPhrases":["核心英文短语"]}}',
+          '{"summary":"用2句温和简洁的中文总结本次对话亮点与流利度表现","qaPolishes":[{"question":"对方的问题","userSaid":"用户原回答","polished":"更地道自然的整句口语改写（保留原意）","tip":"一句话中文点拨"}],"takeaways":[{"said":"用户原话","native":"更地道自然的整句口语说法","phrase":"值得记忆的核心短语","zh":"核心短语中文意思","why":"一句话中文点拨"}],"memory":{"aboutMe":["新了解到的用户背景/目标"],"habits":["观察到的用户表达习惯或卡壳模式"],"recurringTopics":["本次聊到的核心话题"],"targetPhrases":["核心英文短语"]}}',
         ]
           .filter(Boolean)
           .join('\n');
