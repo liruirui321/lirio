@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeFile } from '@tauri-apps/plugin-fs';
 import { open as openExternalUrl } from '@tauri-apps/plugin-shell';
@@ -229,24 +228,6 @@ export function GlobalSettingsModal({
       unsubAcct();
       unsubUpd();
     };
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const latest = loadSpeakState();
-    if (!latest.config.textApiKey && (latest.config.textApiUrl || '').includes('deepseek')) {
-      invoke<string | null>('speak_auto_detect_deepseek')
-        .then((key) => {
-          if (key) {
-            const cur = loadSpeakState();
-            saveSpeakState({
-              ...cur,
-              config: { ...cur.config, textApiKey: key },
-            });
-          }
-        })
-        .catch(() => {});
-    }
   }, [isOpen]);
 
   useEffect(() => {

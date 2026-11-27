@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { setNativeKeepScreenOn } from '../../services/platform';
 import { CustomSelect, type SelectOption } from '../Corpus/CustomSelect';
 import {
@@ -254,25 +253,6 @@ export function SpeakCompanion({
       saveSpeakState(next);
       return next;
     });
-  }, []);
-
-  // Silent auto-detect DeepSeek API key from local dsh credentials
-  useEffect(() => {
-    if (!persisted.config.textApiKey && (persisted.config.textApiUrl || '').includes('deepseek')) {
-      invoke<string | null>('speak_auto_detect_deepseek')
-        .then((key) => {
-          if (key) {
-            updatePersisted((prev) => ({
-              ...prev,
-              config: {
-                ...prev.config,
-                textApiKey: key,
-              },
-            }));
-          }
-        })
-        .catch(() => {});
-    }
   }, []);
 
   const stopAudio = useCallback(() => {

@@ -292,13 +292,86 @@ export function seedDemoUser(db) {
   return credited.user;
 }
 
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  'tauri://localhost',
+  'https://tauri.localhost',
+  'http://tauri.localhost',
+  'https://lirio.deltae.tech',
+  'http://localhost:1420',
+  'http://127.0.0.1:1420',
+  'http://localhost:8787',
+  'http://127.0.0.1:8787',
+]);
+
+function getAllowedCorsOrigin(req) {
+  const origin = String(req?.headers?.origin || '').trim();
+  if (!origin) return '';
+  if (DEFAULT_ALLOWED_ORIGINS.has(origin)) return origin;
+  const extra = String(process.env.LIRIO_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return extra.includes(origin) ? origin : '';
+}
+
+function getClientIp(req) {
+  const xff = String(req?.headers?.['x-forwarded-for'] || '').trim();
+  if (xff) {
+    const first = xff.split(',')[0].trim();
+    if (first) return first;
+  }
+  const realIp = String(req?.headers?.['x-real-ip'] || '').trim();
+  if (realIp) return realIp;
+  return String(req?.socket?.remoteAddress || '127.0.0.1');
+}
+
+function sanitizeSyncPayload(rawPayload) {
+  const parsed = JSON.parse(rawPayload);
+  if (parsed && typeof parsed === 'object' && parsed.entries && typeof parsed.entries === 'object') {
+    const speakEntry = parsed.entries['aboboo-speak-state-v2'];
+    if (speakEntry && typeof speakEntry === 'object' && speakEntry.config && typeof speakEntry.config === 'object') {
+      speakEntry.config.textApiKey = '';
+      speakEntry.config.speechApiKey = '';
+      if (speakEntry.config.providers && typeof speakEntry.config.providers === 'object') {
+        for (const p of Object.values(speakEntry.config.providers)) {
+          if (p && typeof p === 'object' && 'apiKey' in p) {
+            p.apiKey = '';
+          }
+        }
+      }
+    }
+    const acctEntry = parsed.entries['lirio-account-v1'];
+    if (acctEntry && typeof acctEntry === 'object' && 'token' in acctEntry) {
+      acctEntry.token = null;
+    }
+  }
+  return JSON.stringify(parsed);
+}
+
+function sanitizePublicError(err) {
+  const raw = String(err?.message || err || '');
+  const redacted = raw
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***')
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer ***')
+    .replace(/https?:\/\/\S+/gi, '[upstream]');
+  if (!redacted || /(TypeError|ReferenceError|SyntaxError|SQLITE_|ECONN|ENOTFOUND|ETIMEDOUT|fetch failed|at\s+\S+:\d+)/i.test(redacted)) {
+    return '服务暂时异常，请稍后重试。';
+  }
+  return redacted;
+}
+
 function sendJson(res, status, data, headOnly = false) {
-  res.writeHead(status, {
+  const corsOrigin = res._lirioCorsOrigin || '';
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, HEAD, OPTIONS',
-  });
+    'Vary': 'Origin',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Token, X-Admin-Key, X-Audio-Duration, Accept',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, HEAD, OPTIONS',
+  };
+  if (corsOrigin) {
+    headers['Access-Control-Allow-Origin'] = corsOrigin;
+  }
+  res.writeHead(status, headers);
   res.end(headOnly ? undefined : JSON.stringify(data));
 }
 
@@ -1002,15 +1075,73 @@ function serveWebsiteFile(res, rel, headOnly = false) {
 
 export function createLirioServer({ dbPath } = {}) {
   const db = openDatabase(dbPath);
+  const rateBuckets = new Map();
+
+  function rateLimitDisabled() {
+    return process.env.LIRIO_DISABLE_RATE_LIMIT === '1';
+  }
+
+  function pruneBuckets(now) {
+    if (rateBuckets.size <= 2000) return;
+    for (const [k, b] of rateBuckets.entries()) {
+      if (b.resetAt <= now) rateBuckets.delete(k);
+    }
+  }
+
+  function getWindowUsage(key, windowMs) {
+    const now = Date.now();
+    const b = rateBuckets.get(key);
+    if (!b || b.resetAt <= now) return { count: 0, retryAfterSec: Math.ceil(windowMs / 1000) };
+    return { count: b.count, retryAfterSec: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) };
+  }
+
+  function addWindowUsage(key, amount, windowMs) {
+    const now = Date.now();
+    pruneBuckets(now);
+    const b = rateBuckets.get(key);
+    if (!b || b.resetAt <= now) {
+      rateBuckets.set(key, { count: amount, resetAt: now + windowMs });
+      return amount;
+    }
+    b.count += amount;
+    return b.count;
+  }
+
+  function consumeRateLimit(res, key, limit, windowMs, msg) {
+    if (rateLimitDisabled()) return true;
+    const now = Date.now();
+    pruneBuckets(now);
+    const b = rateBuckets.get(key);
+    if (!b || b.resetAt <= now) {
+      rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+    if (b.count >= limit) {
+      const retryAfterSec = Math.max(1, Math.ceil((b.resetAt - now) / 1000));
+      res.setHeader('Retry-After', String(retryAfterSec));
+      sendJson(res, 429, { error: msg, retryAfterSec });
+      return false;
+    }
+    b.count += 1;
+    return true;
+  }
 
   const server = http.createServer(async (req, res) => {
+    const corsOrigin = getAllowedCorsOrigin(req);
+    res._lirioCorsOrigin = corsOrigin;
+    const clientIp = getClientIp(req);
+
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
+      const headers = {
+        'Vary': 'Origin',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Token, X-Admin-Key, X-Audio-Duration, Accept',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, HEAD, OPTIONS',
         'Access-Control-Max-Age': '86400',
-      });
+      };
+      if (corsOrigin) {
+        headers['Access-Control-Allow-Origin'] = corsOrigin;
+      }
+      res.writeHead(204, headers);
       res.end();
       return;
     }
@@ -1028,6 +1159,17 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (req.method === 'POST' && pathname === '/api/admin/login') {
+        if (
+          !consumeRateLimit(
+            res,
+            `admin-login:${clientIp}`,
+            Math.max(1, Number(process.env.LIRIO_RL_ADMIN_LOGIN_PER_15M || 8)),
+            15 * 60 * 1000,
+            '管理员登录尝试过于频繁，请 15 分钟后再试。',
+          )
+        ) {
+          return;
+        }
         const expected = getAdminToken();
         if (!expected) {
           sendJson(res, 200, { ok: true, mode: 'no_admin_token' });
@@ -1216,6 +1358,17 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (req.method === 'POST' && pathname === '/api/auth/register') {
+        if (
+          !consumeRateLimit(
+            res,
+            `reg:${clientIp}`,
+            Math.max(1, Number(process.env.LIRIO_RL_REG_PER_DAY || 5)),
+            24 * 60 * 60 * 1000,
+            '今日当前网络注册次数已达上限，请明天再试。',
+          )
+        ) {
+          return;
+        }
         const body = await readJsonBody(req);
         const email = String(body.account || body.username || body.email || '').trim().toLowerCase();
         const password = String(body.password || '');
@@ -1266,6 +1419,17 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (req.method === 'POST' && pathname === '/api/auth/login') {
+        if (
+          !consumeRateLimit(
+            res,
+            `login:${clientIp}`,
+            Math.max(1, Number(process.env.LIRIO_RL_LOGIN_PER_15M || 15)),
+            15 * 60 * 1000,
+            '登录尝试过于频繁，请稍后再试。',
+          )
+        ) {
+          return;
+        }
         const body = await readJsonBody(req);
         const email = String(body.account || body.username || body.email || '').trim().toLowerCase();
         const password = String(body.password || '');
@@ -1386,6 +1550,13 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录再兑换卡密。');
         if (!authState) return;
         const { user, deviceId } = authState;
+        const redeemLimit = Math.max(1, Number(process.env.LIRIO_RL_REDEEM_PER_15M || 10));
+        if (
+          !consumeRateLimit(res, `redeem-u:${user.id}`, redeemLimit, 15 * 60 * 1000, '兑换尝试过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `redeem-ip:${clientIp}`, redeemLimit * 2, 15 * 60 * 1000, '兑换尝试过于频繁，请稍后再试。')
+        ) {
+          return;
+        }
         const body = await readJsonBody(req);
         try {
           const result = redeemCodeForUser(db, { userId: user.id, rawCode: body.code });
@@ -1684,15 +1855,16 @@ export function createLirioServer({ dbPath } = {}) {
           sendJson(res, 400, { error: '同步内容不能为空。' });
           return;
         }
+        let sanitizedPayload;
         try {
-          JSON.parse(rawPayload);
+          sanitizedPayload = sanitizeSyncPayload(rawPayload);
         } catch {
           sendJson(res, 400, { error: '同步数据格式无效。' });
           return;
         }
         const snapshot = saveUserSyncSnapshot(db, {
           userId: authState.user.id,
-          payload: rawPayload,
+          payload: sanitizedPayload,
           deviceName: String(body.deviceName || ''),
         });
         sendJson(res, 200, { ok: true, snapshot });
@@ -1753,13 +1925,23 @@ export function createLirioServer({ dbPath } = {}) {
       }
 
       if (isRead && pathname === '/api/orders/lookup') {
-        const email = String(url.searchParams.get('email') || '').trim().toLowerCase();
-        if (!isValidAccountId(email)) {
+        const isExplicitAdmin = Boolean(getAdminToken() && isAdminAuthorized(req));
+        const authState = isExplicitAdmin
+          ? null
+          : requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号后查询订单。');
+        if (!isExplicitAdmin && !authState) return;
+        const requestedEmail = String(url.searchParams.get('email') || '').trim().toLowerCase();
+        const targetEmail = isExplicitAdmin ? requestedEmail : requestedEmail || authState.user.email;
+        if (!isValidAccountId(targetEmail)) {
           sendJson(res, 400, { error: '请输入下单时填写的账号或邮箱（4–32 位）。' }, headOnly);
           return;
         }
+        if (!isExplicitAdmin && targetEmail !== authState.user.email) {
+          sendJson(res, 403, { error: '无权查询其他账号的订单。' }, headOnly);
+          return;
+        }
         const orderNo = String(url.searchParams.get('orderNo') || '').trim().toUpperCase();
-        const orders = lookupOrdersByEmail(db, email, { orderNo, limit: 15 });
+        const orders = lookupOrdersByEmail(db, targetEmail, { orderNo, limit: 15 });
         sendJson(res, 200, { ok: true, orders }, headOnly);
         return;
       }
@@ -1828,6 +2010,11 @@ export function createLirioServer({ dbPath } = {}) {
 
       const getOrderMatch = pathname.match(/^\/api\/orders\/([^/]+)$/);
       if (isRead && getOrderMatch) {
+        const isExplicitAdmin = Boolean(getAdminToken() && isAdminAuthorized(req));
+        const authState = isExplicitAdmin
+          ? null
+          : requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号后查看订单。');
+        if (!isExplicitAdmin && !authState) return;
         const orderNo = decodeURIComponent(getOrderMatch[1]);
         const order = getOrderByNo(db, orderNo);
         if (!order) {
@@ -1835,9 +2022,8 @@ export function createLirioServer({ dbPath } = {}) {
           return;
         }
         const qEmail = String(url.searchParams.get('email') || '').trim().toLowerCase();
-        const explicitAdmin = Boolean(getAdminToken() && isAdminAuthorized(req));
-        if (!explicitAdmin && qEmail !== order.buyerEmail) {
-          sendJson(res, 403, { error: '下单邮箱不匹配，无权查看该订单。' }, headOnly);
+        if (!isExplicitAdmin && (authState.user.email !== order.buyerEmail || (qEmail && qEmail !== order.buyerEmail))) {
+          sendJson(res, 403, { error: '无权查看其他账号的订单。' }, headOnly);
           return;
         }
         sendJson(
@@ -1853,16 +2039,68 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
         if (!authState) return;
         const user = authState.user;
-        const body = await readJsonBody(req);
-        if (!Array.isArray(body.messages) || !body.messages.length) {
-          sendJson(res, 400, { error: '缺少对话消息体。' });
+
+        const userRpm = Math.max(1, Number(process.env.LIRIO_BETA_CHAT_RPM || 20));
+        const userDailyReq = Math.max(1, Number(process.env.LIRIO_BETA_CHAT_DAILY_REQ || 120));
+        const userDailyTokens = Math.max(100, Number(process.env.LIRIO_BETA_CHAT_DAILY_TOKENS || 150000));
+        const ipRpm = Math.max(1, Number(process.env.LIRIO_BETA_CHAT_IP_RPM || 40));
+        const ipDailyReq = Math.max(1, Number(process.env.LIRIO_BETA_CHAT_IP_DAILY_REQ || 240));
+        const ipDailyTokens = Math.max(100, Number(process.env.LIRIO_BETA_CHAT_IP_DAILY_TOKENS || 300000));
+
+        if (!rateLimitDisabled()) {
+          const uTok = getWindowUsage(`chat-tok-u:${user.id}`, 86400000);
+          if (uTok.count >= userDailyTokens) {
+            res.setHeader('Retry-After', String(uTok.retryAfterSec));
+            sendJson(res, 429, { error: '今日免费公测对话额度已用完，请明天再试或填写自带 API Key。', retryAfterSec: uTok.retryAfterSec });
+            return;
+          }
+          const ipTok = getWindowUsage(`chat-tok-ip:${clientIp}`, 86400000);
+          if (ipTok.count >= ipDailyTokens) {
+            res.setHeader('Retry-After', String(ipTok.retryAfterSec));
+            sendJson(res, 429, { error: '当前网络今日公测对话额度已达上限，请明天再试或填写自带 API Key。', retryAfterSec: ipTok.retryAfterSec });
+            return;
+          }
+        }
+        if (
+          !consumeRateLimit(res, `chat-rpm-u:${user.id}`, userRpm, 60000, '发送太快了，请稍等片刻再试。') ||
+          !consumeRateLimit(res, `chat-rpm-ip:${clientIp}`, ipRpm, 60000, '当前网络请求过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `chat-day-u:${user.id}`, userDailyReq, 86400000, '今日免费公测对话次数已达上限，请明天再试或使用自带 Key。') ||
+          !consumeRateLimit(res, `chat-day-ip:${clientIp}`, ipDailyReq, 86400000, '当前网络今日对话次数已达上限，请明天再试。')
+        ) {
           return;
         }
+
+        const body = await readJsonBody(req, 512 * 1024);
+        if (!Array.isArray(body.messages) || body.messages.length === 0 || body.messages.length > 32) {
+          sendJson(res, 400, { error: '对话消息数量需在 1–32 条之间。' });
+          return;
+        }
+        let totalChars = 0;
+        for (const m of body.messages) {
+          if (!m || typeof m !== 'object' || !['system', 'user', 'assistant'].includes(m.role) || typeof m.content !== 'string') {
+            sendJson(res, 400, { error: '对话消息格式无效。' });
+            return;
+          }
+          totalChars += m.content.length;
+          if (totalChars > 24000) {
+            sendJson(res, 400, { error: '单次对话上下文过长（最多 24000 字符）。' });
+            return;
+          }
+        }
+        const safeMaxTokens = Math.min(Math.max(64, Number(body.maxTokens) || 1200), 2048);
+
         const aiRes = await forwardChatCompletion({
           messages: body.messages,
           temperature: body.temperature ?? 0.7,
-          maxTokens: body.maxTokens,
+          maxTokens: safeMaxTokens,
         });
+        if (!rateLimitDisabled()) {
+          const usedTokens = Number(aiRes.usage?.totalTokens || 0);
+          if (usedTokens > 0) {
+            addWindowUsage(`chat-tok-u:${user.id}`, usedTokens, 86400000);
+            addWindowUsage(`chat-tok-ip:${clientIp}`, usedTokens, 86400000);
+          }
+        }
         sendJson(res, 200, {
           content: aiRes.content,
           model: aiRes.model,
@@ -1879,20 +2117,42 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
         if (!authState) return;
         const user = authState.user;
-        const body = await readJsonBody(req);
+
+        const ttsRpm = Math.max(1, Number(process.env.LIRIO_BETA_TTS_RPM || 30));
+        const ttsDaily = Math.max(1, Number(process.env.LIRIO_BETA_TTS_DAILY || 300));
+        if (
+          !consumeRateLimit(res, `tts-rpm-u:${user.id}`, ttsRpm, 60000, '朗读请求过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `tts-rpm-ip:${clientIp}`, ttsRpm * 2, 60000, '当前网络朗读请求过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `tts-day-u:${user.id}`, ttsDaily, 86400000, '今日朗读次数已达公测上限，请明天再试。') ||
+          !consumeRateLimit(res, `tts-day-ip:${clientIp}`, Math.max(ttsDaily, 500), 86400000, '当前网络今日朗读次数已达上限，请明天再试。')
+        ) {
+          return;
+        }
+
+        const body = await readJsonBody(req, 64 * 1024);
+        const cleanText = String(body.text || '').trim();
+        if (!cleanText || cleanText.length > 1200) {
+          sendJson(res, 400, { error: !cleanText ? '朗读文本不能为空。' : '朗读文本过长（单次最多 1200 字符）。' });
+          return;
+        }
+
         const ttsRes = await forwardTts({
-          text: body.text,
+          text: cleanText,
           accent: body.accent,
           voice: body.voice,
         });
         if (String(req.headers.accept || '').includes('audio/mpeg')) {
           const buf = ttsRes.audioBuf || Buffer.from(ttsRes.audioBase64 || '', 'base64');
-          res.writeHead(200, {
+          const audioHeaders = {
             'Content-Type': ttsRes.mime || 'audio/mpeg',
             'Content-Length': buf.length,
-            'Access-Control-Allow-Origin': '*',
+            'Vary': 'Origin',
             'Cache-Control': 'private, max-age=3600',
-          });
+          };
+          if (corsOrigin) {
+            audioHeaders['Access-Control-Allow-Origin'] = corsOrigin;
+          }
+          res.writeHead(200, audioHeaders);
           res.end(buf);
           return;
         }
@@ -1913,16 +2173,28 @@ export function createLirioServer({ dbPath } = {}) {
         const authState = requireAuthenticatedUser(req, res, db, '请先登录 Lirio 账号。');
         if (!authState) return;
         const user = authState.user;
+
+        const asrRpm = Math.max(1, Number(process.env.LIRIO_BETA_ASR_RPM || 12));
+        const asrDaily = Math.max(1, Number(process.env.LIRIO_BETA_ASR_DAILY || 60));
+        if (
+          !consumeRateLimit(res, `asr-rpm-u:${user.id}`, asrRpm, 60000, '语音识别过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `asr-rpm-ip:${clientIp}`, Math.max(asrRpm, 20), 60000, '当前网络语音识别过于频繁，请稍后再试。') ||
+          !consumeRateLimit(res, `asr-day-u:${user.id}`, asrDaily, 86400000, '今日云端语音识别次数已达公测上限，请明天再试。') ||
+          !consumeRateLimit(res, `asr-day-ip:${clientIp}`, Math.max(asrDaily, 100), 86400000, '当前网络今日语音识别次数已达上限，请明天再试。')
+        ) {
+          return;
+        }
+
         const ct = String(req.headers['content-type'] || '').toLowerCase();
         const isBinaryAudio = ct.startsWith('audio/') || ct.startsWith('application/octet-stream');
         const asrRes = isBinaryAudio
           ? await forwardTranscribe({
-              wavBuf: await readBinaryBody(req),
+              wavBuf: await readBinaryBody(req, 5 * 1024 * 1024),
               mimeType: ct,
               durationSec: Number(req.headers['x-audio-duration'] || 0) || undefined,
             })
           : await (async () => {
-              const body = await readJsonBody(req);
+              const body = await readJsonBody(req, 7 * 1024 * 1024);
               return forwardTranscribe({
                 wavBase64: body.wavBase64,
                 durationSec: body.durationSec,
@@ -1947,7 +2219,19 @@ export function createLirioServer({ dbPath } = {}) {
         sendJson(res, 402, { error: '当前积分不足，请充值积分后继续。' });
         return;
       }
-      sendJson(res, 500, { error: msg });
+      if (msg === '请求体过大') {
+        sendJson(res, 413, { error: msg });
+        return;
+      }
+      if (msg === '无效的 JSON 请求体') {
+        sendJson(res, 400, { error: msg });
+        return;
+      }
+      const safeMsg = sanitizePublicError(err);
+      if (safeMsg === '服务暂时异常，请稍后重试。') {
+        console.error('[SERVER-ERR]', msg.replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***'));
+      }
+      sendJson(res, 500, { error: safeMsg });
     }
   });
 

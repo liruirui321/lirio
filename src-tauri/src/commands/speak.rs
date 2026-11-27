@@ -590,60 +590,6 @@ $s.Dispose()
     .map_err(|e| format!("朗读任务中断：{e}"))?
 }
 
-fn extract_deepseek_key_from_text(text: &str) -> Option<String> {
-    for raw_line in text.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let cleaned = line.strip_prefix("export ").unwrap_or(line).trim();
-        let rest = if let Some(v) = cleaned.strip_prefix("DEEPSEEK_API_KEY:") {
-            Some(v)
-        } else if let Some(v) = cleaned.strip_prefix("DEEPSEEK_API_KEY=") {
-            Some(v)
-        } else {
-            None
-        };
-        if let Some(val) = rest {
-            let trimmed = val
-                .trim()
-                .trim_matches('"')
-                .trim_matches('\'')
-                .trim()
-                .to_string();
-            if trimmed.starts_with("sk-") && trimmed.len() > 12 {
-                return Some(trimmed);
-            }
-        }
-    }
-    None
-}
-
-#[tauri::command]
-pub fn speak_auto_detect_deepseek() -> Result<Option<String>, String> {
-    if let Ok(v) = std::env::var("DEEPSEEK_API_KEY") {
-        let t = v.trim().to_string();
-        if t.starts_with("sk-") && t.len() > 12 {
-            return Ok(Some(t));
-        }
-    }
-    if let Ok(home) = std::env::var("HOME") {
-        let candidates = [
-            format!("{home}/.dsh/.credentials.yaml"),
-            format!("{home}/.config/novel2comic/deepseek.env"),
-            format!("{home}/.zshrc"),
-        ];
-        for p in candidates {
-            if let Ok(content) = fs::read_to_string(&p) {
-                if let Some(key) = extract_deepseek_key_from_text(&content) {
-                    return Ok(Some(key));
-                }
-            }
-        }
-    }
-    Ok(None)
-}
-
 #[derive(Serialize)]
 pub struct PodcastDownloadResult {
     pub path: String,

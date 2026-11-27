@@ -20,54 +20,16 @@ const DEFAULT_MODELS = {
   gemini: 'gemini-2.5-flash',
 };
 
-let cachedLocalDeepSeekKey;
-
-function extractDeepSeekKeyFromText(text) {
-  for (const rawLine of String(text || '').split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const cleaned = line.replace(/^export\s+/, '').trim();
-    let val = null;
-    if (cleaned.startsWith('DEEPSEEK_API_KEY:')) {
-      val = cleaned.slice('DEEPSEEK_API_KEY:'.length);
-    } else if (cleaned.startsWith('DEEPSEEK_API_KEY=')) {
-      val = cleaned.slice('DEEPSEEK_API_KEY='.length);
-    }
-    if (val !== null) {
-      const trimmed = val.trim().replace(/^['"]+|['"]+$/g, '').trim();
-      if (trimmed.startsWith('sk-') && trimmed.length > 12) {
-        return trimmed;
-      }
-    }
-  }
-  return '';
+function redactSecretText(raw) {
+  return String(raw || '')
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***')
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer ***')
+    .replace(/https?:\/\/\S+/gi, '[upstream]');
 }
 
-function detectLocalDeepSeekKey() {
-  if (cachedLocalDeepSeekKey !== undefined) return cachedLocalDeepSeekKey;
-  if (process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.trim().startsWith('sk-')) {
-    cachedLocalDeepSeekKey = process.env.DEEPSEEK_API_KEY.trim();
-    return cachedLocalDeepSeekKey;
-  }
-  const home = os.homedir();
-  const candidates = [
-    path.join(home, '.dsh', '.credentials.yaml'),
-    path.join(home, '.config', 'novel2comic', 'deepseek.env'),
-    path.join(home, '.zshrc'),
-  ];
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p)) {
-        const key = extractDeepSeekKeyFromText(fs.readFileSync(p, 'utf8'));
-        if (key) {
-          cachedLocalDeepSeekKey = key;
-          return cachedLocalDeepSeekKey;
-        }
-      }
-    } catch {}
-  }
-  cachedLocalDeepSeekKey = '';
-  return cachedLocalDeepSeekKey;
+function sanitizeUpstreamError(tag, detail, publicMsg) {
+  console.error(`[${tag}]`, redactSecretText(detail));
+  return new Error(publicMsg);
 }
 
 function isMockMode() {
@@ -84,7 +46,8 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
   const baseUrl = (process.env.LIRIO_LLM_BASE_URL || DEFAULT_URLS[provider] || DEFAULT_URLS.deepseek).replace(/\/+$/, '');
   const apiKey =
     (process.env.LIRIO_LLM_API_KEY || '').trim() ||
-    (provider === 'deepseek' ? detectLocalDeepSeekKey() : '');
+    (provider === 'deepseek' ? (process.env.DEEPSEEK_API_KEY || '').trim() : '');
+  const safeMaxTokens = Math.min(Math.max(64, Number(maxTokens) || 1200), 2048);
 
   if (isMockMode()) {
     const lastUser = [...(messages || [])].reverse().find((m) => m.role === 'user')?.content || '';
@@ -165,7 +128,7 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
     model,
     messages,
     temperature,
-    ...(maxTokens ? { max_tokens: maxTokens } : {}),
+    max_tokens: safeMaxTokens,
   };
 
   const resp = await fetch(`${baseUrl}/chat/completions`, {
@@ -179,8 +142,11 @@ export async function forwardChatCompletion({ messages, temperature = 0.7, maxTo
 
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    const msg = data?.error?.message || `上游 AI 服务返回错误 (${resp.status})`;
-    throw new Error(msg);
+    throw sanitizeUpstreamError(
+      'LLM',
+      `status=${resp.status} ${data?.error?.message || ''}`,
+      '上游 AI 服务暂时不可用，请稍后重试。',
+    );
   }
 
   const content = String(data?.choices?.[0]?.message?.content || '').trim();
@@ -482,6 +448,7 @@ function resolveCosyVoiceName(ttsModel, accent, voice) {
 export async function forwardTts({ text, accent = 'uk', voice }) {
   const cleanText = String(text || '').trim();
   if (!cleanText) throw new Error('朗读文本不能为空。');
+  if (cleanText.length > 1200) throw new Error('朗读文本过长（单次最多 1200 字符）。');
   const chosenVoice = voice || (accent === 'uk' ? 'fable' : 'alloy');
 
   if (isMockMode()) {
@@ -497,70 +464,73 @@ export async function forwardTts({ text, accent = 'uk', voice }) {
     };
   }
 
-  const speechKey = (process.env.LIRIO_SPEECH_API_KEY || '').trim();
-  const preferEdge = process.env.LIRIO_TTS_PREFER_EDGE !== '0';
-
-  if (preferEdge || !speechKey) {
-    const resolvedVoice = resolveNeuralEdgeVoice(accent, chosenVoice);
-    const cacheKey = `${resolvedVoice}\0${cleanText}`;
-    if (cleanText.length <= 320) {
-      const hit = getCachedTts(cacheKey);
-      if (hit) return hit;
-    }
-    try {
-      const res = await synthLocalNeuralEdgeTts(cleanText, accent, chosenVoice);
-      if (cleanText.length <= 320) setCachedTts(cacheKey, res);
-      return res;
-    } catch (edgeErr) {
-      if (!speechKey) throw edgeErr;
-      console.warn('[TTS] Edge Neural failed, falling back to cloud API:', edgeErr?.message || edgeErr);
-    }
-  }
-
-  const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-  const ttsModel = (process.env.LIRIO_TTS_MODEL || 'tts-1').trim();
-  const isCosyVoice = ttsModel.includes('CosyVoice2');
-  const finalVoice = isCosyVoice ? resolveCosyVoiceName(ttsModel, accent, chosenVoice) : chosenVoice;
-  const billedChars = isCosyVoice ? Buffer.byteLength(cleanText, 'utf8') : cleanText.length;
-
-  const cacheKey = `${finalVoice}\0${cleanText}`;
+  const resolvedVoice = resolveNeuralEdgeVoice(accent, chosenVoice);
+  const cacheKey = `${resolvedVoice}\0${cleanText}`;
   if (cleanText.length <= 320) {
     const hit = getCachedTts(cacheKey);
     if (hit) return hit;
   }
+  try {
+    const res = await synthLocalNeuralEdgeTts(cleanText, accent, chosenVoice);
+    if (cleanText.length <= 320) setCachedTts(cacheKey, res);
+    return res;
+  } catch (edgeErr) {
+    const allowCloudFallback = process.env.LIRIO_TTS_ALLOW_CLOUD_FALLBACK === '1';
+    const speechKey = (process.env.LIRIO_SPEECH_API_KEY || '').trim();
+    if (!allowCloudFallback || !speechKey) {
+      throw sanitizeUpstreamError('TTS', edgeErr?.message || String(edgeErr), '语音合成服务暂时繁忙，请稍后重试。');
+    }
+    console.warn('[TTS] Edge Neural failed, falling back to cloud API:', redactSecretText(edgeErr?.message || edgeErr));
 
-  const resp = await fetch(`${baseUrl}/audio/speech`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${speechKey}`,
-    },
-    body: JSON.stringify({
+    const baseUrl = (process.env.LIRIO_SPEECH_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const ttsModel = (process.env.LIRIO_TTS_MODEL || 'tts-1').trim();
+    const isCosyVoice = ttsModel.includes('CosyVoice2');
+    const finalVoice = isCosyVoice ? resolveCosyVoiceName(ttsModel, accent, chosenVoice) : chosenVoice;
+    const billedChars = isCosyVoice ? Buffer.byteLength(cleanText, 'utf8') : cleanText.length;
+
+    const cloudCacheKey = `${finalVoice}\0${cleanText}`;
+    if (cleanText.length <= 320) {
+      const hit = getCachedTts(cloudCacheKey);
+      if (hit) return hit;
+    }
+
+    const resp = await fetch(`${baseUrl}/audio/speech`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${speechKey}`,
+      },
+      body: JSON.stringify({
+        model: ttsModel,
+        input: cleanText,
+        voice: finalVoice,
+        response_format: 'mp3',
+      }),
+    });
+
+    if (!resp.ok) {
+      const errJson = await resp.json().catch(() => ({}));
+      throw sanitizeUpstreamError(
+        'TTS-Cloud',
+        `status=${resp.status} ${errJson?.error?.message || ''}`,
+        '语音合成服务暂时繁忙，请稍后重试。',
+      );
+    }
+
+    const ab = await resp.arrayBuffer();
+    const audioBuf = Buffer.from(ab);
+    const res = {
+      provider: baseUrl.includes('siliconflow') ? 'siliconflow' : 'openai',
       model: ttsModel,
-      input: cleanText,
       voice: finalVoice,
-      response_format: 'mp3',
-    }),
-  });
-
-  if (!resp.ok) {
-    const errJson = await resp.json().catch(() => ({}));
-    throw new Error(errJson?.error?.message || `云端语音合成失败 (${resp.status})`);
+      chars: billedChars,
+      mime: 'audio/mpeg',
+      audioBuf,
+      audioBase64: audioBuf.toString('base64'),
+    };
+    if (cleanText.length <= 320) setCachedTts(cloudCacheKey, res);
+    return res;
   }
-
-  const ab = await resp.arrayBuffer();
-  const audioBuf = Buffer.from(ab);
-  const res = {
-    provider: baseUrl.includes('siliconflow') ? 'siliconflow' : 'openai',
-    model: ttsModel,
-    voice: finalVoice,
-    chars: billedChars,
-    mime: 'audio/mpeg',
-    audioBuf,
-    audioBase64: audioBuf.toString('base64'),
-  };
-  if (cleanText.length <= 320) setCachedTts(cacheKey, res);
-  return res;
 }
 
 async function callAsrOnce(baseUrl, apiKey, buf, cleanMime, ext, model) {
@@ -581,7 +551,11 @@ async function callAsrOnce(baseUrl, apiKey, buf, cleanMime, ext, model) {
 
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    throw new Error(data?.error?.message || `云端语音识别失败 (${resp.status})`);
+    throw sanitizeUpstreamError(
+      'ASR',
+      `status=${resp.status} ${data?.error?.message || ''}`,
+      '云端语音识别服务暂时不可用，请稍后重试。',
+    );
   }
   const text = String(data?.text || '')
     .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '')
@@ -596,6 +570,9 @@ export async function forwardTranscribe({ wavBuf, wavBase64, mimeType, durationS
   const buf = Buffer.isBuffer(wavBuf) ? wavBuf : Buffer.from(String(wavBase64 || ''), 'base64');
   if (buf.length < 64) {
     throw new Error('录音内容过短或为空。');
+  }
+  if (buf.length > 5 * 1024 * 1024) {
+    throw new Error('录音文件过大（单次最多 5 MB）。');
   }
   const approxSec = Number(durationSec) > 0 ? Number(durationSec) : Math.max(1, Math.round(buf.length / 32000));
 

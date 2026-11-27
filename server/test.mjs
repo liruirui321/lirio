@@ -8,6 +8,7 @@ import { calculateChatCostUnits, calculateTtsCostUnits } from './pricing.mjs';
 
 process.env.LIRIO_MOCK_AI = '1';
 process.env.LIRIO_JWT_SECRET = 'lirio-test-jwt-secret-key-at-least-32-bytes-long-2026';
+process.env.LIRIO_RL_REG_PER_DAY = '50';
 
 const { server, db } = createLirioServer({ dbPath: ':memory:' });
 
@@ -412,6 +413,7 @@ try {
     name: 'Buyer',
   });
   assert.equal(regBuyerRes.status, 201);
+  const buyerToken = regBuyerRes.json.token;
 
   const orderRes = await req('POST', '/api/orders', {
     planId: 'pro_99',
@@ -423,9 +425,11 @@ try {
   assert.ok(ordNo.startsWith('LR-'));
   assert.equal(orderRes.json.order.status, 'pending');
 
-  const wrongOwnerGet = await req('GET', `/api/orders/${ordNo}?email=other@lirio.app`);
+  const unauthGetOrder = await req('GET', `/api/orders/${ordNo}?email=buyer@lirio.app`);
+  assert.equal(unauthGetOrder.status, 401);
+  const wrongOwnerGet = await req('GET', `/api/orders/${ordNo}?email=other@lirio.app`, null, token);
   assert.equal(wrongOwnerGet.status, 403);
-  const ownerGet = await req('GET', `/api/orders/${ordNo}?email=buyer@lirio.app`);
+  const ownerGet = await req('GET', `/api/orders/${ordNo}?email=buyer@lirio.app`, null, buyerToken);
   assert.equal(ownerGet.status, 200);
   assert.equal(ownerGet.json.order.orderNo, ordNo);
 
@@ -446,7 +450,11 @@ try {
   assert.equal(idempotentConfirm.json.alreadyPaid, true);
   assert.equal(idempotentConfirm.json.order.issuedCode, issuedCode);
 
-  const lookupRes = await req('GET', '/api/orders/lookup?email=buyer@lirio.app');
+  const unauthLookupRes = await req('GET', '/api/orders/lookup?email=buyer@lirio.app');
+  assert.equal(unauthLookupRes.status, 401);
+  const wrongLookupRes = await req('GET', '/api/orders/lookup?email=buyer@lirio.app', null, token);
+  assert.equal(wrongLookupRes.status, 403);
+  const lookupRes = await req('GET', '/api/orders/lookup?email=buyer@lirio.app', null, buyerToken);
   assert.equal(lookupRes.status, 200);
   assert.ok(lookupRes.json.orders.some((o) => o.orderNo === ordNo && o.issuedCode === issuedCode));
 
@@ -745,14 +753,88 @@ try {
     password: 'password123',
   });
   assert.equal(userLogin.status, 200);
+  const cherryToken = userLogin.json.token;
 
   const acctOrder = await req('POST', '/api/orders', { planId: 'pro_99', buyerEmail: 'cherry_01' });
   assert.equal(acctOrder.status, 201);
-  const acctLookup = await req('GET', '/api/orders/lookup?email=cherry_01');
+  const acctLookup = await req('GET', '/api/orders/lookup?email=cherry_01', null, cherryToken);
   assert.equal(acctLookup.status, 200);
   assert.ok(acctLookup.json.orders.some((o) => o.orderNo === acctOrder.json.order.orderNo));
 
-  console.log('ALL LIRIO PRO SERVER TESTS PASSED (18/18)');
+  // 19. Security Guardrails: sync secret stripping, AI input bounds, rate limits, and CORS allowlist
+  const dirtySyncPayload = JSON.stringify({
+    app: 'Lirio',
+    version: 1,
+    entries: {
+      'aboboo-speak-state-v2': {
+        config: {
+          textApiKey: 'sk-secret-should-be-stripped-1234',
+          speechApiKey: 'sk-speech-should-be-stripped-5678',
+          providers: {
+            deepseek: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-prov-should-be-stripped-9999', model: 'deepseek-chat' },
+          },
+        },
+        sessions: [],
+      },
+      'lirio-account-v1': { token: 'jwt-should-be-nullified' },
+    },
+  });
+  const dirtyPut = await req('PUT', '/api/sync/state', { payload: dirtySyncPayload }, cherryToken);
+  assert.equal(dirtyPut.status, 200);
+  const cleanGet = await req('GET', '/api/sync/state', null, cherryToken);
+  assert.equal(cleanGet.status, 200);
+  assert.ok(!cleanGet.json.snapshot.payload.includes('sk-secret-should-be-stripped'));
+  assert.ok(!cleanGet.json.snapshot.payload.includes('sk-speech-should-be-stripped'));
+  assert.ok(!cleanGet.json.snapshot.payload.includes('sk-prov-should-be-stripped'));
+  assert.ok(!cleanGet.json.snapshot.payload.includes('jwt-should-be-nullified'));
+
+  const tooManyMsgs = Array.from({ length: 33 }, (_, i) => ({ role: 'user', content: `msg ${i}` }));
+  assert.equal((await req('POST', '/api/ai/chat', { messages: tooManyMsgs }, cherryToken)).status, 400);
+  assert.equal(
+    (await req('POST', '/api/ai/chat', { messages: [{ role: 'tool', content: 'hi' }] }, cherryToken)).status,
+    400,
+  );
+  assert.equal(
+    (await req('POST', '/api/ai/chat', { messages: [{ role: 'user', content: 'a'.repeat(24001) }] }, cherryToken))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await req('POST', '/api/ai/tts', { text: 'b'.repeat(1201), accent: 'uk' }, cherryToken)).status,
+    400,
+  );
+
+  const prevChatRpm = process.env.LIRIO_BETA_CHAT_RPM;
+  process.env.LIRIO_BETA_CHAT_RPM = '2';
+  try {
+    assert.equal(
+      (await req('POST', '/api/ai/chat', { messages: [{ role: 'user', content: '1' }] }, buyerToken)).status,
+      200,
+    );
+    assert.equal(
+      (await req('POST', '/api/ai/chat', { messages: [{ role: 'user', content: '2' }] }, buyerToken)).status,
+      200,
+    );
+    const rateLimitedChat = await req(
+      'POST',
+      '/api/ai/chat',
+      { messages: [{ role: 'user', content: '3' }] },
+      buyerToken,
+    );
+    assert.equal(rateLimitedChat.status, 429);
+  } finally {
+    if (prevChatRpm === undefined) delete process.env.LIRIO_BETA_CHAT_RPM;
+    else process.env.LIRIO_BETA_CHAT_RPM = prevChatRpm;
+  }
+
+  const evilCors = await fetch(`${base}/api/health`, { headers: { Origin: 'https://evil.example' } });
+  assert.equal(evilCors.headers.get('access-control-allow-origin'), null);
+  const appCors = await fetch(`${base}/api/health`, { headers: { Origin: 'tauri://localhost' } });
+  assert.equal(appCors.headers.get('access-control-allow-origin'), 'tauri://localhost');
+  const siteCors = await fetch(`${base}/api/health`, { headers: { Origin: 'https://lirio.deltae.tech' } });
+  assert.equal(siteCors.headers.get('access-control-allow-origin'), 'https://lirio.deltae.tech');
+
+  console.log('ALL LIRIO PRO SERVER TESTS PASSED (19/19)');
 } finally {
   server.close();
 }

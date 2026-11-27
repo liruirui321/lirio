@@ -81,6 +81,84 @@ export async function hydrateStateFromDisk(
   return restoredAny;
 }
 
+function stripSecretsFromSpeakState(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  const obj = raw as Record<string, unknown>;
+  const cfg = obj.config;
+  if (!cfg || typeof cfg !== 'object') return obj;
+  const cfgObj = cfg as Record<string, unknown>;
+  const providersRaw = cfgObj.providers;
+  let cleanProviders = providersRaw;
+  if (providersRaw && typeof providersRaw === 'object') {
+    const provClone: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(providersRaw as Record<string, unknown>)) {
+      if (v && typeof v === 'object') {
+        provClone[k] = { ...(v as Record<string, unknown>), apiKey: '' };
+      } else {
+        provClone[k] = v;
+      }
+    }
+    cleanProviders = provClone;
+  }
+  return {
+    ...obj,
+    config: {
+      ...cfgObj,
+      textApiKey: '',
+      speechApiKey: '',
+      providers: cleanProviders,
+    },
+  };
+}
+
+function stripSecretsFromAccountState(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  return { ...(raw as Record<string, unknown>), token: null };
+}
+
+function mergeLocalSpeakSecrets(incoming: unknown, existingLocalRaw: string | null): unknown {
+  const sanitized = stripSecretsFromSpeakState(incoming);
+  if (!existingLocalRaw || !sanitized || typeof sanitized !== 'object') return sanitized;
+  try {
+    const localParsed = JSON.parse(existingLocalRaw) as Record<string, unknown>;
+    const localCfg = localParsed?.config as Record<string, unknown> | undefined;
+    const outObj = sanitized as Record<string, unknown>;
+    const outCfg = (outObj.config as Record<string, unknown> | undefined) || {};
+    if (!localCfg || typeof localCfg !== 'object') return sanitized;
+
+    const mergedProviders: Record<string, unknown> =
+      outCfg.providers && typeof outCfg.providers === 'object'
+        ? { ...(outCfg.providers as Record<string, unknown>) }
+        : {};
+    if (localCfg.providers && typeof localCfg.providers === 'object') {
+      for (const [k, lv] of Object.entries(localCfg.providers as Record<string, unknown>)) {
+        if (lv && typeof lv === 'object' && typeof (lv as Record<string, unknown>).apiKey === 'string') {
+          const curEntry =
+            mergedProviders[k] && typeof mergedProviders[k] === 'object'
+              ? (mergedProviders[k] as Record<string, unknown>)
+              : {};
+          mergedProviders[k] = {
+            ...curEntry,
+            apiKey: (lv as Record<string, unknown>).apiKey,
+          };
+        }
+      }
+    }
+
+    return {
+      ...outObj,
+      config: {
+        ...outCfg,
+        textApiKey: typeof localCfg.textApiKey === 'string' ? localCfg.textApiKey : '',
+        speechApiKey: typeof localCfg.speechApiKey === 'string' ? localCfg.speechApiKey : '',
+        providers: mergedProviders,
+      },
+    };
+  } catch {
+    return sanitized;
+  }
+}
+
 export function exportAllStateJson(): string {
   const payload: Record<string, unknown> = {
     app: 'Lirio',
@@ -92,7 +170,15 @@ export function exportAllStateJson(): string {
   for (const { localStorageKey } of STATE_SYNC_KEYS) {
     try {
       const raw = localStorage.getItem(localStorageKey);
-      if (raw) entries[localStorageKey] = JSON.parse(raw);
+      if (raw) {
+        let parsed = JSON.parse(raw);
+        if (localStorageKey === 'aboboo-speak-state-v2') {
+          parsed = stripSecretsFromSpeakState(parsed);
+        } else if (localStorageKey === 'lirio-account-v1') {
+          parsed = stripSecretsFromAccountState(parsed);
+        }
+        entries[localStorageKey] = parsed;
+      }
     } catch {}
   }
   for (const extraKey of ['aboboo-theme', 'aboboo-last-listening', 'aboboo-dict-input-style']) {
@@ -196,7 +282,13 @@ export function exportSyncableStateJson(): string {
   for (const { localStorageKey } of SYNC_STUDY_JSON_KEYS) {
     try {
       const raw = localStorage.getItem(localStorageKey);
-      if (raw) entries[localStorageKey] = JSON.parse(raw);
+      if (raw) {
+        let parsed = JSON.parse(raw);
+        if (localStorageKey === 'aboboo-speak-state-v2') {
+          parsed = stripSecretsFromSpeakState(parsed);
+        }
+        entries[localStorageKey] = parsed;
+      }
     } catch {}
   }
   for (const k of SYNC_STUDY_PLAIN_KEYS) {
@@ -229,7 +321,11 @@ export function applySyncedStateJson(raw: string): number {
   for (const [k, v] of Object.entries(parsed.entries as Record<string, unknown>)) {
     const dk = diskByLocal.get(k);
     if (dk && v && typeof v === 'object') {
-      const serialized = JSON.stringify(v);
+      const valueToSave =
+        k === 'aboboo-speak-state-v2'
+          ? mergeLocalSpeakSecrets(v, localStorage.getItem(k))
+          : v;
+      const serialized = JSON.stringify(valueToSave);
       localStorage.setItem(k, serialized);
       try {
         void invoke('app_state_save', { key: dk, value: serialized }).catch(() => {});
