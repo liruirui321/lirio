@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -505,186 +505,11 @@ pub async fn speak_chat_local(_app: tauri::AppHandle, _prompt: String) -> Result
     Err("内置本地 Qwen 已移除以精简安装包体积，请使用 Lirio 官方 DeepSeek 按量余额或配置自定义 API Key。".into())
 }
 
-struct KokoroWorker {
-    child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
-}
-
-static KOKORO_WORKER: OnceLock<Mutex<Option<KokoroWorker>>> = OnceLock::new();
-
-const KOKORO_WORKER_PY: &str = r#"
-import sys, json, soundfile as sf
-from kokoro_onnx import Kokoro
-
-model_path = sys.argv[1]
-voices_path = sys.argv[2]
-kokoro = Kokoro(model_path, voices_path)
-warmed = False
-
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    try:
-        req = json.loads(line)
-        if req.get("warmup"):
-            if not warmed:
-                kokoro.create("Hi.", voice="af_heart", speed=1.0, lang="en-us")
-                kokoro.create("Hi.", voice="bm_george", speed=1.0, lang="en-gb")
-                warmed = True
-            print("OK", flush=True)
-            continue
-        audio, sr = kokoro.create(req["text"], voice=req["voice"], speed=1.0, lang=req["lang"])
-        sf.write(req["out"], audio, sr, subtype="PCM_16")
-        warmed = True
-        print("OK", flush=True)
-    except Exception as e:
-        print("ERR:" + str(e).replace("\n", " "), flush=True)
-"#;
-
-fn resolve_kokoro_paths(app: &tauri::AppHandle) -> Option<(PathBuf, PathBuf, PathBuf)> {
-    let base = app.path().app_data_dir().ok()?.join("kokoro");
-    let model_path = base.join("kokoro-v1.0.int8.onnx");
-    let voices_path = base.join("voices-v1.0.bin");
-    #[cfg(target_os = "windows")]
-    let py_bin = base.join("venv").join("Scripts").join("python.exe");
-    #[cfg(not(target_os = "windows"))]
-    let py_bin = base.join("venv").join("bin").join("python");
-    if py_bin.is_file() && model_path.is_file() && voices_path.is_file() {
-        Some((py_bin, model_path, voices_path))
-    } else {
-        None
-    }
-}
-
-fn resolve_kokoro_voice(requested_voice: Option<&str>) -> (&'static str, &'static str) {
-    let lower = requested_voice.unwrap_or("").trim().to_ascii_lowercase();
-    if lower.contains("am_michael") || lower.contains("andrew") || lower == "echo" {
-        return ("am_michael", "en-us");
-    }
-    if lower.contains("bm_george") || lower.contains("ryan") || lower == "fable" {
-        return ("bm_george", "en-gb");
-    }
-    ("af_heart", "en-us")
-}
-
-fn spawn_kokoro_worker(
-    py_bin: &std::path::Path,
-    model_path: &std::path::Path,
-    voices_path: &std::path::Path,
-) -> Option<KokoroWorker> {
-    let mut cmd = Command::new(py_bin);
-    configure_hidden_cmd(&mut cmd);
-    let mut child = cmd
-        .args(["-u", "-c", KOKORO_WORKER_PY])
-        .arg(model_path)
-        .arg(voices_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-    let stdin = child.stdin.take()?;
-    let stdout = BufReader::new(child.stdout.take()?);
-    Some(KokoroWorker { child, stdin, stdout })
-}
-
-fn warmup_kokoro_worker(
-    py_bin: &std::path::Path,
-    model_path: &std::path::Path,
-    voices_path: &std::path::Path,
-) -> Result<(), String> {
-    let lock = KOKORO_WORKER.get_or_init(|| Mutex::new(None));
-    let mut guard = lock.lock().map_err(|_| "Kokoro TTS 锁异常".to_string())?;
-    if guard.is_none() {
-        *guard = spawn_kokoro_worker(py_bin, model_path, voices_path);
-    }
-    let Some(worker) = guard.as_mut() else {
-        return Err("无法启动 Kokoro 语音进程".into());
-    };
-    let payload = serde_json::json!({ "warmup": true }).to_string();
-    if writeln!(worker.stdin, "{payload}").is_err() || worker.stdin.flush().is_err() {
-        let _ = worker.child.kill();
-        *guard = None;
-        return Err("Kokoro 预热写入失败".into());
-    }
-    let mut resp = String::new();
-    match worker.stdout.read_line(&mut resp) {
-        Ok(n) if n > 0 && resp.trim() == "OK" => Ok(()),
-        _ => {
-            let _ = worker.child.kill();
-            *guard = None;
-            Err("Kokoro 预热失败".into())
-        }
-    }
-}
-
-fn synth_via_kokoro_worker(
-    py_bin: &std::path::Path,
-    model_path: &std::path::Path,
-    voices_path: &std::path::Path,
-    text: &str,
-    voice: &str,
-    lang: &str,
-    out_path: &std::path::Path,
-) -> Result<Vec<u8>, String> {
-    let lock = KOKORO_WORKER.get_or_init(|| Mutex::new(None));
-    let mut guard = lock.lock().map_err(|_| "Kokoro TTS 锁异常".to_string())?;
-
-    for _attempt in 0..2 {
-        if guard.is_none() {
-            *guard = spawn_kokoro_worker(py_bin, model_path, voices_path);
-        }
-        let Some(worker) = guard.as_mut() else {
-            return Err("无法启动 Kokoro 语音进程".into());
-        };
-        let payload = serde_json::json!({
-            "text": text,
-            "voice": voice,
-            "lang": lang,
-            "out": out_path.to_string_lossy(),
-        })
-        .to_string();
-
-        if writeln!(worker.stdin, "{payload}").is_err() || worker.stdin.flush().is_err() {
-            let _ = worker.child.kill();
-            *guard = None;
-            let _ = fs::remove_file(out_path);
-            continue;
-        }
-
-        let mut resp = String::new();
-        match worker.stdout.read_line(&mut resp) {
-            Ok(n) if n > 0 && resp.trim() == "OK" => {
-                if let Ok(bytes) = fs::read(out_path) {
-                    let _ = fs::remove_file(out_path);
-                    if bytes.len() > 300 {
-                        return Ok(bytes);
-                    }
-                }
-                let _ = fs::remove_file(out_path);
-                return Err("Kokoro 语音输出为空".into());
-            }
-            _ => {
-                let _ = worker.child.kill();
-                *guard = None;
-                let _ = fs::remove_file(out_path);
-            }
-        }
-    }
-    Err("Kokoro 语音合成失败".into())
-}
-
 #[tauri::command]
 pub async fn speak_warmup_tts(app: tauri::AppHandle) -> Result<bool, String> {
-    let Some((py_bin, model_path, voices_path)) = resolve_kokoro_paths(&app) else {
-        return Ok(false);
-    };
-    tauri::async_runtime::spawn_blocking(move || warmup_kokoro_worker(&py_bin, &model_path, &voices_path))
+    tauri::async_runtime::spawn_blocking(move || super::kokoro::warmup(&app))
         .await
-        .map_err(|e| format!("预热任务中断：{e}"))??;
-    Ok(true)
+        .map_err(|e| format!("预热任务中断：{e}"))?
 }
 
 #[tauri::command]
@@ -703,7 +528,7 @@ pub async fn speak_tts(
         return Err("朗读内容不能为空".into());
     }
     let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-    let kokoro_paths = resolve_kokoro_paths(&app);
+    let app_handle = app.clone();
     let prov = provider.unwrap_or_else(|| "edge".to_string());
 
     tauri::async_runtime::spawn_blocking(move || {
@@ -786,28 +611,18 @@ pub async fn speak_tts(
         }
 
         if prov != "macos" {
-            // 0b. Prefer ultra-fast local Kokoro-82M neural TTS if installed
-            if let Some((py_bin, model_path, voices_path)) = kokoro_paths.as_ref() {
-                let (k_voice, k_lang) = resolve_kokoro_voice(voice.as_deref());
-                let kokoro_wav: PathBuf = cache.join(format!("speak-kokoro-{id}.wav"));
-                if let Ok(bytes) = synth_via_kokoro_worker(
-                    py_bin,
-                    model_path,
-                    voices_path,
-                    &trimmed,
-                    k_voice,
-                    k_lang,
-                    &kokoro_wav,
-                ) {
-                    return Ok(CorpusAudioResult {
-                        bytes,
-                        mime: "audio/wav".into(),
-                        source: format!("kokoro-{k_voice}"),
-                    });
-                }
+            // 0b. Prefer bundled pure-Rust Kokoro-82M neural TTS (zero Python, zero cloud cost)
+            if let Ok((bytes, voice_name)) =
+                super::kokoro::synthesize(&app_handle, &trimmed, voice.as_deref())
+            {
+                return Ok(CorpusAudioResult {
+                    bytes,
+                    mime: "audio/wav".into(),
+                    source: format!("kokoro-{voice_name}"),
+                });
             }
 
-            // 1. Prefer persistent Python edge-tts worker (zero cold-start latency)
+            // 1. Fallback: persistent Python edge-tts worker (zero cold-start latency)
             let default_neural_voice = match accent.as_str() {
                 "uk" => "en-GB-SoniaNeural",
                 "us" => "en-US-AndrewMultilingualNeural",
@@ -1070,20 +885,5 @@ pub fn open_mic_settings() -> Result<(), String> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err("请在系统「设置 → 应用权限 → 麦克风」中允许 Lirio 访问麦克风。".into())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::resolve_kokoro_voice;
-
-    #[test]
-    fn kokoro_voice_maps_personas_and_examiner_to_af_heart() {
-        assert_eq!(resolve_kokoro_voice(Some("en-US-AvaMultilingualNeural")), ("af_heart", "en-us"));
-        assert_eq!(resolve_kokoro_voice(Some("en-US-AndrewMultilingualNeural")), ("am_michael", "en-us"));
-        assert_eq!(resolve_kokoro_voice(Some("en-GB-RyanNeural")), ("bm_george", "en-gb"));
-        assert_eq!(resolve_kokoro_voice(None), ("af_heart", "en-us"));
-        assert_eq!(resolve_kokoro_voice(Some("en-GB-SoniaNeural")), ("af_heart", "en-us"));
-        assert_eq!(resolve_kokoro_voice(Some("bf_emma")), ("af_heart", "en-us"));
     }
 }

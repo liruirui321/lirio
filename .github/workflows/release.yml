@@ -29,6 +29,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
       - run: npm run build
+      - name: Prepare Bundled Kokoro TTS Model
+        run: node scripts/prepare-kokoro-resources.mjs
       - name: Build macOS Universal App & DMG
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -36,9 +38,9 @@ jobs:
         run: |
           VER=$(node -p "require('./package.json').version")
           if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
-            npx tauri build --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":true}}'
+            npx tauri build --target universal-apple-darwin --config '{"bundle":{"resources":["resources/tts/*"],"createUpdaterArtifacts":true}}'
           else
-            npx tauri build --target universal-apple-darwin
+            npx tauri build --target universal-apple-darwin --config '{"bundle":{"resources":["resources/tts/*"]}}'
           fi
           mkdir -p out
           cp target/universal-apple-darwin/release/bundle/dmg/*.dmg "out/Lirio-${VER}-macos.dmg" || true
@@ -66,6 +68,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
       - run: npm run build
+      - name: Prepare Bundled Kokoro TTS Model
+        run: node scripts/prepare-kokoro-resources.mjs
       - name: Build Windows NSIS Setup & Updater Artifacts
         shell: pwsh
         env:
@@ -73,11 +77,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           $VER = node -p "require('./package.json').version"
-          $cfg = '{"bundle":{"resources":[],"createUpdaterArtifacts":true}}'
+          $cfg = '{"bundle":{"resources":["resources/tts/*"],"createUpdaterArtifacts":true}}'
           if ($env:TAURI_SIGNING_PRIVATE_KEY) {
             npx tauri build --bundles nsis --config $cfg
           } else {
-            npx tauri build --bundles nsis --config '{"bundle":{"resources":[]}}'
+            npx tauri build --bundles nsis --config '{"bundle":{"resources":["resources/tts/*"]}}'
           }
           New-Item -ItemType Directory -Force -Path out | Out-Null
           Write-Host "=== Built NSIS files ==="
@@ -128,6 +132,8 @@ jobs:
           echo "NDK_HOME=$ANDROID_SDK/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run build
+      - name: Prepare Bundled Kokoro TTS Model
+        run: node scripts/prepare-kokoro-resources.mjs
       - name: Patch tauri.conf.json for Android & Build Signed APK
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -136,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           VER=$(node -p "require('./package.json').version")
-          node -e "const fs=require('fs'),p='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle=c.bundle||{};c.bundle.resources=[];c.bundle.createUpdaterArtifacts=false;fs.writeFileSync(p,JSON.stringify(c,null,2));"
+          node -e "const fs=require('fs'),p='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(p,'utf8'));c.bundle=c.bundle||{};c.bundle.resources=['resources/tts/*'];c.bundle.createUpdaterArtifacts=false;fs.writeFileSync(p,JSON.stringify(c,null,2));"
           npx tauri android init
           node scripts/patch-android-mic.mjs
           npx tauri android build --apk --target aarch64

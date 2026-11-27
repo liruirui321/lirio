@@ -933,7 +933,7 @@ export async function transcribeVoice(wavBytes: Uint8Array, language: 'en' | 'au
 
 let didWarmLocalTts = false;
 export function warmupLocalTts(): void {
-  if (didWarmLocalTts || isMobileDevice()) return;
+  if (didWarmLocalTts) return;
   didWarmLocalTts = true;
   void invoke('speak_warmup_tts').catch(() => {});
 }
@@ -982,24 +982,6 @@ export async function synthesizeSpeech(
 
   if (acct.aiMode === 'pro_balance') {
     const cloudVoice = voiceOverride?.edgeVoice || voiceOverride?.openaiVoice || config.speechVoice;
-    const isMacDesktop = !isMobileDevice() && !isWindowsPlatform();
-    if (isMacDesktop) {
-      try {
-        return await invokeFreeTts();
-      } catch (localErr) {
-        if (acct.token) {
-          return await proxyTts(text, effectiveAccent, cloudVoice, '云端语音合成');
-        }
-        throw localErr;
-      }
-    }
-    if (acct.proCloudSpeech) {
-      try {
-        return await proxyTts(text, effectiveAccent, cloudVoice, '云端语音合成');
-      } catch (err) {
-        console.warn('[TTS] pro cloud speech failed, falling back to free local/Edge TTS:', err);
-      }
-    }
     try {
       return await invokeFreeTts();
     } catch (localErr) {

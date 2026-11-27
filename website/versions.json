@@ -3,6 +3,8 @@
   "latestVersion": "0.5.3",
   "releaseDate": "2026-11-27",
   "releaseBaseUrl": "https://lirio.deltae.tech/releases",
+  "githubUrl": "https://github.com/liruirui321/lirio",
+  "releasesUrl": "https://github.com/liruirui321/lirio/releases",
   "priceYuan": 99,
   "platforms": {
     "macos": {
@@ -10,6 +12,8 @@
       "arch": "Apple Silicon / Intel",
       "minOs": "macOS 12+",
       "format": ".dmg",
+      "sizeApprox": "约 310 MB",
+      "sizeNote": "内置开源 Kokoro 语音 + 离线 Whisper",
       "version": "0.5.3",
       "filename": "Lirio-0.5.3-macos.dmg",
       "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.3-macos.dmg",
@@ -20,6 +24,8 @@
       "arch": "64 位 (x64)",
       "minOs": "Windows 10 / 11",
       "format": ".exe",
+      "sizeApprox": "约 125 MB",
+      "sizeNote": "内置开源 Kokoro 语音模型",
       "version": "0.5.3",
       "filename": "Lirio-0.5.3-windows-x64-setup.exe",
       "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.3-windows-x64-setup.exe",
@@ -30,6 +36,8 @@
       "arch": "ARM64 (Android 9+)",
       "minOs": "Android 9+",
       "format": ".apk",
+      "sizeApprox": "约 120 MB",
+      "sizeNote": "内置开源 Kokoro 语音模型",
       "version": "0.5.3",
       "filename": "Lirio-0.5.3-android.apk",
       "downloadUrl": "https://lirio.deltae.tech/releases/Lirio-0.5.3-android.apk",
@@ -53,7 +61,8 @@
       "version": "0.5.3",
       "date": "2026-11-27",
       "highlights": [
-        "极简图标化界面、我的上传独立仓库、拖拽导入与字幕行内精校、Tab 重播直入听写、全面安全加固与纯 Edge 神经语音"
+        "开源发布至 GitHub，内置纯原生离线 Kokoro-82M 神经语音模型（Mac / Windows / Android 全端不依赖云端即可自然发声）",
+        "极简图标化界面、我的上传独立仓库、拖拽导入与字幕行内精校、Tab 重播直入听写、全面安全加固"
       ]
     },
     {

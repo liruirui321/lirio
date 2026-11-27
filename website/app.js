@@ -859,14 +859,20 @@ async function initSite() {
           ? `<span class="platform-meta">${esc(p.statusNote)}</span>`
           : `<span class="platform-meta">${esc(p.format)}</span>`;
       const pendingText = p.statusNote ? `${p.label} ${p.statusNote}` : `${p.label} 敬请期待`;
+      const metaParts = [p.arch, p.minOs, p.sizeNote].filter(Boolean).map(esc).join(' · ');
+      const verParts = isComingSoon
+        ? esc(p.statusNote || '暂不支持 · 敬请期待')
+        : [`v${esc(p.version)}`, p.sizeApprox ? esc(p.sizeApprox) : '', p.autoUpdate ? '支持自动更新' : '']
+            .filter(Boolean)
+            .join(' · ');
       return `
         <div class="platform-card${isRec ? ' recommended' : ''}">
           <div class="platform-top">
             <strong>${esc(p.label)}</strong>
             ${badge}
           </div>
-          <div class="platform-meta">${esc(p.arch)} · ${esc(p.minOs)}</div>
-          <div class="platform-ver">${isComingSoon ? esc(p.statusNote || '暂不支持 · 敬请期待') : `v${esc(p.version)}${p.autoUpdate ? ' · 支持自动更新' : ''}`}</div>
+          <div class="platform-meta">${metaParts}</div>
+          <div class="platform-ver">${verParts}</div>
           ${
             isComingSoon
               ? `<span class="platform-btn disabled">${esc(pendingText)}</span>`
