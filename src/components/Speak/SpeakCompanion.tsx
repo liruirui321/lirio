@@ -51,6 +51,7 @@ import {
   subscribeSpeakState,
   synthesizeSpeech,
   transcribeVoice,
+  warmupLocalTts,
   type CallViewMode,
   type CompanionPersona,
   type CompanionPersonaId,
@@ -69,6 +70,12 @@ import {
 
 type SpeakSubView = 'call' | 'review' | 'library' | 'history';
 type CallPhase = 'idle' | 'ai_speaking' | 'part2_prep' | 'listening' | 'transcribing' | 'thinking' | 'paused';
+
+const EXAMINER_VOICE_OVERRIDE = {
+  accent: 'us' as const,
+  edgeVoice: 'en-US-AvaMultilingualNeural',
+  openaiVoice: 'shimmer',
+};
 
 export interface SpeakExternalContext {
   title: string;
@@ -250,6 +257,9 @@ export function SpeakCompanion({
     mutedRef.current = muted;
     recorderRef.current?.setMuted(muted);
   }, [muted]);
+  useEffect(() => {
+    warmupLocalTts();
+  }, []);
 
   const updatePersisted = useCallback((updater: (prev: SpeakPersistedState) => SpeakPersistedState) => {
     setPersisted((prev) => {
@@ -453,13 +463,15 @@ export function SpeakCompanion({
 
       const accent = configRef.current.accent;
       const voiceOverride =
-        speakModeRef.current === 'companion' && opts?.usePersonaVoice !== false
-          ? {
-              accent: personaRef.current.accent,
-              edgeVoice: personaRef.current.edgeVoice,
-              openaiVoice: personaRef.current.openaiVoice,
-            }
-          : undefined;
+        speakModeRef.current === 'examiner'
+          ? EXAMINER_VOICE_OVERRIDE
+          : opts?.usePersonaVoice !== false
+            ? {
+                accent: personaRef.current.accent,
+                edgeVoice: personaRef.current.edgeVoice,
+                openaiVoice: personaRef.current.openaiVoice,
+              }
+            : undefined;
       let nextPromise: Promise<string> | null = synthesizeSpeech(chunks[0], accent, voiceOverride);
 
       for (let i = 0; i < chunks.length; i++) {
@@ -577,13 +589,13 @@ export function SpeakCompanion({
 
       const accent = configRef.current.accent;
       const voiceOverride =
-        speakModeRef.current === 'companion'
-          ? {
+        speakModeRef.current === 'examiner'
+          ? EXAMINER_VOICE_OVERRIDE
+          : {
               accent: personaRef.current.accent,
               edgeVoice: personaRef.current.edgeVoice,
               openaiVoice: personaRef.current.openaiVoice,
-            }
-          : undefined;
+            };
 
       const ttsQueue: Array<Promise<string>> = [];
       let streamDone = false;

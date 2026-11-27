@@ -899,7 +899,8 @@ export class VadVoiceRecorder {
 
 export async function transcribeVoice(wavBytes: Uint8Array, language: 'en' | 'auto' = 'en'): Promise<string> {
   const acct = getAccountState();
-  if (acct.aiMode === 'pro_balance' && acct.proCloudSpeech && acct.token) {
+  const isMacDesktop = !isMobileDevice() && !isWindowsPlatform();
+  if (!isMacDesktop && acct.aiMode === 'pro_balance' && acct.proCloudSpeech && acct.token) {
     try {
       return await proxyTranscribe(wavBytes, '云端语音识别');
     } catch (cloudErr) {
@@ -928,6 +929,13 @@ export async function transcribeVoice(wavBytes: Uint8Array, language: 'en' | 'au
     }
     throw localErr;
   }
+}
+
+let didWarmLocalTts = false;
+export function warmupLocalTts(): void {
+  if (didWarmLocalTts || isMobileDevice()) return;
+  didWarmLocalTts = true;
+  void invoke('speak_warmup_tts').catch(() => {});
 }
 
 interface TtsResult {
